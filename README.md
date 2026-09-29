@@ -12,10 +12,11 @@ decision model's replies at each point of the loop.
 ## What it depends on
 
 ```json
-"dsh-system1-runtime": "file:../system1-runtime-repo"
+"dsh-system1-runtime": "git+https://github.com/johnlam1968/system1-runtime-repo.git#v0.1.1"
 ```
 
-The runtime owns the seam names, the seam-to-event map, the per-seam text extractor, the evidence record and
+The runtime is fetched from GitHub at the tag above, so a **plain `npm install` is enough** and no sibling checkout
+is required. It owns the seam names, the seam-to-event map, the per-seam text extractor, the evidence record and
 the two decision-model transports; this bundle supplies the row, the config and the listener wiring. The
 interface is checked at mount against `INTERFACE_VERSION`, and a mismatch refuses the mount rather than
 running against a shape this build was not written for.

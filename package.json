@@ -23,7 +23,7 @@
   "scripts": { "test": "node --test test/*.test.js" },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
-    "dsh-system1-runtime": "file:../system1-runtime-repo",
+    "dsh-system1-runtime": "git+https://github.com/johnlam1968/system1-runtime-repo.git#v0.1.1",
     "yaml": "^2.9.1"
   },
   "files": ["index.js", "client.js", "lib/*.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "package.json"]
