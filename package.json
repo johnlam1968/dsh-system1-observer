@@ -11,10 +11,12 @@
     "./locale/*.json": "./locale/*.json"
   },
   "icon": "./icon.svg",
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "scripts": { "test": "node --test test/*.test.js" },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
-    "dsh-system1-runtime": "file:../system1-runtime-repo"
+    "dsh-system1-runtime": "file:../system1-runtime-repo",
+    "yaml": "^2.9.1"
   },
   "files": ["index.js", "lib/*.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "package.json"]
 }
