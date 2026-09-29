@@ -59,6 +59,15 @@ produced from no text is not a measurement.
 | `observeSubagents` | `false` | live |
 | `maxFieldChars` | `20000` | live |
 
+**"Live" means these three must be read through their accessor, and this is easy to get wrong.** A field
+marked `.volatile()` does not arrive as its value: cordis passes a `Volatile<T>` reference and the value
+comes from `.get()`. Read one as a plain value and you get the object — `=== true` is false,
+`typeof x === 'string'` is false — so the plugin runs on its defaults while the settings card, the save
+and the trace all look correct. A saved setting then reaches a **running** row with no restart, because
+the harness deliberately does not re-apply the plugin; that is also why a value captured once in `apply`
+never moves. Every read goes through `readConfigValue` (`lib/config-value.js`), which returns the value
+for an accessor and passes an ordinary field through untouched.
+
 `includeNonOperatorFacing` off keeps the `draft` seam to what an operator would read: the Harness's own
 **purpose-tagged** streaming calls (session titles, compaction) are relayed without a model call. It does not
 touch subagents: a subagent's stream either carries a purpose tag or does not, and this flag reads only the tag.
