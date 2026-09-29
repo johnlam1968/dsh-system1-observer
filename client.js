@@ -114,6 +114,15 @@ window.__ModuleLoader__.load({
 
       return h('div', { style: styles.wrap },
         h('h2', { style: styles.title }, 'System One observer'),
+        // THE DIAGNOSTIC STAYS THROUGH TASKS 2-3, by the controller's ruling: it is what identifies the
+        // namespace on the live page, and `describe()` can spell this row either `system1-observer` or
+        // `include:system1-observer` depending on how the profile composed the bundle. Removing it before
+        // the restart checkpoint would leave a spelling mismatch to be diagnosed from the harness's side
+        // instead of read off the card. Task 3 Step 6 removes it.
+        h('p', { style: styles.note },
+          'diagnostic \u2014 mirror status: ' + (snap ? snap.status : 'no mirror')
+          + ' \u00b7 namespace: ' + (ns ? ns.ns : 'not found')
+          + ' \u00b7 available: ' + (namespaces ? namespaces.map((n) => n.ns).join('|') : '-')),
         h(Form, { scope, services }),
       )
     }

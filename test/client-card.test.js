@@ -256,6 +256,25 @@ test('a re-render over the same entry form reuses the model, so staged edits sur
   assert.equal(calls.length, 1, 'a re-render over the same scope must not build a second model')
 })
 
+// The diagnostic line's `namespace:` field, on its own. Read from the rendered TEXT rather than
+// reconstructed from the fixtures, so dropping the paragraph fails this and so does a wrong spelling.
+function diagnosticNamespace(text) {
+  // The value runs to the middle dot that follows it, NOT to the next space: 'not found' is the value
+  // when nothing was resolved.
+  const found = /namespace: ([^\u00b7]+?)\s*(?:\u00b7|$)/.exec(text)
+  return found === null ? null : found[1]
+}
+
+test('the diagnostic line reports the namespace it resolved, so a spelling mismatch is readable', async () => {
+  const { React, registered } = await mount({ namespaces: [{ ns: 'include:system1-observer', value: {}, revision: 4 }] })
+  React.begin()
+  const wrapper = registered[0].dispose.component({ view: 'page' })
+  const text = renderTree(wrapper.type(wrapper.props))
+  assert.match(text, /diagnostic/, 'the development diagnostic must render on the page view')
+  assert.match(text, /mirror status: ready/, 'it must report the mirror status')
+  assert.equal(diagnosticNamespace(text), 'include:system1-observer', 'it must name the namespace it found')
+})
+
 test('with no namespace served, the page renders the unavailable state and never throws', async () => {
   const { React, registered } = await mount({ namespaces: [] })
   React.begin()
@@ -266,6 +285,10 @@ test('with no namespace served, the page renders the unavailable state and never
   let text
   assert.doesNotThrow(() => { text = renderTree(wrapper.type(wrapper.props)) })
   assert.match(text, /not available/, 'the unavailable state must actually render')
+  // The unavailable line is the USER-FACING state; the diagnostic is the development aid beside it.
+  // Both must be present, and the diagnostic must say the namespace was not found.
+  assert.match(text, /diagnostic/, 'the diagnostic must survive the unavailable path too')
+  assert.equal(diagnosticNamespace(text), 'not found', 'it must report that no namespace was found')
 })
 
 test('the two boolean specs round-trip on/off and refuse a draft they cannot accept', async () => {
