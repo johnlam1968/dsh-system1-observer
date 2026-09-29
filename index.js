@@ -53,7 +53,7 @@ const Config = Schema.object({
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read once, at mount, so this is YAML-only.'),
   question: Schema.string().description('Replaces the runtime probe question with a noul built from this text. Empty uses the probe question. Read once, at mount, so this is YAML-only.'),
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
-  includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own streaming calls: session titles, compaction, subagents. Off keeps the trace to what an operator would read.'),
+  includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
   maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
 })
 
