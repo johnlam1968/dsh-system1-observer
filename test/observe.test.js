@@ -38,6 +38,56 @@ test('a failing decide is traced as an error, never thrown, and never reaches th
   assert.equal(lines[0].hook, 'pre_execute')
 })
 
+// WHY THESE THREE EXIST: `requested`/`executed` are bound TOP-LEVEL by spec §8, but the runtime's
+// ModelResult has no such fields -- they live inside `envelope` (`model/client.ts`, `model/service.ts`).
+// The first version read `result?.requested`/`result?.executed`, so every live `call` line carried
+// `"requested":null,"executed":null` beside a populated envelope, and no test mentioned either field.
+test('a call records requested and executed from the result envelope at the top level', async () => {
+  const { lines, trace } = recorder()
+  const envelope = {
+    requested: { provider: 'typesafe', model: 'jev-latest' },
+    executed: { provider: 'typesafe', model: 'typesafe/jev-1.13-20260917' },
+  }
+  const observer = createObserver({
+    decide: async () => ({ kind: 'answers', answers: {}, envelope }),
+    trace,
+    readConfig: () => config,
+  })
+  await observer.observe('draft', 'hi', { agentId: 'a1' })
+  assert.equal(lines[0].event, 'call')
+  assert.deepEqual(lines[0].requested, envelope.requested)
+  assert.deepEqual(lines[0].executed, envelope.executed)
+})
+
+test('a wire-shaped result projects requested as null and executed from the envelope', async () => {
+  const { lines, trace } = recorder()
+  // The wire client's ENVELOPE list carries `executed` but not `requested` (`model/client.ts`), so this
+  // is the shape the fallback transport really produces: one present, one absent, and the absent one null.
+  const envelope = { executed: { provider: 'laya', model: 'auto' }, model: 'auto' }
+  const observer = createObserver({
+    decide: async () => ({ kind: 'answers', answers: {}, worstCase: 0, envelope, rawAnswers: {} }),
+    trace,
+    readConfig: () => config,
+  })
+  await observer.observe('draft', 'hi', { agentId: 'a1' })
+  assert.equal(lines[0].requested, null)
+  assert.deepEqual(lines[0].executed, envelope.executed)
+})
+
+test('a top-level requested/executed is not projected: the envelope is the only source', async () => {
+  const { lines, trace } = recorder()
+  // A FALLBACK TO THE TOP-LEVEL FIELD IS WHAT CAUSED THE BUG in the first place: a second projection that
+  // looks correct while the field it reads is never populated.
+  const observer = createObserver({
+    decide: async () => ({ kind: 'answers', answers: {}, requested: { provider: 't' }, executed: { provider: 't' } }),
+    trace,
+    readConfig: () => config,
+  })
+  await observer.observe('draft', 'hi', { agentId: 'a1' })
+  assert.equal(lines[0].requested, null)
+  assert.equal(lines[0].executed, null)
+})
+
 test('a result that is not answers is recorded as a call with that result, not as a failure', async () => {
   const { lines, trace } = recorder()
   const observer = createObserver({ decide: async () => ({ kind: 'error', reason: 'the request timed out' }), trace, readConfig: () => config })
