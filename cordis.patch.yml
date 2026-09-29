@@ -1,0 +1,10 @@
+# A HOST ROW, not a preset row: it attaches to the loop's seams, which are process-wide, and its trace is a
+# property of the deployment rather than of one agent's preset.
+- insert:
+    - id: system1-observer
+      name: 'dsh-system1-observer'
+      config:
+        hooks: [admit, draft, pre_execute, post_execute]
+        provider: typesafe
+        model: jev-latest
+        timeoutMs: 8000

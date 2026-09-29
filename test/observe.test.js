@@ -54,6 +54,24 @@ test('a state longer than maxFieldChars is truncated and marked', async () => {
   assert.equal(lines[0].truncated, true)
 })
 
+test('a seam with no text is recorded as a skip and never reaches the model', async () => {
+  const { lines, trace } = recorder()
+  let called = 0
+  const observer = createObserver({
+    decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
+    trace,
+    readConfig: () => config,
+  })
+  await observer.observe('close', '', { agentId: 'a1' })
+  await observer.observe('request', '   ', { agentId: 'a1' })
+  assert.equal(called, 0)
+  assert.equal(lines.length, 2)
+  assert.equal(lines[0].event, 'skip')
+  assert.equal(lines[0].hook, 'close')
+  assert.equal(lines[0].reason, 'no text at this seam')
+  assert.equal(lines[1].event, 'skip')
+})
+
 test('a throwing trace cannot fail the turn', async () => {
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {} }),
