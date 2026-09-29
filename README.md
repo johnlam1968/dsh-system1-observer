@@ -95,3 +95,27 @@ timeout or a malformed body.
 `cordis.patch.yml` inserts one host row, `system1-observer`, with `provider: typesafe`, `model: jev-latest`
 and the default hook set. When the profile mounts a `system1` service the observer calls through it; otherwise
 it falls back to the wire at `wireUrl`. Installing the bundle into a profile is a separate step.
+
+## Installing it
+
+```bash
+git clone https://github.com/johnlam1968/dsh-system1-observer.git
+cd dsh-system1-observer
+./install.sh              # or: ./install.sh <profile>   ·   ./install.sh web --check-only
+```
+
+`install.sh` checks the prerequisites, runs `npm install` (which fetches `dsh-system1-runtime` from
+GitHub), **verifies the runtime actually resolved** rather than trusting npm's exit code, adds the
+bundle, and prints the composed row and the surviving bundle list. It is idempotent.
+
+The equivalent by hand:
+
+```bash
+npm install
+dsh plugin --profile web add "$PWD"
+```
+
+`dsh plugin add` REWRITES the profile's bundle list and drops bundles it did not write — re-read
+`dsh.profile.bundles` afterwards. A newly added bundle needs no restart; a bundle whose package was
+*replaced* does.
+
