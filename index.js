@@ -67,15 +67,28 @@ async function apply(ctx, config) {
   const hooks = readHooks(config)                       // a typo refuses the mount, naming the seam
   const evidence = createEvidence({ defaultPath: resolveTracePath(config, here), envVar: 'SYSTEM1_OBSERVER_TRACE' })
   const transport = { kind: 'wire', provider: config?.provider ?? null, model: config?.model ?? null }
-  let decide = createModel({ baseUrl: config?.wireUrl || 'http://127.0.0.1:8766', timeoutMs: config?.timeoutMs ?? 8000 })
+  const wire = createModel({ baseUrl: config?.wireUrl || 'http://127.0.0.1:8766', timeoutMs: config?.timeoutMs ?? 8000 })
+  // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
+  // site working across the two transports; assigning the client itself to `decide` made every call throw
+  // "decide is not a function", which no unit test saw because `apply` was never executed.
+  let decide = (request) => wire.decide(request)
 
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
-  // when the service arrives, which may be after this row mounts.
+  // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and
+  // `evidence` directly, because the `provider`/`model` consts below are in their temporal dead zone if the
+  // callback runs synchronously during this call.
   ctx.inject(['system1'], (child) => {
     const service = child.get('system1')
     if (service === undefined) return
-    decide = createServiceModel({ service, provider: config?.provider ?? undefined, model: config?.model ?? undefined })
+    const viaService = createServiceModel({
+      service,
+      provider: config?.provider ?? undefined,
+      model: config?.model ?? undefined,
+    })
+    decide = (request) => viaService.decide(request)
     transport.kind = 'service'
+    // The mount line already said `wire`; without this line the record claims a transport that was replaced.
+    evidence.trace('transport', () => ({ transport: 'service', provider: config?.provider ?? null, model: config?.model ?? null }))
   })
 
   const provider = config?.provider ?? null
