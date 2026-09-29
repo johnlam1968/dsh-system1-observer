@@ -28,6 +28,22 @@ const name = 'system1-observer'
 // what `ctx.inject` below is for.
 const inject = ['agents']
 
+/**
+ * Where the trace goes when nothing overrides it.
+ *
+ * The spec's default is `<DSH_HOME>/logs/…`, so a trace is discoverable beside the harness's own logs; with no
+ * `DSH_HOME` (a bare `node` run) it falls back to the package's own data directory. `tracePath` wins over both,
+ * and `SYSTEM1_OBSERVER_TRACE` is applied by the evidence sink on top of whatever this returns.
+ */
+export function resolveTracePath(config, packageDir, env = process.env) {
+  const given = typeof config?.tracePath === 'string' ? config.tracePath.trim() : ''
+  if (given !== '') return given
+  const home = typeof env?.DSH_HOME === 'string' && env.DSH_HOME !== '' ? env.DSH_HOME : undefined
+  return home === undefined
+    ? join(packageDir, 'data', 'system1-observer.jsonl')
+    : join(home, 'logs', 'system1-observer.jsonl')
+}
+
 const Config = Schema.object({
   hooks: Schema.array(Schema.string())
     .description(`Points of the loop to call, from: ${PROBE_SEAMS.join(', ')}. Read once, at mount, so this is YAML-only.`),
@@ -49,11 +65,7 @@ async function apply(ctx, config) {
 
   const here = dirname(fileURLToPath(import.meta.url))
   const hooks = readHooks(config)                       // a typo refuses the mount, naming the seam
-  const evidence = createEvidence({
-    defaultPath: join(here, 'data', 'system1-observer.jsonl'),
-    envVar: 'SYSTEM1_OBSERVER_TRACE',
-    ...(typeof config?.tracePath === 'string' && config.tracePath !== '' ? { defaultPath: config.tracePath } : {}),
-  })
+  const evidence = createEvidence({ defaultPath: resolveTracePath(config, here), envVar: 'SYSTEM1_OBSERVER_TRACE' })
   const transport = { kind: 'wire', provider: config?.provider ?? null, model: config?.model ?? null }
   let decide = createModel({ baseUrl: config?.wireUrl || 'http://127.0.0.1:8766', timeoutMs: config?.timeoutMs ?? 8000 })
 

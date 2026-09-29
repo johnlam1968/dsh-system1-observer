@@ -53,13 +53,17 @@ produced from no text is not a measurement.
 | `timeoutMs` | `8000` | at mount |
 | `wireUrl` | `http://127.0.0.1:8766` | at mount |
 | `question` | the runtime probe question | at mount |
-| `tracePath` | `SYSTEM1_OBSERVER_TRACE`, else `<package>/data/system1-observer.jsonl` | at mount |
+| `tracePath` | `SYSTEM1_OBSERVER_TRACE`, else `<DSH_HOME>/logs/system1-observer.jsonl` | at mount |
 | `includeNonOperatorFacing` | `false` | live |
 | `maxFieldChars` | `20000` | live |
 
 `includeNonOperatorFacing` off keeps the `draft` seam to what an operator would read: the Harness's own
 streaming calls (session titles, compaction, subagents) are relayed without a model call. `maxFieldChars` caps
 each recorded state and marks the line `truncated: true` when anything was cut.
+
+Where the trace is written: `SYSTEM1_OBSERVER_TRACE` overrides everything; otherwise `tracePath` if set;
+otherwise `<DSH_HOME>/logs/system1-observer.jsonl`, so a trace is discoverable beside the harness's own logs.
+Only with no `DSH_HOME` — a bare `node` run — does it fall back to the bundle's `data/system1-observer.jsonl`.
 
 `question` replaces the runtime's probe question with a `noul` built from the text; left empty, the probe
 question is used, and its answer is checkable because the seam is known.
