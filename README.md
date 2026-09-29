@@ -119,3 +119,32 @@ dsh plugin --profile web add "$PWD"
 `dsh.profile.bundles` afterwards. A newly added bundle needs no restart; a bundle whose package was
 *replaced* does.
 
+
+## Reading the trace
+
+```bash
+node scripts/trace.mjs                    # the newest run, aligned and collapsed
+node scripts/trace.mjs --list             # every run in the file
+node scripts/trace.mjs --hook draft --calls --tail 5
+node scripts/trace.mjs --full             # the question and the envelope under each call
+```
+
+The file is append-only across restarts, so it holds several **runs** and the reader takes the newest
+unless told otherwise. It collapses consecutive identical skips into one line with a count — a
+subagent produces hundreds in a row, and a line each buries every call in the run — and it prints the
+verdict a person reads (`before_a_tool_call p=0.88`) rather than the JSON that carries it:
+
+```
+run 2026-09-29T19-13-15-523Z-c69f82ad   1544 events · 19:13:15.888 → 21:06:58.970
+  mounted   hooks admit,draft,pre_execute,post_execute · transport service · typesafe/jev-latest
+  events    566 calls · 977 skips · 0 errors
+  latency   min 181ms · median 273ms · max 15005ms
+  model     typesafe/jev-latest → typesafe/jev-1.13-20260917 ×565
+
+21:06:58  CALL  draft         session-17326d  833ms   Much more readable. Two flaws to fix: the execut…
+                                             → model_output p=0.83
+```
+
+`--file` takes a path; without it the reader picks the most recently written trace among
+`$SYSTEM1_OBSERVER_TRACE`, `<DSH_HOME>/logs/`, and the package's `data/` directory — most recent, not
+first found, so a stale one-line trace cannot shadow the live one.
