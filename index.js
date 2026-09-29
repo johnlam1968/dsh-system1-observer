@@ -14,6 +14,7 @@ import { createEvidence } from 'dsh-system1-runtime/guardrail/evidence.js'
 import { checkInterfaceVersion } from 'dsh-system1-runtime/interface-version.js'
 import { createModel } from 'dsh-system1-runtime/model/client.js'
 import { createServiceModel } from 'dsh-system1-runtime/model/service.js'
+import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { createObserver } from './lib/observe.js'
 import { registerListeners, readHooks } from './lib/register.js'
 
@@ -36,7 +37,8 @@ const inject = ['agents']
  * and `SYSTEM1_OBSERVER_TRACE` is applied by the evidence sink on top of whatever this returns.
  */
 export function resolveTracePath(config, packageDir, env = process.env) {
-  const given = typeof config?.tracePath === 'string' ? config.tracePath.trim() : ''
+  const configured = readConfigValue(config?.tracePath)
+  const given = typeof configured === 'string' ? configured.trim() : ''
   if (given !== '') return given
   const home = typeof env?.DSH_HOME === 'string' && env.DSH_HOME !== '' ? env.DSH_HOME : undefined
   return home === undefined
@@ -65,10 +67,14 @@ async function apply(ctx, config) {
   }
 
   const here = dirname(fileURLToPath(import.meta.url))
-  const hooks = readHooks(config)                       // a typo refuses the mount, naming the seam
-  const evidence = createEvidence({ defaultPath: resolveTracePath(config, here), envVar: 'SYSTEM1_OBSERVER_TRACE' })
-  const transport = { kind: 'wire', provider: config?.provider ?? null, model: config?.model ?? null }
-  const wire = createModel({ baseUrl: config?.wireUrl || 'http://127.0.0.1:8766', timeoutMs: config?.timeoutMs ?? 8000 })
+  // THE MOUNT-BOUND FIELDS, READ ONCE. `hooks` decides which listeners exist, and a transport binds
+  // when its client is built, so neither can change under a running row; unwrapping them once is
+  // correct. The VOLATILE fields are deliberately NOT taken from here -- see `readConfig` below.
+  const mount = plainConfig(config)
+  const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
+  const evidence = createEvidence({ defaultPath: resolveTracePath(mount, here), envVar: 'SYSTEM1_OBSERVER_TRACE' })
+  const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
+  const wire = createModel({ baseUrl: mount.wireUrl || 'http://127.0.0.1:8766', timeoutMs: mount.timeoutMs ?? 8000 })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
   // site working across the two transports; assigning the client itself to `decide` made every call throw
   // "decide is not a function", which no unit test saw because `apply` was never executed.
@@ -81,7 +87,7 @@ async function apply(ctx, config) {
   // within microseconds and would write `wire` again). This writer is idempotent and is called by whichever
   // comes first: the service arriving, or the first observation (so a profile with no service still gets a
   // mount line, in `wire`, before the first call or skip it belongs to). It reads `config` directly because
-  // the `provider`/`model` consts below are in their temporal dead zone if the callback runs synchronously.
+  // the accessors above are unwrapped whatever order these run in.
   let mountTraced = false
   function writeMount() {
     if (mountTraced) return
@@ -89,8 +95,8 @@ async function apply(ctx, config) {
     evidence.trace('mount', () => ({
       hooks,
       transport: transport.kind,
-      provider: config?.provider ?? null,
-      model: config?.model ?? null,
+      provider: mount.provider ?? null,
+      model: mount.model ?? null,
       questionIds: ['probe'],
       tracePath: evidence.path,
     }))
@@ -98,25 +104,29 @@ async function apply(ctx, config) {
 
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
   // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and
-  // `evidence` directly, because the `provider`/`model` consts below are in their temporal dead zone if the
-  // callback runs synchronously during this call.
+  // `evidence` and the `mount` snapshot directly, which is safe whatever order the callback runs in.
   ctx.inject(['system1'], (child) => {
     const service = child.get('system1')
     if (service === undefined) return
     const viaService = createServiceModel({
       service,
-      provider: config?.provider ?? undefined,
-      model: config?.model ?? undefined,
+      provider: mount.provider ?? undefined,
+      model: mount.model ?? undefined,
     })
     decide = (request) => viaService.decide(request)
     transport.kind = 'service'
     writeMount()
   })
 
-  const provider = config?.provider ?? null
-  const model = config?.model ?? null
+  const provider = mount.provider ?? null
+  const model = mount.model ?? null
+  // THE VOLATILE FIELDS ARE READ FRESH ON EVERY CALL. `plainConfig` unwraps each `Volatile` with
+  // `.get()` at this moment, which is what lets a saved setting reach a RUNNING row: the harness does
+  // not re-apply the plugin -- instance identity is unchanged by design -- so a value captured in
+  // `apply` would never move. Reading that captured object instead made every settings save a no-op
+  // that the card still reported as "Saved."
   const readConfig = () => ({
-    ...(config ?? {}),
+    ...plainConfig(config),
     transport: transport.kind,
     provider,
     model,
