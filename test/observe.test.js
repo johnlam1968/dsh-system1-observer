@@ -88,12 +88,45 @@ test('a top-level requested/executed is not projected: the envelope is the only 
   assert.equal(lines[0].executed, null)
 })
 
-test('a result that is not answers is recorded as a call with that result, not as a failure', async () => {
+// SPEC 6 BINDS: "A timeout, a non-2xx, a malformed body, an unresolvable credential and a throwing trace
+// each become an `error` line", and 8 shows that line. The runtime's clients RETURN `{kind:'error', reason}`
+// rather than throwing, so an outage was recorded as a `call` line whose `answer.kind` was `'error'` --
+// invisible to anyone counting `error` lines. This test used to assert that wrong behaviour.
+test('a returned error result is written as an error line with its reason, and no call line', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'error', reason: 'the request timed out' }), trace, readConfig: () => config })
+  const observer = createObserver({
+    decide: async () => ({ kind: 'error', reason: 'the request timed out after 8000 ms' }),
+    trace,
+    readConfig: () => config,
+  })
+  await observer.observe('draft', 'hi', { agentId: 'a1' })
+  assert.equal(lines.length, 1, 'an error result must not also write a call line')
+  assert.equal(lines[0].event, 'error')
+  assert.equal(lines[0].error, 'the request timed out after 8000 ms')
+  assert.equal(lines[0].hook, 'draft')
+  assert.equal(lines[0].hostEvent, 'llm/stream')
+  assert.equal(typeof lines[0].ms, 'number')
+})
+
+test('a returned error result with no reason still writes an error line', async () => {
+  const { lines, trace } = recorder()
+  const observer = createObserver({ decide: async () => ({ kind: 'error' }), trace, readConfig: () => config })
   await observer.observe('draft', 'hi', {})
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].event, 'error')
+  assert.equal(lines[0].error, 'the model client returned an error')
+})
+
+test('a result that is neither answers nor an error is still recorded as a call', async () => {
+  const { lines, trace } = recorder()
+  // The error branch must not swallow every unreadable result: a result of any other kind keeps the `call`
+  // line, which is what today's behaviour does and what the spec's `call` line is for.
+  const odd = { kind: 'something-else', detail: 'kept' }
+  const observer = createObserver({ decide: async () => odd, trace, readConfig: () => config })
+  await observer.observe('draft', 'hi', {})
+  assert.equal(lines.length, 1)
   assert.equal(lines[0].event, 'call')
-  assert.equal(lines[0].answer.kind, 'error')
+  assert.deepEqual(lines[0].answer, odd)
 })
 
 test('a state longer than maxFieldChars is truncated and marked', async () => {
