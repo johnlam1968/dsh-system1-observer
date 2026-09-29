@@ -546,6 +546,21 @@ test('the number field saves a number, not the string that was typed', async () 
   assert.equal(form.calls[0].revision, 7)
 })
 
+test("a fractional character count is refused, as the card's own copy promises", async () => {
+  const form = stubForm()
+  const { React, registered } = await mount({ form })
+  paint(React, registered)
+  form.derive()
+  const ready = paint(React, registered)
+  ready.inputs.find((input) => input.id === 'system1-observer-maxFieldChars')
+    .onChange({ currentTarget: { value: '1.5' } })
+  const edited = paint(React, registered)
+  await formProps(edited.node).onSave()
+  assert.equal(form.calls.length, 0, 'a fractional character count must not reach mutate')
+  const after = paint(React, registered)
+  assert.match(after.text, /whole number/, 'and the card must say why, in the words it already uses')
+})
+
 test('a refused mutate surfaces a refusal rather than claiming success', async () => {
   const form = stubForm({ mutable: false })
   const { React, registered } = await mount({ form })

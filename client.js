@@ -212,7 +212,10 @@ window.__ModuleLoader__.load({
       }, [current])
 
       const parsedChars = Number(draft.maxFieldChars)
-      const charsValid = draft.maxFieldChars.trim() !== '' && Number.isFinite(parsedChars) && parsedChars >= 1
+      // WHOLE NUMBERS ONLY, because the copy below says "a whole number" and the reference does the same
+      // (`dsh-system1/lib/client.js:212`: Number.isInteger(parsedTimeout) && parsedTimeout >= 1). A fractional
+      // count reached `mutate` before this, so the card refused in words what it accepted in code.
+      const charsValid = draft.maxFieldChars.trim() !== '' && Number.isInteger(parsedChars) && parsedChars >= 1
       const invalid = !charsValid
       const dirty = draft.observeSubagents !== current.observeSubagents
         || draft.includeNonOperatorFacing !== current.includeNonOperatorFacing
