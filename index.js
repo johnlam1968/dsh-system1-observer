@@ -73,6 +73,28 @@ async function apply(ctx, config) {
   // "decide is not a function", which no unit test saw because `apply` was never executed.
   let decide = (request) => wire.decide(request)
 
+  // THE MOUNT LINE IS WRITTEN WHEN THE TRANSPORT IS KNOWN -- NOT WHEN `apply` RETURNS. `ctx.inject`'s
+  // callback runs through a cordis fiber, so at the end of `apply` the transport is still `wire`: measured
+  // live, the mount line read `"transport":"wire"` at 17:20:41.319Z while every `call` line and the real
+  // transport were `service`, and the swap landed 355 ms later. A microtask does not fix that (it fires
+  // within microseconds and would write `wire` again). This writer is idempotent and is called by whichever
+  // comes first: the service arriving, or the first observation (so a profile with no service still gets a
+  // mount line, in `wire`, before the first call or skip it belongs to). It reads `config` directly because
+  // the `provider`/`model` consts below are in their temporal dead zone if the callback runs synchronously.
+  let mountTraced = false
+  function writeMount() {
+    if (mountTraced) return
+    mountTraced = true
+    evidence.trace('mount', () => ({
+      hooks,
+      transport: transport.kind,
+      provider: config?.provider ?? null,
+      model: config?.model ?? null,
+      questionIds: ['probe'],
+      tracePath: evidence.path,
+    }))
+  }
+
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
   // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and
   // `evidence` directly, because the `provider`/`model` consts below are in their temporal dead zone if the
@@ -87,8 +109,7 @@ async function apply(ctx, config) {
     })
     decide = (request) => viaService.decide(request)
     transport.kind = 'service'
-    // The mount line already said `wire`; without this line the record claims a transport that was replaced.
-    evidence.trace('transport', () => ({ transport: 'service', provider: config?.provider ?? null, model: config?.model ?? null }))
+    writeMount()
   })
 
   const provider = config?.provider ?? null
@@ -101,17 +122,10 @@ async function apply(ctx, config) {
   })
   const observer = createObserver({ decide: (request) => decide(request), trace: evidence.trace, readConfig })
 
-  evidence.trace('mount', () => ({
-    hooks,
-    transport: transport.kind,
-    provider,
-    model,
-    questionIds: ['probe'],
-    tracePath: evidence.path,
-  }))
-
   registerListeners(ctx, hooks, {
-    observe: observer.observe,
+    // THE MOUNT LINE PRECEDES THE FIRST OBSERVATION when no service ever appeared. Calling the writer here
+    // rather than at the end of `apply` is what keeps "no service" from being recorded before it is known.
+    observe: (hook, text, meta) => { writeMount(); return observer.observe(hook, text, meta) },
     readConfig,
     captureAgent: () => ctx.agents.currentInitiator()?.id,
     meta: (payload) => ({ agentId: payload?.agent?.id, turn: payload?.turn, step: payload?.step }),
