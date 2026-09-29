@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readHooks, registerListeners } from '../lib/register.js'
+import { readHooks, registerListeners, isSubagent } from '../lib/register.js'
 
 /** A Cordis context, reduced to what this plugin touches. */
 function fakeCtx() {
@@ -34,4 +34,117 @@ test('a waterfall listener returns the decision it was given, unchanged', async 
   const returned = await ctx.handlers.get('agent/pre-step')({ agent: { id: 'a1' }, messages: [], turn: 1, step: 1 }, async () => decision)
   assert.equal(returned, decision)
   assert.equal(called, 1)
+})
+
+// THE SUBAGENT DISCRIMINATOR, confirmed at runtime. `agent.session.header.origin === 'subagent'`:
+// `Agent.session` (packages/core/agent/src/runtime-types.ts), `Session.header`
+// (packages/core/session/src/index.ts), `SessionHeader.origin` (packages/core/session/src/types.ts).
+// Property checks only: a payload with no session is an ordinary agent, never a throw.
+const operatorAgent = { id: 'op-1', session: { header: { origin: 'operator' } } }
+const subagentAgent = { id: 'sub-1', session: { header: { origin: 'subagent' } } }
+
+test('isSubagent reads the session header origin with property checks and never throws', () => {
+  assert.equal(isSubagent(subagentAgent), true)
+  assert.equal(isSubagent(operatorAgent), false)
+  const odd = [undefined, null, 'agent', 42, {}, { session: null }, { session: {} }, { session: { header: 42 } }, { session: { header: { origin: null } } }]
+  for (const payload of odd) {
+    // If any of these threw, the call itself would fail the test -- which is the no-throw property.
+    assert.equal(isSubagent(payload), false, `isSubagent(${JSON.stringify(payload)}) should be false`)
+  }
+})
+
+/** The listener dependencies, with `observe`/`skip` reduced to recorders. */
+function listenerDeps({ observed, skipped, config = {}, agent = operatorAgent }) {
+  return {
+    observe: async (hook, text, meta) => { observed.push({ hook, text, meta }) },
+    skip: (hook, meta, reason) => { skipped.push({ hook, meta, reason }) },
+    readConfig: () => config,
+    captureAgent: () => agent,
+    meta: (payload) => ({ agentId: payload?.agent?.id ?? null, turn: payload?.turn ?? null, step: payload?.step ?? null }),
+  }
+}
+
+test("a subagent's waterfall seams record the subagent skip, never observe, and still return the decision", async () => {
+  const ctx = fakeCtx()
+  const observed = [], skipped = []
+  registerListeners(ctx, ['admit', 'pre_execute'], listenerDeps({ observed, skipped }))
+
+  const decision = { messages: ['original'] }
+  const returned = await ctx.handlers.get('agent/pre-step')({ agent: subagentAgent, messages: [], turn: 1, step: 1 }, async () => decision)
+  assert.equal(returned, decision, 'the decision must be returned unchanged')
+
+  const toolDecision = { allow: true }
+  const toolReturned = await ctx.handlers.get('tools/pre-execute')({ agent: subagentAgent, name: 'bash', arguments: { command: 'ls' } }, async () => toolDecision)
+  assert.equal(toolReturned, toolDecision, 'the decision must be returned unchanged')
+
+  assert.equal(observed.length, 0, 'the model must never be called for a subagent')
+  assert.deepEqual(skipped.map(entry => [entry.hook, entry.reason]), [['admit', 'subagent session'], ['pre_execute', 'subagent session']])
+  assert.equal(skipped[0].meta.agentId, 'sub-1')
+})
+
+test('a suppressed draft relays every chunk unchanged and in order, and records one skip', async () => {
+  const ctx = fakeCtx()
+  const observed = [], skipped = []
+  registerListeners(ctx, ['draft'], listenerDeps({ observed, skipped, agent: subagentAgent }))
+
+  async function* reply() {
+    yield { type: 'text-delta', text: 'a' }
+    yield { type: 'text-delta', text: 'b' }
+    yield { type: 'block-end', block: { type: 'text', text: 'ab' } }
+  }
+  const relayed = []
+  for await (const chunk of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) relayed.push(chunk)
+
+  assert.deepEqual(relayed.map(chunk => chunk.type), ['text-delta', 'text-delta', 'block-end'])
+  assert.equal(observed.length, 0, 'a suppressed stream must not reach the model')
+  assert.equal(skipped.length, 1)
+  assert.equal(skipped[0].hook, 'draft')
+  assert.equal(skipped[0].reason, 'subagent session')
+  assert.equal(skipped[0].meta.agentId, 'sub-1')
+})
+
+test("a subagent's result emit records a skip and never observes", () => {
+  const ctx = fakeCtx()
+  const observed = [], skipped = []
+  registerListeners(ctx, ['result'], listenerDeps({ observed, skipped }))
+
+  ctx.handlers.get('tools/result')({ agent: subagentAgent }, { ok: true })
+
+  assert.equal(observed.length, 0)
+  assert.equal(skipped.length, 1)
+  assert.equal(skipped[0].hook, 'result')
+  assert.equal(skipped[0].reason, 'subagent session')
+})
+
+test('observeSubagents true observes a subagent; a non-subagent is observed either way', async () => {
+  const onCtx = fakeCtx()
+  const observed = [], skipped = []
+  registerListeners(onCtx, ['admit'], listenerDeps({ observed, skipped, config: { observeSubagents: true } }))
+  await onCtx.handlers.get('agent/pre-step')({ agent: subagentAgent, messages: [{ role: 'user', content: 'hi' }], turn: 1, step: 1 }, async () => ({}))
+  assert.equal(skipped.length, 0)
+  assert.equal(observed.length, 1)
+  assert.equal(observed[0].hook, 'admit')
+
+  const offCtx = fakeCtx()
+  const observedOp = [], skippedOp = []
+  registerListeners(offCtx, ['admit'], listenerDeps({ observed: observedOp, skipped: skippedOp, agent: operatorAgent }))
+  await offCtx.handlers.get('agent/pre-step')({ agent: operatorAgent, messages: [{ role: 'user', content: 'hi' }], turn: 1, step: 1 }, async () => ({}))
+  assert.equal(skippedOp.length, 0, 'a non-subagent must never be suppressed')
+  assert.equal(observedOp.length, 1)
+})
+
+test('the includeNonOperatorFacing gate comes first: a purpose-tagged stream writes no subagent skip', async () => {
+  const ctx = fakeCtx()
+  const observed = [], skipped = []
+  registerListeners(ctx, ['draft'], listenerDeps({ observed, skipped, agent: subagentAgent, config: {} }))
+
+  async function* reply() {
+    yield { type: 'text-delta', text: 'a' }
+  }
+  const relayed = []
+  for await (const chunk of ctx.handlers.get('llm/stream')({ purpose: 'title' }, reply)) relayed.push(chunk.type)
+
+  assert.deepEqual(relayed, ['text-delta'], 'the stream must still relay untouched')
+  assert.equal(observed.length, 0)
+  assert.equal(skipped.length, 0, 'a stream the purpose gate already excludes must not gain a subagent skip')
 })

@@ -55,11 +55,20 @@ produced from no text is not a measurement.
 | `question` | the runtime probe question | at mount |
 | `tracePath` | `SYSTEM1_OBSERVER_TRACE`, else `<DSH_HOME>/logs/system1-observer.jsonl` | at mount |
 | `includeNonOperatorFacing` | `false` | live |
+| `observeSubagents` | `false` | live |
 | `maxFieldChars` | `20000` | live |
 
 `includeNonOperatorFacing` off keeps the `draft` seam to what an operator would read: the Harness's own
-streaming calls (session titles, compaction, subagents) are relayed without a model call. `maxFieldChars` caps
-each recorded state and marks the line `truncated: true` when anything was cut.
+**purpose-tagged** streaming calls (session titles, compaction) are relayed without a model call. It does not
+touch subagents: a subagent's stream either carries a purpose tag or does not, and this flag reads only the tag.
+
+`observeSubagents` off — the default — records a subagent session's streams and tool calls as `skip` lines with
+reason `subagent session`, and their text never reaches the model or the trace. On, a subagent is observed like
+any other agent. A suppressed `draft` is still relayed chunk for chunk, untouched; a suppressed waterfall seam
+still returns the decision it was handed, the same reference. The discriminator is the session header:
+`agent.session.header.origin === 'subagent'`.
+
+`maxFieldChars` caps each recorded state and marks the line `truncated: true` when anything was cut.
 
 Where the trace is written: `SYSTEM1_OBSERVER_TRACE` overrides everything; otherwise `tracePath` if set;
 otherwise `<DSH_HOME>/logs/system1-observer.jsonl`, so a trace is discoverable beside the harness's own logs.
@@ -74,7 +83,7 @@ One JSON object per line, plus a `run` id on every line so several runs in one f
 
 - `mount` — the hooks, the transport actually chosen, the provider, the model and the trace path;
 - `call` — the seam, the host event, the agent, the excerpt, the questions as sent and the whole answer;
-- `skip` — a seam that carried no text, and why;
+- `skip` — a seam that carried no text, or a subagent session that was deliberately not observed, and why;
 - `error` — a `decide` that threw.
 
 Recording is best-effort throughout: a throwing trace cannot fail a turn, and neither can a model outage, a

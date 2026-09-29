@@ -54,6 +54,7 @@ const Config = Schema.object({
   question: Schema.string().description('Replaces the runtime probe question with a noul built from this text. Empty uses the probe question. Read once, at mount, so this is YAML-only.'),
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
   includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
+  observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
   maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
 })
 
@@ -124,10 +125,14 @@ async function apply(ctx, config) {
 
   registerListeners(ctx, hooks, {
     // THE MOUNT LINE PRECEDES THE FIRST OBSERVATION when no service ever appeared. Calling the writer here
-    // rather than at the end of `apply` is what keeps "no service" from being recorded before it is known.
+    // rather than at the end of `apply` is what keeps "no service" from being recorded before it is known --
+    // including when the first event of a run is a subagent's `skip`.
     observe: (hook, text, meta) => { writeMount(); return observer.observe(hook, text, meta) },
+    skip: (hook, meta, reason) => { writeMount(); return observer.skip(hook, meta, reason) },
     readConfig,
-    captureAgent: () => ctx.agents.currentInitiator()?.id,
+    // THE AGENT, NOT ITS ID: the `draft` seam reads both `agent.id` and the session origin from this one
+    // object, and `isSubagent` needs the latter.
+    captureAgent: () => ctx.agents.currentInitiator(),
     meta: (payload) => ({ agentId: payload?.agent?.id, turn: payload?.turn, step: payload?.step }),
   })
 }

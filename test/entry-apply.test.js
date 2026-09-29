@@ -101,3 +101,88 @@ test('when no service ever arrives the first observation writes a wire mount lin
   assert.ok(mountIndex < observedIndex, 'the mount line must precede the observation it belongs to')
   assert.equal(lines.some(line => line.event === 'transport'), false)
 })
+
+// THE SUBAGENT KNOB, end to end through `apply` and the real observer. `agent.session.header.origin`
+// is the discriminator; `observeSubagents` is off unless it is exactly `true`.
+const OPERATOR = { id: 'op-1', session: { header: { origin: 'operator' } } }
+const SUBAGENT = { id: 'sub-1', session: { header: { origin: 'subagent' } } }
+
+/** A ctx whose system1 service counts `decide` calls, with a settable current initiator. */
+function serviceCtx(decide) {
+  const handlers = new Map()
+  let current
+  return {
+    handlers,
+    setInitiator(agent) { current = agent },
+    on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
+    inject(_services, callback) { callback({ get: () => ({ decide }) }) },
+    agents: { currentInitiator: () => current },
+  }
+}
+
+test("by default a subagent's admit, pre_execute and draft are skips and decide is never called", async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  let calls = 0
+  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  ctx.setInitiator(SUBAGENT)
+  await apply(ctx, { hooks: ['admit', 'pre_execute', 'draft'], tracePath })
+
+  const decision = { messages: ['original'] }
+  const returned = await ctx.handlers.get('agent/pre-step')({ agent: SUBAGENT, messages: [{ role: 'user', content: [{ type: 'text', text: 'THE WHOLE TASK PROMPT' }] }], turn: 1, step: 1 }, async () => decision)
+  assert.equal(returned, decision, 'the decision must be returned unchanged')
+
+  const toolDecision = { allow: true }
+  const toolReturned = await ctx.handlers.get('tools/pre-execute')({ agent: SUBAGENT, name: 'bash', arguments: { command: 'ls' } }, async () => toolDecision)
+  assert.equal(toolReturned, toolDecision, 'the decision must be returned unchanged')
+
+  async function* reply() {
+    yield { type: 'text-delta', text: 'a' }
+    yield { type: 'block-end', block: { type: 'text', text: 'a' } }
+  }
+  const relayed = []
+  for await (const chunk of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) relayed.push(chunk.type)
+  assert.deepEqual(relayed, ['text-delta', 'block-end'], 'a suppressed stream must still be relayed untouched')
+
+  const lines = readLines(tracePath)
+  const skips = lines.filter(line => line.event === 'skip')
+  assert.deepEqual(skips.map(line => line.hook), ['admit', 'pre_execute', 'draft'])
+  assert.ok(skips.every(line => line.reason === 'subagent session'), JSON.stringify(skips))
+  assert.equal(lines.some(line => line.event === 'call'), false, 'a subagent must not reach the model')
+  assert.equal(calls, 0, 'decide must never be called for a subagent')
+  assert.equal(JSON.stringify(lines).includes('THE WHOLE TASK PROMPT'), false, "a subagent's text must not be recorded")
+  const mountIndex = lines.findIndex(line => line.event === 'mount')
+  assert.ok(mountIndex !== -1 && mountIndex < lines.indexOf(skips[0]), 'the mount line must still be written, before the first skip')
+})
+
+test("observeSubagents true calls the model for a subagent's seam", async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  let calls = 0
+  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  ctx.setInitiator(SUBAGENT)
+  await apply(ctx, { hooks: ['pre_execute'], tracePath, observeSubagents: true })
+
+  await ctx.handlers.get('tools/pre-execute')({ agent: SUBAGENT, name: 'bash', arguments: { command: 'ls' } }, async () => ({ allow: true }))
+
+  const lines = readLines(tracePath)
+  assert.equal(lines.filter(line => line.event === 'call').length, 1)
+  assert.equal(calls, 1)
+  assert.equal(lines.some(line => line.event === 'skip'), false)
+})
+
+test('a non-subagent is still observed when observeSubagents is off', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  let calls = 0
+  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  ctx.setInitiator(OPERATOR)
+  await apply(ctx, { hooks: ['pre_execute'], tracePath })
+
+  await ctx.handlers.get('tools/pre-execute')({ agent: OPERATOR, name: 'bash', arguments: { command: 'ls' } }, async () => ({ allow: true }))
+
+  const lines = readLines(tracePath)
+  assert.equal(lines.filter(line => line.event === 'call').length, 1)
+  assert.equal(calls, 1)
+  assert.equal(lines.some(line => line.event === 'skip'), false)
+})
