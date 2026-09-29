@@ -186,3 +186,26 @@ test('a non-subagent is still observed when observeSubagents is off', async () =
   assert.equal(calls, 1)
   assert.equal(lines.some(line => line.event === 'skip'), false)
 })
+
+test("by default a subagent's assemble seam is a skip and decide is never called", async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  let calls = 0
+  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  ctx.setInitiator(SUBAGENT)
+  await apply(ctx, { hooks: ['assemble'], tracePath })
+
+  const assembly = { sections: [{ name: 's', order: 0, text: 'THE ASSEMBLED PROMPT' }], contexts: [], tools: [], variables: {} }
+  const decision = { sections: [{ name: 's', order: 0, text: 'THE ASSEMBLED PROMPT' }], contexts: [], tools: [], variables: {} }
+  // The real agent-driven AssembleContext, built the way assembleContextFor builds it.
+  const returned = await ctx.handlers.get('system-prompt/assemble')(assembly, { agent: SUBAGENT, scope: SUBAGENT }, async () => decision)
+  assert.equal(returned, decision, 'the decision must be returned by reference')
+
+  const lines = readLines(tracePath)
+  const skips = lines.filter(line => line.event === 'skip' && line.reason === 'subagent session')
+  assert.equal(skips.length, 1)
+  assert.equal(skips[0].hook, 'assemble')
+  assert.equal(lines.some(line => line.event === 'call'), false, 'a subagent assemble must not reach the model')
+  assert.equal(calls, 0, 'decide must never be called for a subagent assemble')
+  assert.equal(JSON.stringify(lines).includes('THE ASSEMBLED PROMPT'), false, "a subagent's assembled prompt must not be recorded")
+})
