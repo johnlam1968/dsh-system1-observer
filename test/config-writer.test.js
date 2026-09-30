@@ -70,3 +70,23 @@ test('the tool and the writer together: the record is written, then the row chan
   assert.equal(e.state().provider, 'laya')
   assert.deepEqual(e.state().hooks, ['admit'], 'the wiring did not cost the row its other settings')
 })
+
+// THE ROW THIS PLUGIN LIVES ON IS NAMED `include:<id>` BY CORDIS, and a caller may hold either name. Measured live:
+//   configWriter: no row with id "system1-observer"; available: ... include:system1-observer ...
+// which is the knob the plugin exposes being unturnable -- the one property it must not have.
+test('an included row answers to its bare id and to its include: form, and to nothing fuzzier', async () => {
+  const included = editor({ rows: [{ id: 'include:system1-observer' }] })
+  const write = createConfigWriter({ editor: included, rowId: 'system1-observer' })
+  await write({ knob: 'turnEveryNTurns', value: 5 })
+  assert.deepEqual(included.edits, [{ row: 'include:system1-observer' }], 'the row Cordis named is the one edited')
+  assert.equal(included.state().turnEveryNTurns, 5, 'and the change reached it')
+
+  // THE CONVERSE, which the first version of this fix got wrong: an include:-prefixed rowId must find a bare row.
+  const plain = editor({ rows: [{ id: 'system1-observer' }] })
+  await createConfigWriter({ editor: plain, rowId: 'include:system1-observer' })({ knob: 'provider', value: 'laya' })
+  assert.deepEqual(plain.edits, [{ row: 'system1-observer' }], 'and the converse holds too')
+
+  // AND NOTHING FUZZIER. A near-miss row must stay untouchable, because that is how a write lands somewhere else.
+  const similar = createConfigWriter({ editor: editor({ rows: [{ id: 'include:system1-observer-extra' }] }), rowId: 'system1-observer' })
+  await assert.rejects(() => similar({ knob: 'provider', value: 'laya' }), /no row with id/, 'a similar row is not this row')
+})
