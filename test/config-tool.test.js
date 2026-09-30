@@ -18,39 +18,39 @@ function harness({ knobs = ['provider', 'turn'], state = { provider: 'typesafe',
   return { tool, order, lines, current: () => current }
 }
 
-test('reading is free: no record and no write for list or get', () => {
+test('reading is free: no record and no write for list or get', async () => {
   const h = harness()
-  assert.deepEqual(h.tool.execute({ action: 'list' }), { knobs: { provider: 'typesafe', turn: false }, recorded: false })
-  assert.deepEqual(h.tool.execute({ action: 'get', knob: 'provider' }), { knob: 'provider', value: 'typesafe', recorded: false })
+  assert.deepEqual(await h.tool.execute({ action: 'list' }), { knobs: { provider: 'typesafe', turn: false }, recorded: false })
+  assert.deepEqual(await h.tool.execute({ action: 'get', knob: 'provider' }), { knob: 'provider', value: 'typesafe', recorded: false })
   assert.deepEqual(h.order, [], 'a read must not touch the record it exists to keep honest')
 })
 
-test('a change is RECORDED BEFORE it takes effect', () => {
+test('a change is RECORDED BEFORE it takes effect', async () => {
   const h = harness()
-  const out = h.tool.execute({ action: 'set', knob: 'provider', value: 'laya' })
+  const out = await h.tool.execute({ action: 'set', knob: 'provider', value: 'laya' })
   assert.deepEqual(h.order, ['record:provider', 'write:provider'], 'the order is the contract')
   assert.deepEqual(out, { knob: 'provider', from: 'typesafe', value: 'laya', recorded: true })
   assert.equal(h.current().provider, 'laya')
 })
 
-test('enable and disable switch a knob to a boolean, and say what it was', () => {
+test('enable and disable switch a knob to a boolean, and say what it was', async () => {
   const h = harness()
-  assert.deepEqual(h.tool.execute({ action: 'enable', knob: 'turn' }), { knob: 'turn', from: false, value: true, recorded: true })
-  assert.deepEqual(h.tool.execute({ action: 'disable', knob: 'turn' }), { knob: 'turn', from: true, value: false, recorded: true })
+  assert.deepEqual(await h.tool.execute({ action: 'enable', knob: 'turn' }), { knob: 'turn', from: false, value: true, recorded: true })
+  assert.deepEqual(await h.tool.execute({ action: 'disable', knob: 'turn' }), { knob: 'turn', from: true, value: false, recorded: true })
 })
 
-test('an unknown action or knob is refused, naming what is known', () => {
+test('an unknown action or knob is refused, naming what is known', async () => {
   const h = harness()
-  assert.throws(() => h.tool.execute({ action: 'mutate', knob: 'provider' }), /not one of list, get, set, enable, disable/)
-  assert.throws(() => h.tool.execute({ action: 'set', knob: 'tracePath' }), /is not a knob of this plugin. Known: provider, turn/)
-  assert.throws(() => h.tool.execute({ action: 'set' }), /`knob` is required/)
+  await assert.rejects(() => h.tool.execute({ action: 'mutate', knob: 'provider' }), /not one of list, get, set, enable, disable/)
+  await assert.rejects(() => h.tool.execute({ action: 'set', knob: 'tracePath' }), /is not a knob of this plugin. Known: provider, turn/)
+  await assert.rejects(() => h.tool.execute({ action: 'set' }), /`knob` is required/)
   assert.deepEqual(h.order, [], 'a refused change writes nothing')
 })
 
-test('the lines it writes replay to the state it produced', () => {
+test('the lines it writes replay to the state it produced', async () => {
   const h = harness()
-  h.tool.execute({ action: 'set', knob: 'provider', value: 'laya' })
-  h.tool.execute({ action: 'enable', knob: 'turn' })
+  await h.tool.execute({ action: 'set', knob: 'provider', value: 'laya' })
+  await h.tool.execute({ action: 'enable', knob: 'turn' })
   const { knobs, applied, unusable } = replayConfig(h.lines)
   assert.deepEqual(unusable, [], 'every line the tool writes must be readable by the reader')
   assert.equal(applied, 2)
@@ -58,10 +58,38 @@ test('the lines it writes replay to the state it produced', () => {
   assert.deepEqual(knobs, h.current())
 })
 
-test('the definition is one tool over an action, not a family of tools', () => {
+test('the definition is one tool over an action, not a family of tools', async () => {
   const { tool } = harness()
   assert.equal(tool.name, CONFIG_TOOL_NAME)
   assert.deepEqual(tool.parameters.required, ['action'])
   assert.deepEqual(tool.parameters.properties.action.enum, ['list', 'get', 'set', 'enable', 'disable'])
   assert.equal(typeof tool.execute, 'function')
+})
+
+// THE WRITE IS AWAITED, and this is why: the service it will be wired to persists asynchronously, and an
+// un-awaited write would report `recorded: true` for a change that never landed. A success claim the state
+// contradicts is worse than a failure, because nothing looks wrong.
+test('a write that fails is not reported as a success, and the record still went first', async () => {
+  const order = []
+  const tool = createConfigTool({
+    read: () => ({ provider: 'typesafe' }),
+    write: async () => { order.push('write'); throw new Error('the editor refused') },
+    record: () => order.push('record'),
+    knobs: ['provider'],
+  })
+  await assert.rejects(() => tool.execute({ action: 'set', knob: 'provider', value: 'laya' }), /the editor refused/)
+  assert.deepEqual(order, ['record', 'write'], 'the line is written before the attempt, as the contract says')
+})
+
+test('an asynchronous write is awaited, so the change is in force before the result is returned', async () => {
+  let current = { provider: 'typesafe' }
+  const tool = createConfigTool({
+    read: () => current,
+    write: async ({ knob, value }) => { await new Promise((r) => setTimeout(r, 5)); current = { ...current, [knob]: value } },
+    record: () => {},
+    knobs: ['provider'],
+  })
+  const out = await tool.execute({ action: 'set', knob: 'provider', value: 'laya' })
+  assert.equal(current.provider, 'laya', 'the write finished before the result was built')
+  assert.deepEqual(out, { knob: 'provider', from: 'typesafe', value: 'laya', recorded: true })
 })
