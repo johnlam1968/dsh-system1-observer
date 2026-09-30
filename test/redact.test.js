@@ -294,7 +294,7 @@ test('the structural URL exclusion still holds, including a scheme-relative //',
 // leaves the credential behind it -- the exact upstream defect this module's own comment describes.
 const CREDENTIAL_SHAPES = [
   ['key=sk-abcdefghijklmnop1234', 'sk-abcdefghijklmnop1234'],
-  ['token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'],
+  ['token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
   ['id AKIAIOSFODNN7EXAMPLE', 'AKIAIOSFODNN7EXAMPLE'],
   ['Authorization: Bearer abcdefghijklmnop', 'abcdefghijklmnop'],
   ['Authorization: Basic dXNlcjpwYXNzd29yZA==', 'dXNlcjpwYXNzd29yZA=='],

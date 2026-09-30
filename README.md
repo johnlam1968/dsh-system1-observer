@@ -9,6 +9,10 @@ waterfall listener returns the decision it was handed, the same reference; the `
 stream unchanged; the `result` emit listener swallows its own rejection. Its product is evidence about the
 decision model's replies at each point of the loop.
 
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
 ## Status
 
 **Every trace line says `enforcement: "declarative"` and `verified: false`, and that is the literal truth.**
@@ -34,7 +38,7 @@ a model route.
 | the questions this sends are the shape the vendor's API accepts | `test/vendor-conformance.test.js`, `deepEqual` against `@typesafe-ai/sdk`'s own builders — which is what found a `score` being sent as a keyed map upstream, a defect its stubbed unit tests had passed over |
 
 ```
-npm test              # 343 tests
+npm test              # 360 tests
 npm run coverage      # the floor: 90% lines, 75% branches, 75% functions over lib/
 npm run check:citations
 npm run check:compat
@@ -46,7 +50,9 @@ npm run ci            # all four, in that order
 coverage floor — because the `--experimental-test-coverage` flag's instrumentation differs between majors, so a
 floor measured on one is not a floor on another.
 
-The floor sits **below the measured baseline** (90.90 lines / 83.81 branches / 90.23 functions), deliberately: a
+The floor sits **below the baseline measured when it was set** (90.90 lines / 83.81 branches / 90.23 functions —
+the suite has grown since and now measures **92.80 / 85.79 / 91.29**; re-run `npm run coverage` for the current
+figures), deliberately: a
 gate set at the current number fails on the next honest refactor and gets raised until it means nothing.
 
 ### The one measurement that changes how you should use this
@@ -240,7 +246,7 @@ in for it; a bare run with no home at all falls back to the OS temporary directo
 
 **Paths are kept by default, and that is a deliberate difference from the exporter this was ported from.** That
 one defaults to *omit* because its records leave the machine; this trace is local evidence whose purpose is that a
-wrong judgement is diagnosable, and **2,453 of its 4,369 call lines carry an absolute path** — which is often the
+wrong judgement is diagnosable, and **2,455 of its 4,369 call lines carry an absolute path** — which is often the
 diagnosis. `pathMode: basename | omit` reduces them in the **record** and never in what the model is asked, so a
 deployment that shares the file can export less rather than scrub more.
 

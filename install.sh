@@ -85,7 +85,8 @@ Notes:
     is mounted. With neither, every call is an error line in the trace.
   * Its trace is written to `<DSH_HOME>/logs/system1-observer.jsonl`, or to the package's `data/`
     directory when DSH_HOME is unset; `SYSTEM1_OBSERVER_TRACE` overrides both.
-  * `dsh plugin add` REWRITES the profile's bundle list and drops bundles it did not write. The
+  * `dsh plugin add` MERGES into the profile's bundle list rather than rewriting it, carrying existing entries
+  *  forward and dropping a name only when it is a dependency that no longer declares `dsh.bundle`. The
     line above shows what survived — if something is missing, re-add it.
 
 A newly added bundle needs no restart. A bundle whose package was REPLACED does: the metadata is

@@ -45,6 +45,7 @@
   },
   "files": [
     "LICENSE",
+    "install.sh",
     "index.js",
     "client.js",
     "lib/**/*.js",
