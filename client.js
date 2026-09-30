@@ -146,7 +146,7 @@ window.__ModuleLoader__.load({
 
     // THE SESSION ALLOW-LIST IS A LIST OF ENTRIES: `{ id }`, or `{ id, title }` when a title was captured.
     //
-    // THE ID IS THE KEY AND THE TITLE IS A CACHE. `session-fb6a24b1-5e81-402a-b092-26ae5732c7b9` is not
+    // THE ID IS THE KEY AND THE TITLE IS A CACHE. `session-01234567-89ab-4cde-8f01-23456789abcd` is not
     // something a person reads, so the session menu stores the headline it was handed beside the id -- and
     // nothing matches on the title, because a rename would then silently stop a session being observed.
     // Both shapes are accepted on read, so the plain string list written before titles existed still works.

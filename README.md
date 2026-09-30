@@ -303,8 +303,8 @@ something a person reads, so an entry may be either shape:
 
 ```yaml
     sessions:
-      - session-fb6a24b1-5e81-402a-b092-26ae5732c7b9                      # an id alone, still accepted
-      - id: session-91d07b68-3903-45fa-81c1-dbeaf3f69ddd
+      - session-01234567-89ab-4cde-8f01-23456789abcd                      # an id alone, still accepted
+      - id: session-fedcba98-7654-4321-0fed-cba987654321
         title: Question flow to decision model                            # display only
 ```
 

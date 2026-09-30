@@ -1093,13 +1093,13 @@ test('the type control explains what the selected type is for, per question', as
 test('the card shows each observed session by its headline, with the id it is matched by', async () => {
   const ctx = await liveCard({
     sessions: [
-      { id: 'session-fb6a24b1-5e81-402a-b092-26ae5732c7b9', title: 'test session' },
+      { id: 'session-01234567-89ab-4cde-8f01-23456789abcd', title: 'test session' },
       'session-bbb',   // the shape written before titles existed, and what a hand-edit looks like
     ],
   })
   const { text } = act(ctx).paint()
   assert.match(text, /test session/, 'the headline is what a person reads')
-  assert.match(text, /session-fb6a24b1-5e81-402a-b092-26ae5732c7b9/, 'and the id is still shown, so an entry is identifiable')
+  assert.match(text, /session-01234567-89ab-4cde-8f01-23456789abcd/, 'and the id is still shown, so an entry is identifiable')
   assert.match(text, /no headline recorded/, "an entry with no cached title says so rather than showing nothing")
   assert.doesNotMatch(text, /No session is observed/, 'a non-empty list is not the empty state')
 })
@@ -1367,7 +1367,7 @@ const TRACE_META = {
   subjects: [{ key: 'openrouter/mistralai/ministral-3b-2512', count: 175 }],
   models: [{ key: 'typesafe/jev-1.13-20260917', count: 1 }],
   latency: { min: 804, median: 804, max: 804 },
-  liveAgents: ['session-91d07b68-3903-45fa-81c1-dbeaf3f69ddd (openrouter/mistralai/ministral-3b-2512)'],
+  liveAgents: ['session-fedcba98-7654-4321-0fed-cba987654321 (openrouter/mistralai/ministral-3b-2512)'],
   mounts: [{
     at: '2026-09-30T04:06:13.609Z', hooks: ['admit', 'draft'], transport: 'service',
     provider: 'typesafe', model: 'jev-latest', questions: ['reply_kind'],

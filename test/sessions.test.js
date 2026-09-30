@@ -26,11 +26,11 @@ test('an ABSENT field observes everything (the schema default); an EMPTY list ob
 })
 
 test('a non-empty list observes only matching sessions, by full id or prefix', () => {
-  const config = { sessions: ['session-91d07b68-3903-45fa'] }
-  assert.equal(sessionObserved(config, 'session-91d07b68-3903-45fa-81c1-dbeaf3f69ddd'), true, 'a prefix matches')
-  assert.equal(sessionObserved(config, 'session-91d07b68-3903-45fa'), true, 'and so does the whole id')
+  const config = { sessions: ['session-fedcba98-7654-4321'] }
+  assert.equal(sessionObserved(config, 'session-fedcba98-7654-4321-0fed-cba987654321'), true, 'a prefix matches')
+  assert.equal(sessionObserved(config, 'session-fedcba98-7654-4321'), true, 'and so does the whole id')
   assert.equal(sessionObserved(config, 'session-other'), false)
-  assert.equal(sessionObserved(config, 'session-91d07b68-3903-45fb'), false, 'a prefix is not a fuzzy match')
+  assert.equal(sessionObserved(config, 'session-fedcba98-7654-4322'), false, 'a prefix is not a fuzzy match')
 })
 
 test('entries are trimmed, deduplicated, and blanks dropped', () => {
