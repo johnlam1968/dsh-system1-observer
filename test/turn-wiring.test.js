@@ -83,5 +83,8 @@ test('the trigger is off by default: turnEveryNTurns 0 mounts and watches nothin
   // fixture agent's shape: `isSubagent` consults the real helper, and an agent the fixture invents can legitimately
   // trip that gate and write `subagent session`. So the assertion names what the knob controls.
   assert.equal(row.lines().some((line) => line.event === 'call'), false, 'off means nothing was sent')
-  assert.equal(row.lines().some((line) => Array.isArray(line.questionIds)), false, 'and no measurement was recorded')
+  // SCOPED TO CALL LINES, because the MOUNT line legitimately carries `questionIds` -- those are the questions the
+  // row is CONFIGURED with, not a measurement's. This assertion as written also forbade the row from recording its
+  // own configuration, which its own comment already said was the wrong property: "no measurement, not no lines".
+  assert.equal(row.lines().some((line) => line.event === 'call' && Array.isArray(line.questionIds)), false, 'and no measurement was recorded')
 })
