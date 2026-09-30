@@ -35,6 +35,8 @@ test('apply provides the observer service, with the four readers and a freeze', 
     sessions: accessor(['agent-1']),
     wireUrl: accessor('http://127.0.0.1:9'),
     timeoutMs: accessor(200),
+    turnEveryNTurns: accessor(3),
+    questions: { turn: [{ id: 'a_noul', type: 'noul', instructions: 'Is this true?' }] },
   })
 
   const service = ctx.provided.get(OBSERVER_SERVICE)
@@ -48,4 +50,7 @@ test('apply provides the observer service, with the four readers and a freeze', 
   const config = service.config()
   assert.deepEqual(config.hooks, ['admit'], 'the mount snapshot reaches the consumer')
   assert.equal(config.provider, null)
+  // A COUNT OF ANSWERS IS NOT INTERPRETABLE WITHOUT THE QUESTIONS THEY ANSWER.
+  assert.deepEqual(config.questionIds, ['a_noul'], 'the questions the row is configured to ask reach the consumer')
+  assert.equal(config.turnEveryNTurns, 3)
 })

@@ -337,8 +337,14 @@ async function apply(ctx, config) {
     sessions: () => ({ live: liveAgentRoutes(), configured: mount.sessions ?? null }),
     config: () => ({
       hooks,
+      // WHICH QUESTIONS, WHICH IS WHAT `config()` IS FOR. The first version reported hooks, provider and model and
+      // left this out, so a consumer could see that calls were recorded but not WHAT was asked -- and a count of
+      // answers is not interpretable without the questions they answer. Read through the same reader the mount line
+      // uses, so the two cannot disagree about what the row is configured to ask.
+      questionIds: configuredQuestionIds(liveConfig()),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
+      turnEveryNTurns: readConfigValue(liveConfig().turnEveryNTurns) ?? 0,
       pricePerMTokInput: readConfigValue(liveConfig().pricePerMTokInput) ?? null,
     }),
   }))
