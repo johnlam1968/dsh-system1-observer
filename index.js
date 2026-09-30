@@ -27,6 +27,8 @@ import { createTraceTool } from './lib/tool.js'
 import { readTraceWindow, runIds } from './lib/trace-report.js'
 import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
 import { createDecideTool } from './lib/decide-tool.js'
+import { createConfigTool } from './lib/config-tool.js'
+import { createConfigWriter } from './lib/config-writer.js'
 import { registerListeners, readHooks } from './lib/register.js'
 
 const name = 'system1-observer'
@@ -284,6 +286,24 @@ async function apply(ctx, config) {
       provider: mount.provider ?? null,
       model: mount.model ?? null,
     }))
+    // THE SETTINGS TOOL. `record` writes a config line BEFORE the change -- that ordering is the tool's contract,
+    // and `evidence.trace` is the same sink every other line goes to, so a reader finds it where it looks.
+    // `write` goes through the harness's configEditor rather than editing the profile file, and NO knob list is
+    // passed: the editor validates and reconciles a plugin's next config itself, so an unknown field is refused
+    // by the thing that owns the schema instead of by a copy of it that would drift.
+    tools.register(createConfigTool({
+      read: () => plainConfig(liveConfig()),
+      record: (line) => {
+        const { event, ...fields } = line
+        evidence.trace(event, fields)
+      },
+      write: async (change) => {
+        if (configEditor === null) {
+          throw new Error('system1_observe_config: the configEditor service is not available in this profile, so no change can be persisted.')
+        }
+        return createConfigWriter({ editor: configEditor, rowId: 'system1-observer' })(change)
+      },
+    }))
   })
 
 
@@ -317,6 +337,14 @@ async function apply(ctx, config) {
     // `sanitizeJson` also redacts by KEY, so an attribute NAMED `token` loses its value too. It deep-clones, which
     // is what the waterfall requires: the record handed over must not be mutated.
     scrub: (record) => sanitizeJson(record, redactPolicy(liveConfig())),
+  })
+
+  // THE CONFIG EDITOR, captured rather than reached for, for the same reason as the service: it may arrive after
+  // this row mounts. `write` REFUSES while it is absent -- a settings tool that silently did nothing would report
+  // success for a change that never happened, which is worse than an error.
+  let configEditor = null
+  ctx.inject(['configEditor'], (child) => {
+    configEditor = child.get('configEditor') ?? null
   })
 
   ctx.inject(['system1'], (child) => {

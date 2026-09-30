@@ -291,7 +291,7 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   // registered TWICE, because a duplicate name throws in the registry. A count would have had to be bumped for a
   // legitimate addition while going on passing for an illegitimate duplicate.
   const names = registered.map((definition) => definition.name)
-  assert.deepEqual([...names].sort(), ['system1_decide', 'system1_trace'], 'both tools, and nothing else')
+  assert.deepEqual([...names].sort(), ['system1_decide', 'system1_observe_config', 'system1_trace'], 'every tool, and nothing else')
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
   const tool = registered.find((definition) => definition.name === 'system1_trace')
   assert.match(tool.description, /System One observer trace/, 'the description is the hint the agent reads')
