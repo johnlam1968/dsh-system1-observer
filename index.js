@@ -139,6 +139,16 @@ const Config = Schema.object({
   // ITEMS ARE `any`, NOT `string`, because an entry may be `{ id, title }`: the title is the headline the
   // session menu was handed, kept for display only. A `string` item schema would REFUSE that object at
   // resolution, which would make the row fail to load the moment the menu wrote one.
+  // A SESSION-SCOPED ROW GOES INERT ACROSS A RESTART, and this is measured rather than supposed. The `sessions`
+  // list named one session; the process restarted; that session was not resumed. The trigger then evaluated this
+  // gate on 145 consecutive turn boundaries and skipped every one -- correctly, and uselessly. The id stays
+  // configured while the session is gone, so nothing in the trace says "you pointed me at a session that is not
+  // here"; it says `session not observed` 145 times, which reads like a scope working as intended.
+  //
+  // The default below is `['*']` -- EVERY session -- so the narrowing is always this list's doing, and an operator
+  // who expects a scheduled measurement and sees none should check FIRST that the named session is live in the
+  // current process. Measured: five attempts to drive that session were refused with "is not live in this process",
+  // and the trace held 145 skip lines and zero call lines on the turn hook.
   sessions: Schema.array(Schema.any()).default(['*']).volatile().description('Observe only these sessions, matched by id or id prefix. `*` means EVERY session and is the default; an EMPTY list observes nothing. The “...” menu on a session in the sidebar is the way in, and it can also narrow to one session. An entry may be a bare id string or `{ id, title }` — the title is a display cache and is never matched on. A firing in any other session records a `skip` with reason `session not observed` and its text never reaches the model or the trace.'),
   includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
   observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
