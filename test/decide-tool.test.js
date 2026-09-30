@@ -159,3 +159,20 @@ test('a tool constructed with no recorder still works, and records nothing', asy
   const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }) })
   await tool.execute({ state: 'x', questions: [spec] })
 })
+
+// THE TRANSPORT DIFFERENCE, which cost the provenance silently. `lib/model/service.js` returns the envelope NESTED
+// (`{kind, answers, envelope:{executed, usage, durationMs}}`) while the wire spreads it flat -- so reading the top
+// level lost `executed`, `usage` and `durationMs` on the service path, which is the one a profile with `system1`
+// mounted runs. The tool reported answers with no record of which checkpoint answered them.
+test('the provenance is read from a NESTED envelope as well as a flat one', async () => {
+  const nested = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, worstCase: { level: 'high' }, envelope: { executed: { provider: 'typesafe', revision: 'typesafe/jev-1.13' }, usage: { inputTokens: 12 }, durationMs: 812.5 } }) })
+  const out = await nested.execute({ state: 'x', questions: [spec] })
+  assert.deepEqual(out.executed, { provider: 'typesafe', revision: 'typesafe/jev-1.13' }, 'the checkpoint that answered reaches the caller')
+  assert.deepEqual(out.usage, { inputTokens: 12 })
+  assert.equal(out.durationMs, 812.5)
+
+  const flat = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, executed: { provider: 'wire' }, usage: { inputTokens: 1 }, durationMs: 5 }) })
+  const flatOut = await flat.execute({ state: 'x', questions: [spec] })
+  assert.deepEqual(flatOut.executed, { provider: 'wire' }, 'and the flat shape still works')
+  assert.equal(flatOut.durationMs, 5)
+})
