@@ -482,6 +482,11 @@ async function apply(ctx, config) {
   }
 
   ctx.on('agent/pre-step', (payload, next) => {
+    // THE MOUNT LINE PRECEDES ANY SKIP THIS HANDLER WRITES, as the seam path arranges at its own observe and
+    // skip. This handler wrote its gate skip straight to the trace, so a row whose FIRST event is a turn skip
+    // -- which a scope pointing at a dead session produces, 145 times over -- recorded no mount line at all,
+    // and the mount line is the thing that answers "was it scoped, paused, or broken?" for a quiet trace.
+    writeMount()
     const sessionId = payload?.agent?.id
     // THE SAME SESSION GATE THE OBSERVATION PATH APPLIES, and the schema's own description depends on it: a firing
     // in a session this row was not pointed at "never reaches the model or the trace". Without this, the scheduled
