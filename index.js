@@ -24,6 +24,7 @@ import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { createObserver } from './lib/observe.js'
 import { createTraceTool } from './lib/tool.js'
+import { createDecideTool } from './lib/decide-tool.js'
 import { registerListeners, readHooks } from './lib/register.js'
 
 const name = 'system1-observer'
@@ -269,6 +270,17 @@ async function apply(ctx, config) {
       runId: evidence.runId(),
       liveAgents: liveAgentRoutes,
       price: () => readConfigValue(liveConfig().pricePerMTokInput),
+    }))
+    // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
+    // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
+    // it at call time. Reaching for a model here would freeze whichever transport happened to be ready first and
+    // would let the tool and the instrument drift apart -- the exact failure the thin-tool design exists to
+    // prevent. `mount` supplies the defaults the row was configured with, so the tool's own description names the
+    // backend it will actually reach.
+    tools.register(createDecideTool({
+      decide: (request) => decide(request),
+      provider: mount.provider ?? null,
+      model: mount.model ?? null,
     }))
   })
 

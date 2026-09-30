@@ -283,9 +283,14 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   }
   await apply(ctx, { hooks: ['admit'], tracePath, sessions: [OPERATOR.id] })
 
-  assert.equal(registered.length, 1, 'exactly one tool, registered once')
-  const tool = registered[0]
-  assert.equal(tool.name, 'system1_trace')
+  // EACH TOOL EXACTLY ONCE, rather than a bare count. The row now registers two -- the trace tool and the
+  // repository's own decision tool -- and the property this assertion has always been about is that nothing is
+  // registered TWICE, because a duplicate name throws in the registry. A count would have had to be bumped for a
+  // legitimate addition while going on passing for an illegitimate duplicate.
+  const names = registered.map((definition) => definition.name)
+  assert.deepEqual([...names].sort(), ['system1_decide', 'system1_trace'], 'both tools, and nothing else')
+  assert.equal(new Set(names).size, names.length, 'no name registered twice')
+  const tool = registered.find((definition) => definition.name === 'system1_trace')
   assert.match(tool.description, /System One observer trace/, 'the description is the hint the agent reads')
   assert.match(tool.description, /session ids/, 'including where to find what a session-scoped observer targets')
   assert.equal(typeof tool.output.render, 'function', 'register requires an output.render')
