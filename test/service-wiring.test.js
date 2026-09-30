@@ -26,7 +26,7 @@ function recordingCtx() {
   }
 }
 
-test('apply provides the observer service, with the four readers and a freeze', async () => {
+test('apply provides the observer service, with its readers, the label, and a freeze', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'observer-wiring-'))
   const ctx = recordingCtx()
   await apply(ctx, {
@@ -41,7 +41,7 @@ test('apply provides the observer service, with the four readers and a freeze', 
 
   const service = ctx.provided.get(OBSERVER_SERVICE)
   assert.notEqual(service, undefined, 'the row must provide the service under its declared name')
-  assert.deepEqual(Object.keys(service).sort(), ['config', 'read', 'runs', 'sessions'])
+  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'runs', 'sessions'])
   assert.equal(Object.isFrozen(service), true, 'a consumer must not be handed something it can mutate')
   // The readers answer rather than throw, which is the property a consumer depends on.
   assert.equal(Array.isArray(service.read({}).events), true)
@@ -53,4 +53,9 @@ test('apply provides the observer service, with the four readers and a freeze', 
   // A COUNT OF ANSWERS IS NOT INTERPRETABLE WITHOUT THE QUESTIONS THEY ANSWER.
   assert.deepEqual(config.questionIds, ['a_noul'], 'the questions the row is configured to ask reach the consumer')
   assert.equal(config.turnEveryNTurns, 3)
+  // THE SIGNAL THE RECORD ALONE CANNOT GIVE, reachable now instead of only from a test file in this package.
+  const nudged = service.label({ request: 'Find dsh plugins related to system1.', next: 'You should mutate the keywords and search again.' })
+  assert.equal(nudged.label, true, 'a correction marker is a nudge')
+  const absent = service.label({ request: 'anything' })
+  assert.equal(absent.label, null, 'and no next message is NO EVIDENCE, not "no nudge"')
 })
