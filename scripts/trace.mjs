@@ -19,6 +19,8 @@ import { readFileSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
+import { describeSubject } from '../lib/subject.js'
+import { egressLines } from '../lib/egress.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const argv = process.argv.slice(2)
@@ -213,7 +215,18 @@ const median = sorted.length === 0 ? undefined : sorted[Math.floor(sorted.length
 console.log()
 console.log(`${bold('run')} ${run}   ${dim(`${total} events · ${short(rows[0]?.at ?? '')} → ${short(rows[rows.length - 1]?.at ?? '')}`)}`)
 if (mount !== undefined) {
-  console.log(`  ${dim('mounted')}   hooks ${mount.hooks?.join(',')} · transport ${mount.transport} · ${mount.provider}/${mount.model} · questions ${(mount.questionIds ?? []).join(',')}`)
+  // THE SCOPE THE RUN STARTED WITH, on the same line: a quiet trace is otherwise unreadable as a whole,
+  // and "was it scoped, paused, or broken?" is the first question anyone asks of one.
+  // WHAT LEAVES, printed for this run's mount: the one thing an operator most needs and could not previously
+  // get without reading the source.
+  if (mount.egress !== undefined) for (const line of egressLines(mount.egress)) console.log(dim('  ' + line))
+  console.log(`  ${dim('mounted')}   hooks ${mount.hooks?.join(',')} · transport ${mount.transport} · ${mount.provider}/${mount.model} · questions ${(mount.questionIds ?? []).join(',')}`
+    + ` · calls ${mount.callsEnabled === false ? 'OFF' : 'on'}`
+    + ` · seams off ${(mount.seamsOff ?? []).join(',') || 'none'}`
+    + ` · sessions ${(mount.sessions ?? []).join(',') || 'NONE (observes nothing)'}`
+    + `${mount.probeHash === undefined ? '' : ` · probe ${mount.probeHash}`}`
+    + `${mount.rotated === undefined || mount.rotated === null || mount.rotated.count === 0 ? '' : ` · rotated ${mount.rotated.count}×`}`
+    + `${mount.remote === undefined ? '' : ` · tab ${mount.remote}`}`)
 }
 console.log(`  ${dim('events')}    ${green(`${counts.call ?? 0} calls`)} · ${dim(`${counts.skip ?? 0} skips`)} · ${(counts.error ?? 0) > 0 ? red(`${counts.error} errors`) : '0 errors'}`)
 if (latencies.length > 0) {
@@ -226,6 +239,16 @@ if (Object.keys(byAgent).length > 0) {
   console.log(`  ${dim('agents')}    ${Object.entries(byAgent).sort((a, b) => b[1] - a[1]).map(([a, n]) => `${agent(a)} ${n}`).join(' · ')}`)
 }
 for (const [key, n] of models) console.log(`  ${dim('model')}     ${key} ${dim(`×${n}`)}`)
+// WHO WROTE THE TEXT, beside who judged it. The `model` line above is the JUDGE -- the observer's own decision
+// model -- and this is the model being judged. Without it an accuracy figure is not comparable across
+// sessions, because the same question scores differently on different models' output.
+const subject = (e) => describeSubject(e.subject)
+const subjects = new Map()
+for (const e of collapsed) {
+  const route = subject(e)
+  if (route !== '(unknown)') subjects.set(route, (subjects.get(route) ?? 0) + 1)
+}
+for (const [key, n] of subjects) console.log(`  ${dim('subject')}   ${key} ${dim(`×${n}`)}`)
 if (malformed.length > 0) console.log(`  ${yellow(`${malformed.length} unparsable line(s): ${malformed.slice(0, 5).join(', ')}`)}`)
 if (shown.length < collapsed.length) console.log(`  ${dim(`showing the last ${shown.length} of ${collapsed.length} rendered events`)}`)
 console.log()
@@ -267,6 +290,10 @@ for (const e of shown) {
       console.log(`${indent}${dim('question')}  ${id} [${q.type}, ${n}] ${oneLine(q.instructions, 120)}`)
       if (q.type === 'choice') console.log(`${indent}           ${Object.keys(q.criteria ?? {}).join(' · ')}`)
     }
+    // A SPEC THAT WAS DROPPED is the one thing a `call` line otherwise hides: the answers look complete,
+    // and the question nobody asked is missing from a list of questions. Printed in red because it is a
+    // configuration defect, not a measurement.
+    for (const problem of e.problems ?? []) console.log(`${indent}${red('dropped')}   ${oneLine(problem, 150)}`)
     const envelope = e.answer?.envelope ?? e.envelope
     if (envelope !== undefined) {
       const usage = envelope.usage ?? {}

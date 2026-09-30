@@ -6,9 +6,8 @@
 #   ./install.sh my-profile         # another profile
 #   ./install.sh web --check-only   # do everything except touch the profile
 #
-# Both repositories are PRIVATE. `npm install` fetches dsh-system1-runtime from GitHub, so your
-# git credentials must be able to read it: accept the collaborator invitation, then make sure the
-# CLI has a token (`gh auth login`, or a personal access token in the credential helper).
+# Dependencies are PUBLIC now, and the decision runtime is source in this repository under `lib/`:
+# `npm install` needs no git credentials, and nothing is fetched from GitHub to mount the plugin.
 set -euo pipefail
 
 PROFILE=web
@@ -16,7 +15,7 @@ CHECK_ONLY=no
 for arg in "$@"; do
   case "$arg" in
     --check-only) CHECK_ONLY=yes ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $arg" >&2; exit 2 ;;
     *) PROFILE="$arg" ;;
   esac
@@ -34,22 +33,15 @@ for tool in node npm git; do command -v "$tool" >/dev/null || die "$tool is not 
 command -v dsh >/dev/null || die "the dsh CLI is not on PATH; install the DeepSeek Harness first"
 echo "  node $(node -v) · npm $(npm -v) · profile '${PROFILE}'"
 
-step "installing dependencies (fetches dsh-system1-runtime from GitHub)"
-npm install || die "npm install failed.
-       Both repositories are private: your git credentials must be able to read
-       https://github.com/johnlam1968/system1-runtime-repo. Accept the invitation, then check
-       'gh auth status', or configure a personal access token in your git credential helper."
+step "installing dependencies"
+npm install || die "npm install failed (the dependencies are the public @deepseek-ai/schemastery and yaml; check your network and registry)."
 
-# The dependency is a git URL. A failure here is the one that used to be SILENT: npm reports
-# success and leaves node_modules/dsh-system1-runtime as a dangling symlink, and the import only
-# fails later, at run time.
-RUNTIME="${ROOT}/node_modules/dsh-system1-runtime"
-if [ -L "$RUNTIME" ] && [ ! -e "$RUNTIME" ]; then
-  die "node_modules/dsh-system1-runtime is a DANGLING symlink: the runtime was never fetched."
-fi
-[ -e "$RUNTIME" ] || die "node_modules/dsh-system1-runtime is missing after npm install."
-node -e "import('dsh-system1-runtime/guard/hooks.js').then(m => console.log('  runtime resolves ·', m.PROBE_SEAMS.length, 'seams, probe question:', m.PROBE_QUESTION?.type)).catch(e => { console.error('  runtime import failed:', e.code || e.message); process.exit(1) })" \
-  || die "the runtime is installed but does not import."
+# THE RUNTIME IS LOCAL, SO WHAT IS PROBED IS THAT IT LOADS. This replaces a check for a git dependency
+# whose fetch could fail silently and leave a dangling symlink the import only hit at run time: `lib/`
+# cannot dangle, but a copy missing a file or a specifier fails exactly the same way -- inside a listener,
+# on the first turn.
+node -e "import('./lib/seams.js').then(m => console.log('  runtime loads ·', m.PROBE_SEAMS.length, 'seams, probe question:', m.PROBE_QUESTION?.type)).catch(e => { console.error('  runtime import failed:', e.code || e.message); process.exit(1) })" \
+  || die "the runtime source in lib/ does not import."
 
 step "adding the bundle to profile '${PROFILE}'"
 listed() {
@@ -74,7 +66,7 @@ if command -v dsh >/dev/null && [ "$CHECK_ONLY" = no ]; then
   if dsh --profile "$PROFILE" --dump-config 2>/dev/null | grep -q 'id: system1-observer'; then
     echo "  row 'system1-observer' is in the composed config"
   else
-    warn "row 'system1-observer' is not in --dump-config; it may be PENDING on a missing dependency"
+    warn "row 'system1-observer' is not in --dump-config; it may be PENDING or have failed to mount"
   fi
 fi
 node -e '

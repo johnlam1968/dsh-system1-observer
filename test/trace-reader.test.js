@@ -100,3 +100,24 @@ test('a --file that does not exist fails with the PATH, not a stack trace', () =
   assert.match(out, /definitely-not-here\.jsonl/)
   assert.doesNotMatch(out, /at .*\.mjs:\d+/, 'a person should not have to read a stack trace')
 })
+
+// A CALL LINE CAN CARRY TWO QUESTIONS AND A DROPPED THIRD. The answers look complete on the one-line
+// view, so `--full` has to show both the questions that were asked and the spec that was not -- otherwise
+// "I configured three and got two answers" reads as a model that ignored one.
+test('--full prints every question at a seam, and names a spec that was dropped', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'observer-trace-'))
+  const path = join(dir, 'trace.jsonl')
+  const line = {
+    ...call('RUN-Q', '2026-01-03T00:00:00.000Z', 'pre_execute', 'before_a_tool_call'),
+    questions: {
+      safe: { type: 'noul', instructions: 'Could this harm somebody?' },
+      reversible: { type: 'noul', instructions: 'Could this be undone?' },
+    },
+    problems: ['pre_execute[2]: unknown type "magic"'],
+  }
+  writeFileSync(path, `${JSON.stringify(line)}\n`)
+  const { out } = run('--file', path, '--full')
+  assert.match(out, /question\s+safe \[noul, probability\] Could this harm somebody\?/)
+  assert.match(out, /question\s+reversible \[noul, probability\] Could this be undone\?/)
+  assert.match(out, /dropped\s+pre_execute\[2\]: unknown type "magic"/)
+})

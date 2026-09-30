@@ -23,25 +23,55 @@
         "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-primitives"
       ]
+    },
+    "compatibility": {
+      "testedAgainst": {
+        "node": "25.3.0",
+        "dsh": "0.1.7-rc.2",
+        "note": "Re-run `npm run ci` after upgrading Node or DSH, and update these two versions only then. `npm run check:compat` asserts the line and says so when it cannot check it."
+      }
     }
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "check:citations": "node scripts/check-citations.mjs",
+    "coverage": "node --experimental-test-coverage --test --test-coverage-include='lib/*.js' --test-coverage-include='lib/model/*.js' --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=75 test/*.test.js",
+    "check:compat": "node scripts/check-compat.mjs",
+    "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
-    "dsh-system1-runtime": "git+https://github.com/johnlam1968/system1-runtime-repo.git#v0.1.1",
     "yaml": "^2.9.1"
   },
   "files": [
     "LICENSE",
     "index.js",
     "client.js",
-    "lib/*.js",
+    "lib/**/*.js",
+    "scripts/**/*.mjs",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
     "package.json"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnlam1968/dsh-system1-observer.git"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "system-one",
+    "observability",
+    "trace"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "devDependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  }
 }

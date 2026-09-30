@@ -1,25 +1,30 @@
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //
-// THE RUNTIME IS LOADED LAZILY, by subpath, for the reason `dsh-docdrift` measured: a static import of a
-// missing dependency fails ESM resolution BEFORE `apply`, so the harness sees an unattributable
-// module-not-found instead of a row that is merely inert. Here the import is static -- this package declares
-// the runtime as its own dependency -- but the interface is CHECKED at mount, because the runtime and its
-// consumers version separately.
+// THE DECISION RUNTIME IS LOCAL SOURCE -- it lives under `lib/`, in the same commit as this file, rather
+// than arriving as a fetched dependency. So a renamed or removed export is refused by ESM resolution BEFORE
+// `apply`, and the argument shapes this file calls are held by the tests that execute `apply`. There is no
+// interface version to compare: pinned across a repository boundary a version integer has a job, but here it
+// could only ever fire when the person who broke the shape also volunteered to bump it.
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
-import { PROBE_SEAMS } from 'dsh-system1-runtime/guard/hooks.js'
-import { createEvidence } from 'dsh-system1-runtime/guardrail/evidence.js'
-import { checkInterfaceVersion } from 'dsh-system1-runtime/interface-version.js'
-import { createModel } from 'dsh-system1-runtime/model/client.js'
-import { createServiceModel } from 'dsh-system1-runtime/model/service.js'
+import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
+import { probeFingerprint } from './lib/probe-score.js'
+import { configuredQuestionIds } from './lib/questions.js'
+import { readSessions } from './lib/sessions.js'
+import { egressFacts } from './lib/egress.js'
+import { attachRedactionRule } from './lib/telemetry.js'
+import { minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
+import { describeSubject, subjectOfAgent } from './lib/subject.js'
+import { createEvidence } from './lib/evidence.js'
+import { createModel } from './lib/model/client.js'
+import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { createObserver } from './lib/observe.js'
+import { createTraceTool } from './lib/tool.js'
 import { registerListeners, readHooks } from './lib/register.js'
-
-/** The runtime interface this build was written against. Checked at mount; a mismatch refuses. */
-const EXPECTED_INTERFACE_VERSION = 1
 
 const name = 'system1-observer'
 
@@ -32,18 +37,36 @@ const inject = ['agents']
 /**
  * Where the trace goes when nothing overrides it.
  *
- * The spec's default is `<DSH_HOME>/logs/…`, so a trace is discoverable beside the harness's own logs; with no
- * `DSH_HOME` (a bare `node` run) it falls back to the package's own data directory. `tracePath` wins over both,
- * and `SYSTEM1_OBSERVER_TRACE` is applied by the evidence sink on top of whatever this returns.
+ * `<DSH_HOME>/logs/…` first, so a trace is discoverable beside the harness's own logs; with no `DSH_HOME` the
+ * HARNESS'S OWN DEFAULT HOME (`~/.dsh`, the directory the profiles live under) stands in for it, because the
+ * alternative was the package's own directory and that is wrong for anyone who installed this normally.
+ *
+ * THE PACKAGE DIRECTORY IS DELIBERATELY NEVER USED. It was the last resort, and for a published plugin that
+ * path is inside `node_modules` -- read-only on a global install, wiped by the next `npm install` otherwise,
+ * and never what a person means by "the logs". Worse, a write there that fails is swallowed by the
+ * best-effort evidence sink, so the failure mode was a plugin that silently produced no trace at all. A bare
+ * `node` run with no home directory falls back to the OS temporary directory, which is at least writable.
+ *
+ * `tracePath` wins over both, and `SYSTEM1_OBSERVER_TRACE` is applied by the evidence sink on top of whatever
+ * this returns.
  */
 export function resolveTracePath(config, packageDir, env = process.env) {
   const configured = readConfigValue(config?.tracePath)
   const given = typeof configured === 'string' ? configured.trim() : ''
   if (given !== '') return given
-  const home = typeof env?.DSH_HOME === 'string' && env.DSH_HOME !== '' ? env.DSH_HOME : undefined
-  return home === undefined
-    ? join(packageDir, 'data', 'system1-observer.jsonl')
-    : join(home, 'logs', 'system1-observer.jsonl')
+  const configuredHome = typeof env?.DSH_HOME === 'string' && env.DSH_HOME !== '' ? env.DSH_HOME : undefined
+  const home = configuredHome ?? defaultDshHome()
+  const base = home === undefined || home === '' ? join(tmpdir(), 'dsh-logs') : join(home, 'logs')
+  return join(base, 'system1-observer.jsonl')
+}
+
+/** The harness's own default home, so an unset `DSH_HOME` still lands beside the profiles. */
+function defaultDshHome() {
+  try {
+    return join(homedir(), '.dsh')
+  } catch {
+    return undefined
+  }
 }
 
 const Config = Schema.object({
@@ -53,26 +76,90 @@ const Config = Schema.object({
   model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read once, at mount, so this is YAML-only.'),
   timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read once, at mount, so this is YAML-only.'),
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read once, at mount, so this is YAML-only.'),
-  question: Schema.string().description('Replaces the runtime probe question with a noul built from this text. Empty uses the probe question. Read once, at mount, so this is YAML-only.'),
+  question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read once, at mount, so this is YAML-only.'),
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
+  // THE PER-SEAM QUESTIONS, and the one field whose SHAPE matters to the host rather than to us.
+  //
+  // A volatile OBJECT rather than nine flat fields, because the settings host projects a form onto the
+  // schema: `isVolatilePath` treats every path BENEATH a volatile node as writable (so
+  // `['questions','admit',0,'instructions']` is accepted) and `projectForm` on an ARRAY returns the array
+  // whole -- so a question object keeps its `options`/`criteria`/`levels` verbatim, while an undeclared
+  // key under an OBJECT would be silently dropped. Every seam is therefore declared here, and a tenth seam
+  // would need a line here as well as in `PROBE_SEAMS` -- which is what `test/schema.test.js` asserts, so
+  // the two lists cannot drift apart.
+  //
+  // MEASURED against the installed `dsh-settings` (0.1.7-rc.2) before this was written: every path beneath
+  // `questions` answers `isVolatilePath` true, a nine-key map round-trips through `projectForm` verbatim,
+  // and an undeclared tenth seam comes back `undefined`.
+  questions: Schema.object(
+    Object.fromEntries(PROBE_SEAMS.map(seam => [seam, Schema.array(Schema.any())])),
+  ).volatile().description('Per-seam questions, keyed by seam name. An array of `{id, type, instructions}` where `type` is `noul` (optional `criteria`), `choice` (`options`: `{label, criterion, abstain}`) or `score` (`levels`). A seam left empty asks nothing. Legacy mode -- the probe question, or `question` -- applies until at least one seam carries a question.'),
+  // THE KILL SWITCH. `!= false` in `lib/observe.js`, NOT `=== true`: an absent field has to leave the
+  // observer ON, because a switch that turns itself off when nobody set it is worse than no switch. There
+  // is deliberately no `.default(true)` -- a VOLATILE field does not arrive as its value, and the schema
+  // default is not what `.get()` answers for a field nobody has written.
+  callsEnabled: Schema.boolean().volatile().description('Master switch for the model calls. Off records a `skip` at every seam with reason `calls disabled` and makes no request; the questions are kept, so turning it back on resumes where it left off. Read at the point of use, so it is live.'),
+  // PER SEAM, and the defaults are the point. MEASURED: a plain boolean inside a volatile object
+  // materialises to an ABSENT KEY (`{}`), unlike an array which materialises to `[]` -- so an unset seam
+  // reads `undefined`, and `.default(true)` makes the resolved config say `true` rather than nothing at
+  // all. Either way an absent key means ON; `lib/seams.js` is what enforces that, not this schema.
+  //
+  // Declared per seam for the same reason as `questions`: `projectForm` DROPS a key this schema does not
+  // declare, so a tenth seam would need a line here too. `test/schema.test.js` holds the two lists equal.
+  seamEnabled: Schema.object(
+    Object.fromEntries(PROBE_SEAMS.map(seam => [seam, Schema.boolean().default(true)])),
+  ).volatile().description('Per-seam switch for the model calls, keyed by seam name. Off records a `skip` at that seam with reason `calls disabled at this seam`; its questions are kept. The master `callsEnabled` overrides all of them while it is off.'),
+  // TWO WAYS TO OBSERVE EVERYTHING, AND ONE TO OBSERVE NOTHING -- see `lib/sessions.js`:
+  //   unset          -> `['*']` by the DEFAULT below, so a row nobody configured observes every session
+  //   `['*']`        -> the same thing, written down and visible in the card, and removable
+  //   `[]`           -> observe NOTHING, which is the one state that has to be explicit
+  // The wildcard exists BECAUSE an array MATERIALISES to `[]`: without it, "nobody has configured this" and
+  // "configured to observe nothing" would be the same value, and one of the two would have to be wrong.
+  //
+  // ITEMS ARE `any`, NOT `string`, because an entry may be `{ id, title }`: the title is the headline the
+  // session menu was handed, kept for display only. A `string` item schema would REFUSE that object at
+  // resolution, which would make the row fail to load the moment the menu wrote one.
+  sessions: Schema.array(Schema.any()).default(['*']).volatile().description('Observe only these sessions, matched by id or id prefix. `*` means EVERY session and is the default; an EMPTY list observes nothing. The “...” menu on a session in the sidebar is the way in, and it can also narrow to one session. An entry may be a bare id string or `{ id, title }` — the title is a display cache and is never matched on. A firing in any other session records a `skip` with reason `session not observed` and its text never reaches the model or the trace.'),
   includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
   observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
   maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
+  // THE RECORD'S OWN SWITCHES, all three volatile because all three must be live: a trace that had to be
+  // restarted to stop leaking is a trace that leaks until somebody notices.
+  redactEnabled: Schema.boolean().default(true).volatile().description('Redact the trace copy. ON by default, and it NEVER touches what the model is asked: `state` stays raw, because a model asked to classify `[REDACTED]` measures the scrubber. Off lets credential shapes through on purpose — truncation still applies, because a kill switch that also removed the size cap would be a foot-gun.'),
+  redactKeys: Schema.array(Schema.string()).default([]).volatile().description('Extra field names to redact, beside the six built in (key, token, secret, password, authorization, credential). Matched by the tokenizer, so `apiKey`, `api_key` and `API-KEY` all match `key` — and `monkey`, `keyboard` and `turkey` do not, because containment is deliberately not part of the rule.'),
+  // THE RATE IS CONFIGURABLE, AND NAMED, AND DATED. Four sibling plugins hard-code the same number, and the one
+  // that says why puts it best: two copies of a price drift. This is the fifth copy -- one, and named.
+  // THE QUESTION TEXT WAS UNBOUNDED UNTIL THIS EXISTED. `maxFieldChars` bounds `state.text` alone; the
+  // instructions, every option label, every criterion and every level went verbatim -- an unbounded per-call
+  // spend. Refused rather than truncated: the answer map is keyed by question.
+  // EXPORT LESS RATHER THAN SCRUB MORE, where the trade is the operator's to make. The reference this is ported
+  // from defaults to `omit`, and this one defaults to `full` for a reason the switch itself cannot carry: a
+  // telemetry exporter ships records OFF THE MACHINE, while this trace is local evidence whose purpose is that a
+  // wrong judgement is diagnosable -- and 56% of its call lines carry a path. The record is minimised; the model
+  // still receives the raw text.
+  pathMode: Schema.union(['full', 'basename', 'omit']).default('full').volatile().description('How much of an absolute path the TRACE keeps: `full`, `basename`, or `omit` (replaced with [PATH]). It never touches what the model is asked. Default `full`, because this trace is local evidence and a path is often the diagnosis; set `basename` or `omit` if you share the file.'),
+  redactSessionTelemetry: Schema.boolean().volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
+  maxQuestionChars: Schema.number().default(4000).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to 4000.'),
+  pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
+  maxTraceBytes: Schema.number().default(33554432).volatile().description('Rotate the trace when the next line would cross this many bytes. 0 disables rotation. Rotation renames the full file aside as `<name>.<run>.<n>.jsonl` and starts a fresh one at the same path, so every reader keeps following the live file; each rotation writes a `rotate` line naming both, and the count is on the mount line.'),
 })
 
 async function apply(ctx, config) {
-  const verdict = checkInterfaceVersion(EXPECTED_INTERFACE_VERSION)
-  if (!verdict.ok) {
-    throw new Error(`system1-observer was written against runtime interface version ${EXPECTED_INTERFACE_VERSION} and the installed runtime provides ${verdict.found}`)
-  }
-
   const here = dirname(fileURLToPath(import.meta.url))
   // THE MOUNT-BOUND FIELDS, READ ONCE. `hooks` decides which listeners exist, and a transport binds
   // when its client is built, so neither can change under a running row; unwrapping them once is
   // correct. The VOLATILE fields are deliberately NOT taken from here -- see `readConfig` below.
   const mount = plainConfig(config)
   const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
-  const evidence = createEvidence({ defaultPath: resolveTracePath(mount, here), envVar: 'SYSTEM1_OBSERVER_TRACE' })
+  // THE POLICY IS A GETTER because it is live config, read per line; the path is captured because the test suite
+  // depends on that ordering. See `lib/evidence.js`.
+  const liveConfig = () => plainConfig(config)
+  const evidence = createEvidence({
+    defaultPath: resolveTracePath(mount, here),
+    envVar: 'SYSTEM1_OBSERVER_TRACE',
+    policy: liveConfig,
+    maxBytes: () => readConfigValue(liveConfig().maxTraceBytes),
+  })
   const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
   const wire = createModel({ baseUrl: mount.wireUrl || 'http://127.0.0.1:8766', timeoutMs: mount.timeoutMs ?? 8000 })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
@@ -92,19 +179,116 @@ async function apply(ctx, config) {
   function writeMount() {
     if (mountTraced) return
     mountTraced = true
-    evidence.trace('mount', () => ({
-      hooks,
-      transport: transport.kind,
-      provider: mount.provider ?? null,
-      model: mount.model ?? null,
-      questionIds: ['probe'],
-      tracePath: evidence.path,
-    }))
+    evidence.trace('mount', () => {
+      // THE SCOPE THIS RUN STARTED WITH, and it belongs on this line because a trace is otherwise unreadable as
+      // a whole: without it, a run that recorded nothing looks identical to a run that was never asked to --
+      // and the first question anyone asks of a quiet trace is "was it scoped, paused, or broken?".
+      //
+      // READ LIVE, not from the apply-time `mount` snapshot above, because these three fields are volatile: a
+      // setting saved while the row runs changes them without re-applying, so the snapshot would be the one
+      // thing in this line that was never true. IT IS STILL A SNAPSHOT OF THE MOMENT — the line is written once,
+      // at mount or at the first observation — and the per-event `reason` remains the authority on any firing.
+      const live = plainConfig(config)
+      return {
+        hooks,
+        transport: transport.kind,
+        provider: mount.provider ?? null,
+        model: mount.model ?? null,
+        // THE IDS ARE READ FROM THE CONFIG, not restated. This line said `['probe']` while the row asked
+        // whatever the config said, so the moment a per-seam question existed the mount line would have
+        // named a question the row never asked. It is an apply-time snapshot, like `hooks` beside it: the
+        // mount line is written once, and a later save is deliberately not re-applied.
+        questionIds: configuredQuestionIds(mount),
+        // THE INSTRUMENT'S IDENTITY. The probe's question text was authored by intuition, so a run with edited
+        // instructions is a NEW MEASUREMENT and not a comparison. Without this, two runs are silently averaged
+        // as though one instrument produced both.
+        probeHash: probeFingerprint(),
+        callsEnabled: readConfigValue(live.callsEnabled) !== false,
+        // The DEVIANT set, because "nothing is off" is the common case and a list of nine booleans buries it --
+        // and the two seams that carry no text are excluded, because they are not switched off, they are
+        // inapplicable, and a line that cannot tell those apart reports a decision nobody made.
+        seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live, seam)),
+        // A BOUND NOBODY CAN READ IS NOT A BOUND. The cap that rotates this file is only auditable if the
+        // record says how often it fired and how much moved, and the mount line is where a run's scope lives.
+        rotated: evidence.rotations(),
+        // WHAT LEAVES AND WHERE IT GOES, as data so it can be asserted -- the mount line is already the answer to
+        // "was it scoped, paused, or broken?", and this is the answer to "and what did that send?".
+        egress: egressFacts({
+          transport: transport.kind,
+          endpoint: transport.kind === 'service' ? `provider:${mount.provider ?? '(unset)'}` : (mount.wireUrl || 'http://127.0.0.1:8766'),
+          model: mount.model ?? null,
+          callsEnabled: readConfigValue(live.callsEnabled) !== false,
+          maxFieldChars: readConfigValue(live.maxFieldChars),
+          maxQuestionChars: readConfigValue(live.maxQuestionChars),
+          redactEnabled: readConfigValue(live.redactEnabled) !== false,
+          pathMode: readConfigValue(live.pathMode),
+          observeSubagents: readConfigValue(live.observeSubagents) === true,
+          includeNonOperatorFacing: readConfigValue(live.includeNonOperatorFacing) === true,
+          sessions: readSessions(live),
+          hooks,
+          seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live, seam)),
+        }),
+        // The list as written: `['*']` is every session and `[]` is none, so REWRITING it would destroy the
+        // only distinction this field has.
+        sessions: readSessions(live),        // MINIMISED LIKE EVERY OTHER PATH IN THE RECORD. The reader already knows where the file is -- it opened
+        // it -- so this field costs nothing to reduce and is the one place a deployment path is recorded verbatim.
+        tracePath: minimisePaths(evidence.path, readConfigValue(live.pathMode)),
+      }
+    })
   }
+
+  // THE TRACE TOOL, so an agent can read what the questions actually did instead of being told a path it
+  // has no reason to know. Through `ctx.inject` for the same reason as `system1`: a hard dependency on
+  // `tools` would leave the row PENDING -- running nothing at all, listeners included -- on a deployment
+  // without it, and losing the observation to gain a reader would be a bad trade. The path is captured
+  // here because it is mount-bound, and the run id so the default answer is "what is happening now".
+  // THE MODEL EACH LIVE SESSION IS ON, because "which model is this session using" is the question the subject
+  // field answers per line and this answers right now -- and because it is the only way to see whether
+  // `Agent.options` is populated at all without waiting for a seam to fire. Shared by the tool and the tab, so
+  // the two cannot report different answers for the same question.
+  function liveAgentRoutes() {
+    try {
+      const list = ctx.agents.list()
+      if (!Array.isArray(list)) return []
+      return list
+        .filter(agent => typeof agent?.id === 'string')
+        .map(agent => {
+          const route = describeSubject(subjectOfAgent(agent))
+          return route === '(unknown)' ? agent.id : `${agent.id} (${route})`
+        })
+    } catch {
+      return []
+    }
+  }
+
+  ctx.inject(['tools'], (child) => {
+    const tools = child.get('tools')
+    if (tools === undefined || typeof tools.register !== 'function') return
+    tools.register(createTraceTool({
+      path: evidence.path,
+      runId: evidence.runId(),
+      liveAgents: liveAgentRoutes,
+      price: () => readConfigValue(liveConfig().pricePerMTokInput),
+    }))
+  })
+
 
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
   // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and
   // `evidence` and the `mount` snapshot directly, which is safe whatever order the callback runs in.
+  // THE HARNESS'S OWN OUTBOUND TELEMETRY, off unless asked. Reached by STRING -- the service key and the event
+  // name are verified against the installed declarations, and both were wrong in shipped documentation: the event
+  // is `session-telemetry/record`, not the `sessionTelemetry/record` three READMEs spell, and the service key is
+  // `sessionTelemetry`, not the `telemetry` its own doc comment claims.
+  const detachTelemetryRule = attachRedactionRule(ctx, {
+    readEnabled: () => readConfigValue(liveConfig().redactSessionTelemetry) === true,
+    // THE WHOLE RECORD, NOT ONLY ITS `body`. The record is `{channel, time, severity, attributes, body}`, and
+    // `attributes` is a string map that can carry a path or a credential shape as easily as the body can --
+    // `sanitizeJson` also redacts by KEY, so an attribute NAMED `token` loses its value too. It deep-clones, which
+    // is what the waterfall requires: the record handed over must not be mutated.
+    scrub: (record) => sanitizeJson(record, redactPolicy(liveConfig())),
+  })
+
   ctx.inject(['system1'], (child) => {
     const service = child.get('system1')
     if (service === undefined) return
@@ -143,7 +327,19 @@ async function apply(ctx, config) {
     // THE AGENT, NOT ITS ID: the `draft` seam reads both `agent.id` and the session origin from this one
     // object, and `isSubagent` needs the latter.
     captureAgent: () => ctx.agents.currentInitiator(),
-    meta: (payload) => ({ agentId: payload?.agent?.id, turn: payload?.turn, step: payload?.step }),
+    // THE SUBJECT COMES FROM THE AGENT on every seam whose payload carries no LLM request -- see
+    // `lib/subject.js`. The `draft` listener does not come through here: it builds its own meta from the
+    // `GenerateOptions` it is handed, which is the request as actually sent.
+    meta: (payload, agent) => ({
+      agentId: payload?.agent?.id ?? agent?.id,
+      turn: payload?.turn,
+      step: payload?.step,
+      subject: subjectOfAgent(agent ?? payload?.agent),
+      // THE TOOL'S NAME, which the payload of every tool seam already carries. `post_execute` and `result` are
+      // asked about the RESULT text alone, so without this a matrix of results cannot say which tool produced
+      // one.
+      toolName: typeof payload?.name === 'string' && payload.name !== '' ? payload.name : undefined,
+    }),
   })
 }
 

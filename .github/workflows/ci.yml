@@ -1,0 +1,47 @@
+# WHAT THE README CLAIMS, RUN BY A MACHINE.
+#
+# Before this existed the suite had been run by hand and never in CI, which is the difference between "it passes"
+# and "it is known to pass on the combinations this package says it supports".
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The supported lines from `engines`. The TESTED line is `dsh.compatibility.testedAgainst.node`, and
+        # `check:compat` reports a difference from it without failing on one.
+        node: ['22.19.0', '24.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: the suite
+        run: npm test
+      - name: every comment's citation must resolve in a clone
+        run: npm run check:citations
+      - name: the declared compatibility line
+        run: npm run check:compat
+
+  coverage:
+    name: coverage floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # ONE line, because a coverage floor measured on one Node minor is not a floor on another: the flag is
+          # still `--experimental-`, and its instrumentation differs between majors.
+          node-version: '25.x'
+          cache: npm
+      - run: npm ci
+      - run: npm run coverage

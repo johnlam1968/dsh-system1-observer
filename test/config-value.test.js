@@ -11,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply, resolveTracePath } from '../index.js'
 import { plainConfig, readConfigValue } from '../lib/config-value.js'
@@ -63,22 +63,33 @@ test('the mount-bound fields are unwrapped where they are used', () => {
   assert.deepEqual(readHooks({ hooks: ['draft'] }), ['draft'])
   assert.equal(resolveTracePath({ tracePath: accessor('/tmp/x.jsonl') }, '/pkg'), '/tmp/x.jsonl')
   assert.equal(resolveTracePath({ tracePath: '/tmp/y.jsonl' }, '/pkg'), '/tmp/y.jsonl')
-  assert.equal(resolveTracePath({ tracePath: accessor('   ') }, '/pkg', {}), join('/pkg', 'data', 'system1-observer.jsonl'))
+  // A blank tracePath is not a path, and the fallback is the harness's default home -- NEVER the package
+  // directory, which for a published plugin is inside node_modules.
+  const blank = resolveTracePath({ tracePath: accessor('   ') }, '/pkg', {})
+  assert.equal(blank, join(homedir(), '.dsh', 'logs', 'system1-observer.jsonl'))
+  assert.doesNotMatch(blank, /^\/pkg/)
 })
 
 test('the call-time fields are unwrapped where they are read', () => {
-  const questions = buildQuestions({ question: accessor('  Does this look complete?  ') })
+  const questions = buildQuestions({ question: accessor('  Does this look complete?  ') }, 'admit').questions
   assert.equal(questions.probe.type, 'noul')
   assert.equal(questions.probe.instructions, 'Does this look complete?')
-  assert.equal(buildQuestions({ question: accessor('') }).probe.type, 'choice', 'an empty accessor falls back to the probe')
+  assert.equal(buildQuestions({ question: accessor('') }, 'admit').questions.probe.type, 'choice', 'an empty accessor falls back to the probe')
+  // `questions` is volatile too, so it arrives as an accessor: read as a plain value the object would be
+  // one opaque field and the per-seam map would never be seen.
+  const perSeam = buildQuestions({ questions: accessor({ admit: [{ id: 'q', type: 'noul', instructions: 'Is this the operator?' }] }) }, 'admit').questions
+  assert.deepEqual(Object.keys(perSeam), ['q'])
+  assert.equal(perSeam.q.instructions, 'Is this the operator?')
 
   const lines = []
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {}, worstCase: 0, envelope: undefined, rawAnswers: undefined }),
     trace: (event, fields) => lines.push({ event, ...(typeof fields === 'function' ? fields() : fields) }),
-    readConfig: () => ({ maxFieldChars: accessor(10), transport: 'service' }),
+    // A SESSION MUST BE NAMED or every firing is a `session not observed` skip and this never reaches the
+    // excerpt it is about -- observation is opt-in.
+    readConfig: () => ({ maxFieldChars: accessor(10), transport: 'service', sessions: accessor(['session-a']) }),
   })
-  return observer.observe('draft', 'x'.repeat(50), { agentId: 'a' }).then(() => {
+  return observer.observe('draft', 'x'.repeat(50), { agentId: 'session-a' }).then(() => {
     assert.equal(lines[0].excerpt.length, 10, 'a maxFieldChars accessor must bound the excerpt')
     assert.equal(lines[0].truncated, true)
   })
@@ -95,6 +106,9 @@ test('a VOLATILE field written AFTER apply reaches the running row, with no re-a
     hooks: accessor(['admit']),
     tracePath: accessor(tracePath),
     observeSubagents: { get: () => observeSubagents },
+    // Named, because observation is opt-in: with no session the row is inert and this test's subject is the
+    // accessor, not the gate.
+    sessions: accessor(['sub-1']),
     wireUrl: accessor('http://127.0.0.1:9'),
     timeoutMs: accessor(200),
   }

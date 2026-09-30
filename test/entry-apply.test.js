@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
+import { PROBE_SEAMS } from '../lib/seams.js'
 
 // WHY THIS EXISTS: the observer's first live mount wrote 209 `error` lines reading "decide is not a function"
 // and no `call` lines at all. Both model factories return a CLIENT object, and `apply` assigned it to `decide`
@@ -29,7 +30,7 @@ test('apply wires a callable decide, so a streamed reply reaches the transport i
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   const ctx = fakeCtx()
-  await apply(ctx, { hooks: ['draft'], tracePath, wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
+  await apply(ctx, { hooks: ['draft'], tracePath, sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
 
   const handler = ctx.handlers.get('llm/stream')
   assert.equal(typeof handler, 'function', 'apply did not subscribe the draft seam')
@@ -68,7 +69,7 @@ test('a service arriving after apply writes the mount line as service, and no tr
       arrive = () => Promise.resolve().then(() => callback({ get: () => ({ decide: async () => ({ kind: 'answers', answers: {} }) }) }))
     },
   })
-  await apply(ctx, { hooks: ['close'], tracePath, wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
+  await apply(ctx, { hooks: ['close'], tracePath, sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
   await arrive()
 
   await ctx.handlers.get('agent/turn-stopping')({ agent: { id: 'agent-1' } })
@@ -84,7 +85,7 @@ test('when no service ever arrives the first observation writes a wire mount lin
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   const ctx = fakeCtx()   // inject is a no-op: no system1 service ever appears
-  await apply(ctx, { hooks: ['close'], tracePath, wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
+  await apply(ctx, { hooks: ['close'], tracePath, sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
 
   // NOTHING IS WRITTEN AT APPLY TIME. The live trace shows the service landing 355 ms later, so a mount
   // line written here would say `wire` and stay wrong; the line is deferred until the transport is known
@@ -126,7 +127,7 @@ test("by default a subagent's admit, pre_execute and draft are skips and decide 
   let calls = 0
   const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
   ctx.setInitiator(SUBAGENT)
-  await apply(ctx, { hooks: ['admit', 'pre_execute', 'draft'], tracePath })
+  await apply(ctx, { hooks: ['admit', 'pre_execute', 'draft'], tracePath, sessions: [OPERATOR.id] })
 
   const decision = { messages: ['original'] }
   const returned = await ctx.handlers.get('agent/pre-step')({ agent: SUBAGENT, messages: [{ role: 'user', content: [{ type: 'text', text: 'THE WHOLE TASK PROMPT' }] }], turn: 1, step: 1 }, async () => decision)
@@ -161,7 +162,7 @@ test("observeSubagents true calls the model for a subagent's seam", async () => 
   let calls = 0
   const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
   ctx.setInitiator(SUBAGENT)
-  await apply(ctx, { hooks: ['pre_execute'], tracePath, observeSubagents: true })
+  await apply(ctx, { hooks: ['pre_execute'], tracePath, sessions: [SUBAGENT.id], observeSubagents: true })
 
   await ctx.handlers.get('tools/pre-execute')({ agent: SUBAGENT, name: 'bash', arguments: { command: 'ls' } }, async () => ({ allow: true }))
 
@@ -177,7 +178,7 @@ test('a non-subagent is still observed when observeSubagents is off', async () =
   let calls = 0
   const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
   ctx.setInitiator(OPERATOR)
-  await apply(ctx, { hooks: ['pre_execute'], tracePath })
+  await apply(ctx, { hooks: ['pre_execute'], tracePath, sessions: [OPERATOR.id] })
 
   await ctx.handlers.get('tools/pre-execute')({ agent: OPERATOR, name: 'bash', arguments: { command: 'ls' } }, async () => ({ allow: true }))
 
@@ -193,7 +194,7 @@ test("by default a subagent's assemble seam is a skip and decide is never called
   let calls = 0
   const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
   ctx.setInitiator(SUBAGENT)
-  await apply(ctx, { hooks: ['assemble'], tracePath })
+  await apply(ctx, { hooks: ['assemble'], tracePath, sessions: [SUBAGENT.id] })
 
   const assembly = { sections: [{ name: 's', order: 0, text: 'THE ASSEMBLED PROMPT' }], contexts: [], tools: [], variables: {} }
   const decision = { sections: [{ name: 's', order: 0, text: 'THE ASSEMBLED PROMPT' }], contexts: [], tools: [], variables: {} }
@@ -208,4 +209,183 @@ test("by default a subagent's assemble seam is a skip and decide is never called
   assert.equal(lines.some(line => line.event === 'call'), false, 'a subagent assemble must not reach the model')
   assert.equal(calls, 0, 'decide must never be called for a subagent assemble')
   assert.equal(JSON.stringify(lines).includes('THE ASSEMBLED PROMPT'), false, "a subagent's assembled prompt must not be recorded")
+})
+
+// MEASURED LIVE, and it cost every assembled prompt: `meta` was built from `args[0]` -- the `PromptAssembly`,
+// which carries no `agent` -- while the agent is on `args[1]`. Nothing noticed until a session filter existed,
+// because nothing read `meta.agentId` before; then EVERY assemble recorded `session not observed`, including
+// inside the session the row was pointed at, and `assemble` could not be observed at all.
+test('an assemble in the TARGETED session is attributed to it, not skipped as unattributable', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  let calls = 0
+  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  ctx.setInitiator(OPERATOR)
+  await apply(ctx, { hooks: ['assemble'], tracePath, sessions: [OPERATOR.id] })
+
+  const assembly = { sections: [{ name: 's', order: 0, text: 'THE ASSEMBLED PROMPT' }], contexts: [], tools: [], variables: {} }
+  await ctx.handlers.get('system-prompt/assemble')(assembly, { agent: OPERATOR, scope: OPERATOR }, async () => assembly)
+
+  const lines = readLines(tracePath)
+  assert.deepEqual(lines.filter(line => line.event === 'skip').map(line => line.reason), [], 'the agent is on the second argument, and the session filter must read it there')
+  const call = lines.find(line => line.event === 'call')
+  assert.equal(call?.agentId, OPERATOR.id, 'the call line must name the session it belongs to')
+  assert.equal(calls, 1)
+
+  // AND THE FILTER STILL BITES at this seam: a diagnostic assembly carries no agent, so it is unattributable
+  // and must be passed over rather than credited to whoever happens to be the initiator.
+  await ctx.handlers.get('system-prompt/assemble')(assembly, { scope: OPERATOR }, async () => assembly)
+  const after = readLines(tracePath).filter(line => line.event === 'skip')
+  assert.deepEqual(after.map(line => line.reason), ['session not observed'])
+  assert.equal(calls, 1, 'an unattributable assembly must not reach the model once a session is targeted')
+})
+
+// ---------------------------------------------------------------------------------------------
+// THE TRACE TOOL. An agent asked to tune the questions has to be able to see what they did, and a path it
+// has no reason to know is a path it will not read -- so the row registers a tool whose own description is
+// the hint. Registration goes through `ctx.inject(['tools'])`: a hard dependency would leave the whole row
+// PENDING on a deployment without the tools service, losing the observation to gain a reader.
+// ---------------------------------------------------------------------------------------------
+const SCHEMA_KEYWORDS = new Set(['type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'description', 'title', 'default', 'examples'])
+
+/** Every keyword used anywhere in a schema, so an unsupported one fails here rather than at `register`. */
+function keywordsOf(node, found = new Set()) {
+  if (node === null || typeof node !== 'object') return found
+  if (Array.isArray(node)) {
+    for (const item of node) keywordsOf(item, found)
+    return found
+  }
+  for (const [key, value] of Object.entries(node)) {
+    found.add(key)
+    if (key === 'properties') {
+      for (const child of Object.values(value)) keywordsOf(child, found)
+    } else if (key === 'items' || key === 'oneOf') {
+      keywordsOf(value, found)
+    }
+  }
+  return found
+}
+
+test('apply registers a trace tool, and its schema stays inside the registry subset', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const registered = []
+  const handlers = new Map()
+  const ctx = {
+    on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
+    inject(services, callback) {
+      // Only the tools service answers here, so the `system1` inject is the no-service path.
+      if (services.includes('tools')) {
+        callback({ get: () => ({ register(definition) { registered.push(definition); return () => {} } }) })
+      }
+    },
+    agents: { currentInitiator: () => OPERATOR, list: () => [{ id: 'session-aaa' }, { id: 'session-bbb' }] },
+  }
+  await apply(ctx, { hooks: ['admit'], tracePath, sessions: [OPERATOR.id] })
+
+  assert.equal(registered.length, 1, 'exactly one tool, registered once')
+  const tool = registered[0]
+  assert.equal(tool.name, 'system1_trace')
+  assert.match(tool.description, /System One observer trace/, 'the description is the hint the agent reads')
+  assert.match(tool.description, /session ids/, 'including where to find what a session-scoped observer targets')
+  assert.equal(typeof tool.output.render, 'function', 'register requires an output.render')
+  assert.equal(typeof tool.execute, 'function')
+
+  // A KEYWORD OUTSIDE THE SUBSET MAKES `register` THROW, so it is checked here -- `minimum` is the one a
+  // tool author reaches for first, and it is not in the subset.
+  const unsupported = [...keywordsOf(tool.parameters), ...keywordsOf(tool.output.schema)].filter(key => !SCHEMA_KEYWORDS.has(key))
+  assert.deepEqual(unsupported, [], 'the parameter and output schemas must use only supported keywords')
+  assert.equal(tool.parameters.type, 'object', 'a tool schema is object-rooted')
+  assert.deepEqual(tool.parameters.properties.hook.enum, [...PROBE_SEAMS], 'the seam enum comes from the runtime list')
+
+  // NO TRACE YET: a report, not a throw.
+  const empty = await tool.execute({})
+  assert.match(empty.text, /no trace at /)
+
+  // THEN A REAL OBSERVATION, through the listener the row registered. `wireUrl` points at a closed port, so
+  // the call fails and the trace gets an error line -- which is the point: the tool reads what the row wrote.
+  await handlers.get('agent/pre-step')({ agent: OPERATOR, messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }] }, async () => ({}))
+  const after = await tool.execute({})
+  assert.match(after.text, /trace /)
+  assert.match(after.text, /1 errors/, 'the failed call the row recorded is what the agent sees')
+  assert.match(after.text, /sessions live now: session-aaa, session-bbb/, 'live sessions come from the agents service')
+
+  // JUNK ARGUMENTS MUST NOT THROW: `execute` receives whatever the model sent.
+  const junk = await tool.execute({ run: 42, tail: 'lots', full: 'yes' })
+  assert.match(junk.text, /trace /)
+
+  // RENDER TURNS THE VALUE INTO A TEXT BLOCK, which is what the model actually reads.
+  const blocks = tool.output.render({}, { text: after.text })
+  assert.deepEqual(blocks, [{ type: 'text', text: after.text }])
+})
+
+// THE MOUNT LINE MUST SAY WHAT THE RUN WAS ASKED TO DO. Without it a quiet trace is unreadable as a whole:
+// "was it scoped, paused, or broken?" is the first question anyone asks of one, and the three fields that
+// answer it -- the master switch, the per-seam switches and the session list -- were only ever visible
+// per-event, if at all.
+test('the mount line records the master switch, the seams that are off, and the session list', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const ctx = fakeCtx()
+  await apply(ctx, {
+    hooks: ['draft'],
+    tracePath,
+    callsEnabled: false,
+    sessions: ['session-aaa'],
+    seamEnabled: { draft: true, admit: false },
+  })
+  // The line is written lazily, so an observation is what forces it. `next` is a THUNK returning the stream,
+  // which is the harness contract -- passing an already-created generator makes the listener throw.
+  async function* reply() { yield { type: 'text-delta', text: 'x' } }
+  for await (const _ of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) { /* drain */ }
+
+  const mount = readLines(tracePath).find(line => line.event === 'mount')
+  assert.ok(mount !== undefined, 'no mount line was written')
+  assert.equal(mount.callsEnabled, false)
+  assert.deepEqual(mount.sessions, ['session-aaa'], 'the list as written, because [] and [*] are different states')
+  assert.deepEqual(mount.seamsOff, ['admit'], 'the DEVIANT set only -- nine booleans would bury the one that is off')
+})
+
+test('the mount line records the wildcard rather than rewriting it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const ctx = fakeCtx()
+  await apply(ctx, { hooks: ['draft'], tracePath, sessions: ['*'] })
+  async function* reply() { yield { type: 'text-delta', text: 'x' } }
+  for await (const _ of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) { /* drain */ }
+
+  const mount = readLines(tracePath).find(line => line.event === 'mount')
+  assert.deepEqual(mount.sessions, ['*'], 'the wildcard is the distinction between "everything" and "nothing"')
+  assert.equal(mount.callsEnabled, true)
+  assert.deepEqual(mount.seamsOff, [])
+})
+
+// THE INSTRUMENT'S IDENTITY GOES ON THE MOUNT LINE. The probe's question text was authored by intuition, so a
+// run with edited instructions is a new measurement rather than a comparison, and the hash is what lets a
+// reader tell the two apart instead of averaging them.
+test('the mount line records the probe question fingerprint', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-hash-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const ctx = fakeCtx()
+  await apply(ctx, { hooks: ['draft'], tracePath, sessions: ['agent-1'] })
+  async function* reply() { yield { type: 'text-delta', text: 'x' } }
+  for await (const _ of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) { /* drain */ }
+
+  const mount = readLines(tracePath).find(line => line.event === 'mount')
+  assert.match(mount.probeHash, /^[0-9a-f]{12}$/, 'a short, stable fingerprint of the question text')
+})
+
+// THE BOUND IS ON THE MOUNT LINE, and that is the only place a run says what it has already rotated away. A cap
+// that cannot be read is a cap that cannot be audited -- which is the defect three upstream counters share.
+test('the mount line carries the rotation count and the instrument fingerprint', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'system1-observer-rot-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const ctx = fakeCtx()
+  await apply(ctx, { hooks: ['draft'], tracePath, sessions: ['agent-1'], maxTraceBytes: 0 })
+  async function* reply() { yield { type: 'text-delta', text: 'x' } }
+  for await (const _ of ctx.handlers.get('llm/stream')({ purpose: undefined }, reply)) { /* drain */ }
+
+  const mount = readLines(tracePath).find(line => line.event === 'mount')
+  assert.deepEqual(mount.rotated, { count: 0, lines: 0, bytes: 0, archived: null }, 'nothing rotated yet')
+  assert.match(mount.probeHash, /^[0-9a-f]{12}$/, 'and the instrument is named')
 })
