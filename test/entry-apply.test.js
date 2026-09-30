@@ -118,6 +118,7 @@ function serviceCtx(decide) {
     setInitiator(agent) { current = agent },
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
     inject(_services, callback) { callback({ get: () => ({ decide }) }) },
+    provide: () => () => {},
     agents: { currentInitiator: () => current },
   }
 }

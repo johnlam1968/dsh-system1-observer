@@ -23,6 +23,7 @@ const accessor = (value) => ({ get: () => value })
 const fakeCtx = () => {
   const handlers = new Map()
   return {
+    provide: () => () => {},
     handlers,
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
     inject() {},

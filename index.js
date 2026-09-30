@@ -24,6 +24,8 @@ import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { createObserver } from './lib/observe.js'
 import { createTraceTool } from './lib/tool.js'
+import { readTraceWindow, runIds } from './lib/trace-report.js'
+import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
 import { createDecideTool } from './lib/decide-tool.js'
 import { registerListeners, readHooks } from './lib/register.js'
 
@@ -284,6 +286,22 @@ async function apply(ctx, config) {
     }))
   })
 
+
+  // THE OBSERVER AS A SERVICE, so another plugin can read what this row recorded instead of re-implementing the
+  // readers. Registered with `ctx.provide` -- NOT `ctx.set`, which only replaces an already-provided value and
+  // throws otherwise -- and needing no import of cordis, so it costs no dependency. Every method closes over a
+  // reader and returns its result, so there is no mutator here by construction; the test asserts the freeze.
+  ctx.provide(OBSERVER_SERVICE, createObserverService({
+    read: (options) => readTraceWindow(evidence.path, options?.maxBytes),
+    runs: () => runIds(readTraceWindow(evidence.path).events),
+    sessions: () => ({ live: liveAgentRoutes(), configured: mount.sessions ?? null }),
+    config: () => ({
+      hooks,
+      provider: mount.provider ?? null,
+      model: mount.model ?? null,
+      pricePerMTokInput: readConfigValue(liveConfig().pricePerMTokInput) ?? null,
+    }),
+  }))
 
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
   // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and

@@ -28,6 +28,7 @@ function fakeCtx({ present = true } = {}) {
       listeners.set(event, handler)
       return () => listeners.delete(event)
     },
+    provide: () => () => {},
   }
 }
 
