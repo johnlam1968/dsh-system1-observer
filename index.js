@@ -300,6 +300,11 @@ async function apply(ctx, config) {
       decide: (request) => decide(request),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
+      // The line goes to the same sink as every other one, so a reader finds it where it already looks.
+      record: (line) => {
+        const { event, ...fields } = line
+        evidence.trace(event, fields)
+      },
     }))
     // THE SETTINGS TOOL. `record` writes a config line BEFORE the change -- that ordering is the tool's contract,
     // and `evidence.trace` is the same sink every other line goes to, so a reader finds it where it looks.

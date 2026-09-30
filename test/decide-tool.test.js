@@ -122,3 +122,40 @@ test('the render never prints undefined for an answer shape it did not anticipat
     assert.equal(text.includes('?'), false, `and without a placeholder: ${text}`)
   }
 })
+
+// CRITERION 1(b), which the plan wrote and the code did not have: the tool writes its own line naming itself. It
+// also has to satisfy the acceptance check, which requires every call line under a NON-SEAM hook to name its
+// questions -- so the line carries questionIds, and hook: 'tool' is not a seam.
+test('a call through the tool records a line naming the tool and its questions', async () => {
+  const lines = []
+  const tool = createDecideTool({
+    decide: async () => ({ kind: 'answers', answers: { a: 1 }, executed: { provider: 'typesafe' }, durationMs: 812.5 }),
+    record: (line) => lines.push(line),
+  })
+  await tool.execute({ state: 'x', questions: [spec, { id: 'ladder', type: 'score', instructions: 'How much?', levels: ['low', 'high'] }] })
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].hook, 'tool')
+  assert.equal(lines[0].tool, 'system1-observer')
+  assert.deepEqual(lines[0].questionIds, ['asked', 'ladder'])
+  assert.deepEqual(lines[0].executed, { provider: 'typesafe' })
+  assert.equal(lines[0].durationMs, 812.5)
+  const { probeViolations } = await import('../lib/turn-record.js')
+  assert.deepEqual(probeViolations(lines), [], 'the line satisfies the acceptance check it could otherwise violate')
+})
+
+test('a refused question and a failed judgement both record NOTHING', async () => {
+  const refused = []
+  await assert.rejects(() => createDecideTool({ decide: async () => ({}), record: (l) => refused.push(l) })
+    .execute({ state: 'x', questions: [{ id: 'bad', type: 'score', instructions: 'How?', levels: ['one'] }] }))
+  assert.deepEqual(refused, [], 'a refused set never reaches the backend, so there is no measurement to record')
+
+  const failed = []
+  const tool = createDecideTool({ decide: async () => ({ kind: 'error', reason: 'the service refused' }), record: (l) => failed.push(l) })
+  await tool.execute({ state: 'x', questions: [spec] })
+  assert.deepEqual(failed, [], 'a judgement that did not happen is not a measurement')
+})
+
+test('a tool constructed with no recorder still works, and records nothing', async () => {
+  const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }) })
+  await tool.execute({ state: 'x', questions: [spec] })
+})
