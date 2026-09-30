@@ -458,6 +458,33 @@ async function apply(ctx, config) {
   // its own turn -- it hands the listener BEHIND it a payload where the continuation should be, which broke the
   // observer's own admit handling. Found by driving the wiring rather than the modules: every unit test passed while
   // this would have failed in a live process, on the seam the whole plugin depends on.
+  /**
+   * WHY NOTHING FIRED, WHEN THE REASON IS A CONFIGURATION THAT CANNOT FIRE.
+   *
+   * A skip that says only `session not observed` cannot be told from a scope working as intended, and that is
+   * exactly the confusion this row caused live: it was scoped to one session, a restart did not resume that
+   * session, and 145 consecutive boundaries skipped identically. The row can tell the two apart -- it knows which
+   * sessions are LIVE -- so the skip says which it is. Null when nothing configured is missing, because a note on
+   * every skip would be noise.
+   */
+  function configuredScopeNotLive() {
+    try {
+      const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
+      if (agents === undefined || typeof agents.list !== 'function') return null
+      const live = (agents.list() ?? []).map((entry) => entry?.id).filter((id) => typeof id === 'string')
+      // `readSessions` returns a list of ID STRINGS, deduplicated and trimmed, not the `{ id, title }` entries the
+      // config may hold -- read from lib/sessions.js, after a first version assumed the entry shape and matched
+      // nothing. Bare strings are accepted too, so neither assumption can matter.
+      const missing = readSessions(liveConfig())
+        .map((entry) => (typeof entry === 'string' ? entry : entry?.id))
+        .filter((id) => typeof id === 'string' && id !== '*' && !live.includes(id) && !live.some((liveId) => liveId.startsWith(id)))
+      return missing.length === 0 ? null : `${missing.join(', ')} configured, not live in this process`
+    } catch {
+      // A diagnostic must never be the reason a turn is lost.
+      return null
+    }
+  }
+
   ctx.on('agent/pre-step', (payload, next) => {
     const sessionId = payload?.agent?.id
     // THE SAME SESSION GATE THE OBSERVATION PATH APPLIES, and the schema's own description depends on it: a firing
@@ -465,7 +492,13 @@ async function apply(ctx, config) {
     // measurement would send an EXCLUDED conversation to the judge -- the documented promise, broken, and broken by
     // the one code path that was added last. The reason string is the same one, so a reader can group them.
     if (!sessionObserved(liveConfig(), sessionId)) {
-      evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: 'session not observed' })
+      const note = configuredScopeNotLive()
+      evidence.trace('skip', {
+        hook: 'turn',
+        agentId: sessionId ?? null,
+        reason: 'session not observed',
+        ...(note === null ? {} : { note }),
+      })
       return next()
     }
     // AND THE SUBAGENT GATE, from the same module and with the same reason string the observation path uses. It is
