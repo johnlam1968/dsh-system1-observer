@@ -93,3 +93,19 @@ test('an asynchronous write is awaited, so the change is in force before the res
   assert.equal(current.provider, 'laya', 'the write finished before the result was built')
   assert.deepEqual(out, { knob: 'provider', from: 'typesafe', value: 'laya', recorded: true })
 })
+
+// THE FIRST LIVE `list` FAILED WITH `value is not lossless JSON`: the live config holds Volatile ACCESSORS, which
+// are functions, and the tool returned it verbatim. The harness validates a tool's output, so this was a live-only
+// failure -- a stub of plain values cannot produce it.
+test('a knob that arrives as an accessor is unwrapped, and a function is never returned', async () => {
+  const tool = createConfigTool({
+    read: () => ({ provider: { get: () => 'typesafe' }, turn: { get: () => 0 }, weird: () => {}, missing: undefined, hooks: ['admit'] }),
+    write: () => {},
+    record: () => {},
+  })
+  const listed = await tool.execute({ action: 'list' })
+  assert.deepEqual(listed.knobs, { provider: 'typesafe', turn: 0, hooks: ['admit'] }, 'accessors unwrapped, functions and undefined dropped')
+  assert.equal(JSON.stringify(listed).includes('function'), false)
+  const got = await tool.execute({ action: 'get', knob: 'provider' })
+  assert.equal(got.value, 'typesafe')
+})

@@ -102,3 +102,23 @@ test('a well-formed envelope still comes through intact', async () => {
   const out = await tool.execute({ state: 'x', questions: [spec] })
   assert.deepEqual(out, { answers: { a: 1 }, executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, worstCase: { level: 'high' }, durationMs: 812.5 })
 })
+
+// THE FIRST LIVE CALL ANSWERED CORRECTLY AND REPORTED IT AS NOTHING: the renderer assumed the BRIDGE's field names
+// and printed `undefined true` / `undefined of ?`. A render that loses an answer is a defect in the tool even when
+// the judgement was right, so the shapes are recognised by what they carry.
+test('the render never prints undefined for an answer shape it did not anticipate', () => {
+  const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }) })
+  const shapes = [
+    { type: 'noul', probabilityTrue: 0.92 },
+    { type: 'score', value: 1, levels: ['a', 'b'] },
+    { type: 'choice', value: 'x', confidence: 0.9 },
+    { type: 'noul', noul: 0.4 },
+    { something: 'else' },
+    'not an object',
+  ]
+  for (const answer of shapes) {
+    const text = tool.output.render({}, { answers: { q: { status: 'ok', answer } } })[0].text
+    assert.equal(text.includes('undefined'), false, `rendered ${JSON.stringify(answer)} as ${text}`)
+    assert.equal(text.includes('?'), false, `and without a placeholder: ${text}`)
+  }
+})
