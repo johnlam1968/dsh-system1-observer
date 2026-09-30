@@ -129,3 +129,28 @@ test('a clean answer carries no invalid field at all', () => {
   assert.equal(answer.label, 'a_tool_call')
   assert.equal(answer.answerConfidence, 0.93)
 })
+
+// A SCORE'S PROBABILITIES NAME THEIR LEVELS, AND THE WIRE HAS BEEN SEEN DOING IT BOTH WAYS. Measured live:
+// `{"no: the operator had to supply the answer...": 0.97, "partly: ...": 0.03, "yes: ...": 0}` -- keyed by the
+// LEVEL TEXT. `expectedKeys` returns indices for a score, which is what the `legend` form names, so measuring
+// against indices alone flagged a VALID answer as invalid with a message that contradicted itself.
+//
+// THIS TEST EXISTS BECAUSE THE FIRST ATTEMPT AT IT PROVED NOTHING. That probe wrote the raw as
+// `{type:'score', probabilities:{...}}`; the real raw uses a `score` field, so nothing was ever flagged and all
+// three cases -- including one that must fail -- read `invalid: undefined`. A check whose every case passes is not
+// a check, and this one is written from the shape the tests above use.
+test("a score's probabilities may name their levels by TEXT or by INDEX, and a wrong set still fails", () => {
+  const LEVELS = ['nothing', 'partial', 'complete']
+  const SCORED_LADDER = score('how far along?', LEVELS)
+
+  const byText = read({ score: 0.03, probabilities: { nothing: 0.97, partial: 0.03, complete: 0 } }, SCORED_LADDER)
+  assert.notEqual(byText.invalid, true, 'the live encoding must not read as a defect: ' + byText.invalidReason)
+
+  const byIndex = read({ score: 0.03, probabilities: { 0: 0.97, 1: 0.03, 2: 0 } }, SCORED_LADDER)
+  assert.notEqual(byIndex.invalid, true, 'the legend encoding must not either: ' + byIndex.invalidReason)
+
+  // AND A GENUINELY WRONG SET STILL FAILS, or the fix would have been a licence to accept anything.
+  const wrong = read({ score: 0.5, probabilities: { a: 0.5, b: 0.5 } }, SCORED_LADDER)
+  assert.equal(wrong.invalid, true, 'a key set naming none of the levels is a defect')
+  assert.match(wrong.invalidReason, /missing|unexpected/, 'and the message says WHAT is wrong, not merely how many')
+})
