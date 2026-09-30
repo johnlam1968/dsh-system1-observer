@@ -31,7 +31,8 @@ async function fire({ configured, liveId, eventId }) {
     turnEveryNTurns: accessor(1), questions: { turn: [{ id: 'a', type: 'noul', instructions: 'x?' }] },
   })
   await handlers.get('agent/pre-step')?.[0]({ agent: { id: eventId, session: agent.session }, messages: [{ text: 'no' }] }, () => Promise.resolve())
-  return read(tracePath).filter((line) => line.event === 'skip' && line.hook === 'turn')
+  const all = read(tracePath)
+  return all.filter((line) => line.event === 'skip' && line.hook === 'turn').concat(all.filter((line) => line.event === 'mount'))
 }
 
 test('a skip says when the session it is scoped to is CONFIGURED BUT NOT LIVE', async () => {
@@ -40,6 +41,12 @@ test('a skip says when the session it is scoped to is CONFIGURED BUT NOT LIVE', 
   assert.equal(gated(dead).length, 1, 'the boundary is gated out, and the trace says: ' + JSON.stringify(dead))
   assert.equal(gated(dead)[0].reason, 'session not observed', 'the reason is unchanged, so readers keep working')
   assert.match(gated(dead)[0].note ?? '', /session-x configured, not live in this process/, 'and the note names the session that cannot fire')
+
+  // AND THE MOUNT LINE IS THERE TO BE READ FIRST, which this handler previously did not write at all. This is
+  // the bisection: if the line appears, what failed before was the NOTE on it; if it does not, the WRITE is
+  // failing inside the mount closure and the note was never the problem.
+  const mounted = dead.filter((line) => line.event === 'mount')
+  assert.equal(mounted.length, 1, 'the mount line is written before the first skip: ' + JSON.stringify(dead.map((l) => l.event)))
 
   // An ordinary out-of-scope session, where the configured scope IS live: gated, but no note. That is scope working.
   const ordinary = await fire({ configured: ['session-y'], liveId: 'session-y', eventId: 'session-z' })
