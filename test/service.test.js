@@ -22,7 +22,7 @@ test('the service is frozen, named, and exposes exactly the four readers', () =>
   const service = createObserverService(readers())
   assert.equal(OBSERVER_SERVICE, 'system1Observer')
   assert.equal(Object.isFrozen(service), true)
-  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'runs', 'sessions'])
+  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'replay', 'runs', 'sessions'])
 })
 
 test('a non-function member is refused rather than exposed as a broken method', () => {
