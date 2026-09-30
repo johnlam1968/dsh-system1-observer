@@ -13,7 +13,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { configuredQuestionIds } from './lib/questions.js'
-import { readSessions, sessionObserved } from './lib/sessions.js'
+import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
 import { minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
@@ -471,14 +471,10 @@ async function apply(ctx, config) {
     try {
       const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
       if (agents === undefined || typeof agents.list !== 'function') return null
-      const live = (agents.list() ?? []).map((entry) => entry?.id).filter((id) => typeof id === 'string')
-      // `readSessions` returns a list of ID STRINGS, deduplicated and trimmed, not the `{ id, title }` entries the
-      // config may hold -- read from lib/sessions.js, after a first version assumed the entry shape and matched
-      // nothing. Bare strings are accepted too, so neither assumption can matter.
-      const missing = readSessions(liveConfig())
-        .map((entry) => (typeof entry === 'string' ? entry : entry?.id))
-        .filter((id) => typeof id === 'string' && id !== '*' && !live.includes(id) && !live.some((liveId) => liveId.startsWith(id)))
-      return missing.length === 0 ? null : `${missing.join(', ')} configured, not live in this process`
+      // THE RULE ITSELF LIVES IN lib/sessions.js, beside the gate it explains, so the SEAM path can adopt it
+      // without a second copy -- and a second copy is how the envelope rule went wrong twice. This function only
+      // supplies what a module cannot know: which sessions this process currently has.
+      return scopeNotLiveNote(liveConfig(), (agents.list() ?? []).map((entry) => entry?.id))
     } catch {
       // A diagnostic must never be the reason a turn is lost.
       return null
