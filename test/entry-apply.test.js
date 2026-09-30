@@ -15,6 +15,7 @@ function fakeCtx({ inject = () => {} } = {}) {
     handlers,
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
     inject,
+    provide: () => () => {},
     agents: { currentInitiator: () => ({ id: 'agent-1' }) },
   }
 }
@@ -272,6 +273,7 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   const registered = []
   const handlers = new Map()
   const ctx = {
+      provide: () => () => {},
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
     inject(services, callback) {
       // Only the tools service answers here, so the `system1` inject is the no-service path.
