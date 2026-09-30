@@ -29,6 +29,8 @@ import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
 import { createDecideTool } from './lib/decide-tool.js'
 import { createConfigTool } from './lib/config-tool.js'
 import { createConfigWriter } from './lib/config-writer.js'
+import { createTurnObserver } from './lib/turn-observer.js'
+import { createTurnListener } from './lib/turn-listener.js'
 import { registerListeners, readHooks } from './lib/register.js'
 
 const name = 'system1-observer'
@@ -374,6 +376,47 @@ async function apply(ctx, config) {
     model,
   })
   const observer = createObserver({ decide: (request) => decide(request), trace: evidence.trace, readConfig })
+
+  // THE TURN TRIGGER. It fires on `agent/pre-step` -- the event the `admit` seam maps to -- because an admit ENDS
+  // the turn before it, so the exchange being judged has closed by the time this runs.
+  //
+  // THE INTERVAL IS READ AT MOUNT and the on/off knob at every boundary. That split is deliberate: the agent may
+  // switch the scheduled measurement off and on again (the operator's decision -- every knob is the agent's), while
+  // changing HOW OFTEN it fires is a different statement about the experiment and takes effect on a re-mount.
+  //
+  // A THROW HERE MUST NOT FAIL THE TURN -- the one thing this plugin must never do -- but it must not vanish
+  // either, so a failure is recorded as a skip line with its reason rather than swallowed.
+  const everyNTurns = Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0)
+  const turnObserver = createTurnObserver({
+    listener: createTurnListener({
+      everyNTurns,
+      isEnabled: () => Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0) > 0,
+      readConfig: () => liveConfig(),
+    }),
+    // The session's events, obtained the way the peer bridge does: the agents service by session id, then the
+    // agent's own session. A missing service or session yields no events, which `composeTurnState` refuses on.
+    readEvents: (sessionId) => {
+      try {
+        const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
+        const direct = agents !== undefined && typeof agents.get === 'function' ? agents.get(sessionId) : undefined
+        const agent = direct ?? (agents !== undefined && typeof agents.list === 'function' ? agents.list().find((one) => one?.id === sessionId) : undefined)
+        const session = agent !== undefined && agent !== null ? agent.session : undefined
+        return session !== undefined && typeof session.snapshotEvents === 'function' ? session.snapshotEvents(0) : []
+      } catch {
+        return []
+      }
+    },
+    ask: (request) => decide(request),
+    record: (line) => {
+      const { event, ...fields } = line
+      evidence.trace(event, fields)
+    },
+  })
+  ctx.on('agent/pre-step', (payload) => {
+    Promise.resolve(turnObserver.onAdmit({ sessionId: payload?.agent?.id })).catch((error) => {
+      evidence.trace('skip', { hook: 'turn', reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
+    })
+  })
 
   registerListeners(ctx, hooks, {
     // THE MOUNT LINE PRECEDES THE FIRST OBSERVATION when no service ever appeared. Calling the writer here
