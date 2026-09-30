@@ -51,3 +51,12 @@ test('junk lines are not violations and do not throw', () => {
   assert.deepEqual(probeViolations([null, 7, 'x', { event: 'mount' }, { event: 'skip', hook: 'turn' }]), [])
   assert.deepEqual(probeViolations(), [])
 })
+
+// A TRUNCATED TARGET IS A DIFFERENT MEASUREMENT FROM A WHOLE ONE. The plan's one surviving constraint about X
+// leaving the machine: its truncation is recorded rather than silent.
+test('truncation is on the line when it happened, and absent when it did not', () => {
+  const cut = turnLine({ sessionId: 's', turn: 1, questionIds: ['a'], truncated: true })
+  assert.equal(cut.truncated, true)
+  const whole = turnLine({ sessionId: 's', turn: 1, questionIds: ['a'] })
+  assert.equal(Object.hasOwn(whole, 'truncated'), false, 'a whole target says nothing, rather than saying false')
+})

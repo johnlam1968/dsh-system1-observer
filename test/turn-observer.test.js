@@ -120,3 +120,18 @@ test('the operator message from the boundary reaches the composed target', async
   assert.equal(out.fired, true, 'the turn composes because the boundary supplied the message')
   assert.equal(lines.length, 1)
 })
+
+test('a truncated target is recorded as truncated on the line', async () => {
+  const lines = []
+  const listener = createTurnListener({ everyNTurns: 1, readConfig: () => config })
+  const observer = createTurnObserver({
+    listener,
+    readEvents: () => EXCHANGE,
+    ask: async () => ({ kind: 'answers', answers: { a_noul: { status: 'ok' } } }),
+    record: (line) => lines.push(line),
+    maxChars: 60,
+  })
+  await observer.onAdmit({ sessionId: 's' })
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].truncated, true, 'the reader can see the state was cut short')
+})
