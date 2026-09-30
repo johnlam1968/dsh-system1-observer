@@ -219,6 +219,11 @@ async function apply(ctx, config) {
       // thing in this line that was never true. IT IS STILL A SNAPSHOT OF THE MOMENT — the line is written once,
       // at mount or at the first observation — and the per-event `reason` remains the authority on any firing.
       const live = plainConfig(config)
+      // THE SCOPE THIS RUN STARTED WITH CANNOT FIRE, WHICH THE MOUNT LINE SHOULD SAY. It already carries the
+      // scope, deliberately -- "was it scoped, paused, or broken?" is the first question of a quiet trace -- but
+      // a scope naming a session that is not live in this process answers that question WRONGLY: it reads as
+      // scoped-and-working, and it took 145 identical skips to tell.
+      const scopeNote = configuredScopeNotLive()
       return {
         hooks,
         transport: transport.kind,
@@ -229,6 +234,7 @@ async function apply(ctx, config) {
         // named a question the row never asked. It is an apply-time snapshot, like `hooks` beside it: the
         // mount line is written once, and a later save is deliberately not re-applied.
         questionIds: configuredQuestionIds(mount),
+        ...(scopeNote === null ? {} : { scopeNote }),
         // THE INSTRUMENT'S IDENTITY. The probe's question text was authored by intuition, so a run with edited
         // instructions is a NEW MEASUREMENT and not a comparison. Without this, two runs are silently averaged
         // as though one instrument produced both.

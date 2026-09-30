@@ -47,6 +47,7 @@ test('a skip says when the session it is scoped to is CONFIGURED BUT NOT LIVE', 
   // failing inside the mount closure and the note was never the problem.
   const mounted = dead.filter((line) => line.event === 'mount')
   assert.equal(mounted.length, 1, 'the mount line is written before the first skip: ' + JSON.stringify(dead.map((l) => l.event)))
+  assert.match(mounted[0].scopeNote ?? '', /session-x configured, not live in this process/, 'and the mount line names the scope that cannot fire')
 
   // An ordinary out-of-scope session, where the configured scope IS live: gated, but no note. That is scope working.
   const ordinary = await fire({ configured: ['session-y'], liveId: 'session-y', eventId: 'session-z' })
