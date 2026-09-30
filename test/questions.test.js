@@ -228,3 +228,20 @@ test('the legacy global question is capped as well', () => {
   assert.deepEqual(built.questions, {})
   assert.match(built.problems[0], /over the 100-character cap/)
 })
+
+// A HOOK THAT IS NOT A SEAM MUST STILL BE REPORTED, and the misspelling case below it must still not be.
+// `turn` is absent from PROBE_SEAMS by construction -- it is a scheduled hook, not a seam -- so counting only
+// the seams reported `questionIds: []` for a row that had twelve questions configured and building. The mount
+// line would have denied the questions the row was about to ask, which is the one thing it must not do.
+test('a question under the turn hook is reported, because code exists to ask it', () => {
+  const turn = { questions: { ...allSeamsEmpty(), turn: [{ id: 'nudged', type: 'noul', instructions: 'x' }] } }
+  assert.deepEqual(configuredQuestionIds(turn), ['nudged'], 'the turn trigger asks under this hook')
+  const seamAndTurn = {
+    questions: {
+      ...allSeamsEmpty(),
+      admit: [{ id: 'opening', type: 'noul', instructions: 'x' }],
+      turn: [{ id: 'nudged', type: 'noul', instructions: 'y' }],
+    },
+  }
+  assert.deepEqual(configuredQuestionIds(seamAndTurn), ['opening', 'nudged'], 'both, in list order')
+})
