@@ -72,3 +72,33 @@ test('the tool names the backend its row configures, not a built-in default', ()
   assert.match(tool.parameters.properties.model.description, /jev-latest/)
   assert.equal(TOOL_HOOK, 'call')
 })
+
+// THE LIVE DEFECT, AS A TEST. The first live call failed with `"value.worstCase" must be an object`: the schema
+// declares worstCase an object and the model returned something else. The stub in the other tests returns no
+// worstCase, so the property was absent and the schema was satisfied VACUOUSLY -- the same shape as the two
+// verifications that passed while proving nothing. So this asserts the type gate directly.
+test('a field whose type the schema forbids is DROPPED, not emitted', async () => {
+  const wrong = [
+    { kind: 'answers', answers: {}, worstCase: null, executed: 'not an object', usage: 7, durationMs: 'soon' },
+    { kind: 'answers', answers: {}, worstCase: 'the least favourable reading', executed: {}, usage: {} },
+    { kind: 'answers', answers: [1, 2], worstCase: {}, executed: {}, usage: {}, durationMs: Number.NaN },
+  ]
+  for (const reply of wrong) {
+    const tool = createDecideTool({ decide: async () => reply })
+    const out = await tool.execute({ state: 'x', questions: [spec] })
+    const properties = tool.output.schema.properties
+    for (const [key, value] of Object.entries(out)) {
+      assert.equal(Object.hasOwn(properties, key), true, `${key} is not in the schema`)
+      const declared = properties[key].type
+      if (declared === 'object') assert.equal(typeof value === 'object' && value !== null && !Array.isArray(value), true, `${key} must be an object`)
+      if (declared === 'number') assert.equal(Number.isFinite(value), true, `${key} must be a finite number`)
+    }
+    assert.deepEqual(out.answers, Array.isArray(reply.answers) ? {} : {}, 'a non-object answers map is replaced by an empty one')
+  }
+})
+
+test('a well-formed envelope still comes through intact', async () => {
+  const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, worstCase: { level: 'high' }, executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, durationMs: 812.5 }) })
+  const out = await tool.execute({ state: 'x', questions: [spec] })
+  assert.deepEqual(out, { answers: { a: 1 }, executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, worstCase: { level: 'high' }, durationMs: 812.5 })
+})
