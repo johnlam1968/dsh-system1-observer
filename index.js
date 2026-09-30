@@ -468,9 +468,20 @@ async function apply(ctx, config) {
     // The payload's own messages, taken as they stand: `composeTurnState` accepts text or a message-like object, so
     // this does not need to know the UserMessage shape -- and must not, since guessing it is what this fix avoids.
     const messages = Array.isArray(payload?.messages) ? payload.messages : []
-    Promise.resolve(turnObserver.onAdmit({ sessionId, nextMessage: messages[messages.length - 1] })).catch((error) => {
-      evidence.trace('skip', { hook: 'turn', reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
-    })
+    // EVERY OUTCOME THAT ASKS NOTHING IS RECORDED, not only the ones that throw. A REFUSAL WROTE NOTHING AT ALL --
+    // no boundary yet, no set configured under `turn`, and a malformed set were all indistinguishable from silence,
+    // and an operator could not tell a schedule that has not come round from one that will never fire. Measured:
+    // with a set configured and the interval at 1, this handler produced ZERO trace lines, which is the same
+    // evidence as a node that was never reached.
+    Promise.resolve(turnObserver.onAdmit({ sessionId, nextMessage: messages[messages.length - 1] }))
+      .then((outcome) => {
+        if (outcome !== undefined && (outcome.refused === true || outcome.failed === true)) {
+          evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement did not run: ${outcome.reason ?? 'no reason given'}` })
+        }
+      })
+      .catch((error) => {
+        evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
+      })
     // THE CHAIN CONTINUES. Everything above is bookkeeping around the seam; the seam's own decision is not ours.
     return next()
   })
