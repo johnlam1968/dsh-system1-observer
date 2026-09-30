@@ -18,7 +18,7 @@ const EXCHANGE = [
   env(5, 'user/message', [text('Mutate the keywords and try again.')]),
 ]
 
-function chain({ events = EXCHANGE, askResult = { kind: 'answers', answers: { a_noul: { status: 'ok' } }, executed: { provider: 'typesafe' }, durationMs: 812.5 }, everyNTurns = 3 } = {}) {
+function chain({ events = EXCHANGE, askResult = { kind: 'answers', answers: { a_noul: { status: 'ok' } }, envelope: { executed: { provider: 'typesafe' }, durationMs: 812.5 } }, everyNTurns = 3 } = {}) {
   const lines = []
   const asked = []
   const listener = createTurnListener({ everyNTurns, readConfig: () => config })

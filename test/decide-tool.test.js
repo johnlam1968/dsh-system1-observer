@@ -24,7 +24,7 @@ test('the definition is the shape the registry requires', () => {
 
 test('a set file is passed as it is written, with no conversion', async () => {
   const set = JSON.parse(readFileSync(new URL('../criteria/helpfulness-set@2.json', import.meta.url), 'utf8'))
-  const { calls, decide } = stub({ kind: 'answers', answers: { request_addressed: { status: 'ok' } }, executed: { provider: 'typesafe' } })
+  const { calls, decide } = stub({ kind: 'answers', answers: { request_addressed: { status: 'ok' } }, envelope: { executed: { provider: 'typesafe' } } })
   const tool = createDecideTool({ decide })
   const out = await tool.execute({ state: 'OPERATOR REQUEST: find plugins', questions: set.turn })
   assert.equal(calls.length, 1)
@@ -79,9 +79,9 @@ test('the tool names the backend its row configures, not a built-in default', ()
 // verifications that passed while proving nothing. So this asserts the type gate directly.
 test('a field whose type the schema forbids is DROPPED, not emitted', async () => {
   const wrong = [
-    { kind: 'answers', answers: {}, worstCase: null, executed: 'not an object', usage: 7, durationMs: 'soon' },
-    { kind: 'answers', answers: {}, worstCase: 'the least favourable reading', executed: {}, usage: {} },
-    { kind: 'answers', answers: [1, 2], worstCase: {}, executed: {}, usage: {}, durationMs: Number.NaN },
+    { kind: 'answers', answers: {}, worstCase: null, envelope: { executed: 'not an object', usage: 7, durationMs: 'soon' } },
+    { kind: 'answers', answers: {}, worstCase: 'the least favourable reading', envelope: { executed: {}, usage: {} } },
+    { kind: 'answers', answers: [1, 2], worstCase: {}, envelope: { executed: {}, usage: {}, durationMs: Number.NaN } },
   ]
   for (const reply of wrong) {
     const tool = createDecideTool({ decide: async () => reply })
@@ -98,7 +98,7 @@ test('a field whose type the schema forbids is DROPPED, not emitted', async () =
 })
 
 test('a well-formed envelope still comes through intact', async () => {
-  const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, worstCase: { level: 'high' }, executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, durationMs: 812.5 }) })
+  const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, worstCase: { level: 'high' }, envelope: { executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, durationMs: 812.5 } }) })
   const out = await tool.execute({ state: 'x', questions: [spec] })
   assert.deepEqual(out, { answers: { a: 1 }, executed: { provider: 'typesafe' }, usage: { inputTokens: 10 }, worstCase: { level: 'high' }, durationMs: 812.5 })
 })
@@ -129,7 +129,7 @@ test('the render never prints undefined for an answer shape it did not anticipat
 test('a call through the tool records a line naming the tool and its questions', async () => {
   const lines = []
   const tool = createDecideTool({
-    decide: async () => ({ kind: 'answers', answers: { a: 1 }, executed: { provider: 'typesafe' }, durationMs: 812.5 }),
+    decide: async () => ({ kind: 'answers', answers: { a: 1 }, envelope: { executed: { provider: 'typesafe' }, durationMs: 812.5 } }),
     record: (line) => lines.push(line),
   })
   await tool.execute({ state: 'x', questions: [spec, { id: 'ladder', type: 'score', instructions: 'How much?', levels: ['low', 'high'] }] })
@@ -173,6 +173,8 @@ test('the provenance is read from a NESTED envelope as well as a flat one', asyn
 
   const flat = createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 }, executed: { provider: 'wire' }, usage: { inputTokens: 1 }, durationMs: 5 }) })
   const flatOut = await flat.execute({ state: 'x', questions: [spec] })
-  assert.deepEqual(flatOut.executed, { provider: 'wire' }, 'and the flat shape still works')
-  assert.equal(flatOut.durationMs, 5)
+  // ASSERTED AGAINST: the rule is that the envelope is the ONLY source, and the observation path already has a
+  // test saying so. Writing mine the other way is why a shared helper was born with a fallback that broke it.
+  assert.equal(flatOut.executed, undefined, 'a top-level executed is NOT projected: the envelope is the only source')
+  assert.equal(flatOut.durationMs, undefined)
 })
