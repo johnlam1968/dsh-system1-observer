@@ -1,7 +1,6 @@
 {
   "name": "dsh-system1-observer",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Calls a System One model at configured points of the agent loop and writes each call, request and response, to a JSONL trace. Decides nothing.",
   "main": "./index.js",
@@ -9,7 +8,9 @@
     ".": "./index.js",
     "./client": "./client.js",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon.svg": "./icon.svg"
   },
   "icon": "./icon.svg",
   "dsh": {

@@ -9,6 +9,11 @@ waterfall listener returns the decision it was handed, the same reference; the `
 stream unchanged; the `result` emit listener swallows its own rejection. Its product is evidence about the
 decision model's replies at each point of the loop.
 
+## Roadmap
+
+The direction — question sets as versioned artifacts, criteria as data, an evaluate → rewrite → re-evaluate
+loop — is in [ROADMAP.md](ROADMAP.md), together with what already exists in the ecosystem so we do not rebuild it.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).

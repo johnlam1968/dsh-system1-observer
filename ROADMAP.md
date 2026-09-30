@@ -1,0 +1,520 @@
+# Roadmap — from a seam observer to a question-set engine
+
+**Status:** direction agreed with the operator; nothing in P1+ is built yet. This document exists so the
+decisions are legible before the code is.
+
+---
+
+## 1. Where this is going
+
+The observer today asks **one question per call** at nine seams and records what happened. The direction is
+different in kind, not degree:
+
+| | now | direction |
+|---|---|---|
+| unit of work | a question | **a question set** `S = {Q1…Qn}` |
+| target | one seam's text (`probeText`, hard-coded) | **`X`**, an artifact assembled from a named source: a seam, a turn, the operator's messages, the agent's messages, the trace, or a file — see §9.6 |
+| questions | authored in config, one per seam | `S1, S2, …SN` as **versioned artifacts**, loaded and swapped at runtime |
+| criteria | prose inline in each question | **named, reusable** entries in a dictionary |
+| the loop | a human reads the trace | evaluate → read the result `R` → **rewrite `S`** → re-evaluate |
+| mutation | a config edit | variants of question text and choice-option sets, as **first-class, measurable** changes |
+
+The vehicle stays a DSH plugin, because the seams, the trace, the card, the session scope and the peer bridge
+already exist here and none of them exist in a bare library. That is convenience, and §6 is where it becomes a
+constraint worth revisiting.
+
+## 2. What already exists — do not build it
+
+Researched before designing, and most of it is already done by someone else.
+
+**Aggregators** (the thing to read first, and to keep reading):
+[`ckaraca/awesome-jev`](https://github.com/ckaraca/awesome-jev) ·
+[`wh000wh000/awesome-jev-live`](https://github.com/wh000wh000/awesome-jev-live) — *evidence-graded* index across
+20 languages, **rebuilt every two hours**, with a section of **73** evaluation/calibration/benchmark entries and a
+summary of the model's own known limits (counting unreliable, multi-level indirection weak, nine classes of
+jaggedness, *"schema-valid output is not the same as a correct decision — calibrate on your own data"*).
+
+**Question sets are already an artifact.** This is the convention to adopt rather than invent:
+
+- `chr-kelly/jev-cookbook/recipes/_TEMPLATE` + seven recipes (`content-qa`, `context-pruning`,
+  `customer-support-routing`, `llm-router`, `roleplay-state`, …)
+- `nexibeo/jev-cookbook/recipes/01-support-triage` … eight numbered recipes
+- `laguagu/jev-skills/examples/decisions/requests/*.json` — `{model, state, questions}`, six of them
+- [`Anil-matcha/awesome-jev-by-typesafe`](https://github.com/Anil-matcha/awesome-jev-by-typesafe) (886★) —
+  use cases, patterns, **prompts** and starter code
+
+**Evaluation machinery:**
+
+| what | where |
+|---|---|
+| official workflow evals | [evals.typesafe.ai](https://evals.typesafe.ai/) · [typesafe-ai/WorkflowEvals](https://github.com/typesafe-ai/WorkflowEvals) |
+| a measured batching study (13 questions, std dev by repeat) | the [parallel-questions cookbook](https://docs.typesafe.ai/cookbooks/parallel_questions.md) |
+| an **evaluation agent** | [`vinilana/jev-eval-agent`](https://github.com/vinilana/jev-eval-agent) (106★) — `agent/` + `eval-results/` |
+| **task-success evaluation of a session** | [`Asymptote-Labs/agent-beacon`](https://github.com/Asymptote-Labs/agent-beacon) (1.6k★) — "uses Jev to evaluate task success, reusable lessons, and supporting evidence" |
+| set selection by a decision model | [`EliaAlberti/jev-rules`](https://github.com/EliaAlberti/jev-rules) — Jev picks which rules apply to a prompt |
+| a harness shaped like ours | [`PromtEngineer/jev-harness`](https://github.com/PromtEngineer/jev-harness) — router, context picker, gate, verifier |
+| SDK-level typed evaluation | [`vercel/ai`](https://github.com/vercel/ai) (27k★) · [`agentjido/req_llm`](https://github.com/agentjido/req_llm) · [`ash-project/ash_ai`](https://github.com/ash-project/ash_ai) · [`donvito/ai-backends`](https://github.com/donvito/ai-backends) · `ai-cli`'s `ai evaluate` |
+
+**What does *not* appear to exist**, and is therefore our actual gap: a per-type **builder library with a
+criteria dictionary**, and a **set-level mutation/versioning primitive**. Both are small. Everything else —
+loading, evaluating, comparing, even the evaluation agent — exists.
+
+## 3. What our code already has, so the gap is smaller than it looks
+
+- `lib/model/questions.js` **already exports `choice`, `noul`, `score`** as separate builders, each validating its
+  own shape (a choice needs ≥2 options and **exactly one** abstain; a score needs ≥2 ordered levels; a noul's
+  criteria are optional). The per-type separation asked for in the brief is largely already there — as functions
+  rather than classes, which is the right call for a package with two runtime dependencies.
+- `lib/questions.js` **already builds a set** per seam (`buildQuestions` → a map keyed by question id) with a
+  character cap that **refuses rather than truncates** (`capQuestions`).
+- The trace already records `questionIds` per run, and the comparability key already treats a changed question
+  set as a **different experiment**.
+- `probeScore` is already the thing the cookbook repos also ship: an accuracy/κ/calibration harness with
+  known-answer cases.
+
+**Missing:** the set as a *loadable, versioned artifact*; criteria as *data*; the recursive loop.
+
+## 4. The design
+
+1. **`S` is a file.** Adopt the ecosystem's shape verbatim — `{ id, version, state, questions }` — so a set is
+   portable between this plugin and anyone else's harness. No bespoke format.
+2. **A criteria dictionary.** `criteria/*.json` holding named choice-option sets and score-level ladders, so a
+   question references criteria by name instead of restating prose. This is the piece that makes sets
+   *comparable*: two questions sharing a criteria name are measuring the same thing by construction.
+3. **Builders, extended not replaced.** Keep `choice`/`noul`/`score`; add criteria resolution by name, and a
+   `buildSet` that validates a whole `S` (unique ids, one abstain per choice, ordered levels, the char cap).
+4. **A registry and loader.** `S1…SN` addressed by `id@version`, selected at runtime, and **recorded on the
+   trace** so a judgement is attributable to the set version that produced it.
+5. **Mutation stays measurable.** Because `questions` is part of the comparability key, a mutated set is a
+   different experiment by construction and cannot silently pool its results with the original. The mutation
+   loop gets its scoreboard for free.
+6. **The recursive loop needs a frozen reference.** `R` → rewrite `S` is only meaningful if acceptance is
+   judged against cases whose answers cannot move. The probe already is one: 3,370 labelled calls with a
+   published κ. **A rewrite is accepted only if it improves on the frozen reference** — otherwise the loop is
+   unfalsifiable, and §7 explains why that is the whole risk.
+
+## 5. Phases
+
+| phase | deliverable | why here |
+|---|---|---|
+| **P0 — done** | the seam instrument, the trace, one question per call, probe accuracy 88.99% / κ 0.8374, calibration (ECE, bins, bias, Brier) | the measuring apparatus exists and is verified |
+| **P1** | **at least two questions per call**, and `S` as a file | smallest change with the largest measured gain: batching cost us *no* latency (190 vs 204 ms median) and +55% tokens for 5× the questions |
+| **P2** | criteria dictionary, set registry, `id@version` provenance on the trace | makes sets comparable and mutations attributable |
+| **P3** | session/turn targets `T` (§1) and a helpfulness gauge set | the operator's stated use: judging whether a model, or a review, actually helped. Constraint in §7 |
+| **P4** | the recursive rewrite loop, gated on the frozen reference | last, because it is the only phase that can degrade the thing measuring it |
+| **P5** | decide the vehicle: stay a plugin, or extract sets + criteria + eval into a package other harnesses can consume | the ecosystem is in libraries (`vercel/ai`, the cookbooks, the eval agent); a DSH-only engine reaches DSH only |
+
+## 6. Why the vehicle question is real
+
+A DSH plugin buys seams, tracing, a card, session scope, and the peer bridge — none of which a library gets. What
+it costs: the question-set engine is then only usable by DSH, while every comparable project in §2 is a library,
+an SDK integration, or a cookbook anyone can run. **P5 is a genuine fork, not a formality**, and the cheap hedge
+is to keep `S`, the criteria dictionary and the evaluator free of any DSH import from P1 onward.
+
+## 7. Risks, stated from this project's own record
+
+- **The ruler that grades the ruler.** This session produced a catalogue of *the check passes while the property
+  is false* — nine shapes, five found in this repository. A self-modifying question set **industrialises that
+  failure mode**. §4.6 is the mitigation and it is not optional.
+- **Our review history argues for measuring, not asserting.** Two independent reviewers produced five real
+  defects and also **five confident claims that a single command refuted**. A rewrite loop built on claims
+  rather than measurements will accept its own mistakes.
+- **Context shape.** Many questions × **one** document is the recommended and measured-good case. Many
+  *documents or rows* in one state is the case that breaks (a documented ranking collapse at 40 rows). So
+  "gauge five sessions" must be **five calls with many questions each**, never one call with five transcripts.
+- **Egress.** Every judged draft leaves this machine (documented in the profile comment: the judge is a hosted
+  third party). An open-weight Jev-compatible model is listed in the aggregator and would remove the constraint;
+  it interacts with a question-set engine that may process far more text than today's seams.
+- **Provenance is thin on this deployment.** The server returned **no `routing` field in 4,369 calls**, so the
+  language-detection guard the vendor guidance depends on **cannot be applied here**. A set whose questions are
+  written in English and answered against non-English targets would fail silently.
+
+## 8. What the local research report settles — and one thing it contradicts
+
+`system1-runtime/docs/DECISION_MODEL_RESEARCH.md` (671 lines, read after the roadmap was first written). It changes
+four decisions and opens one conflict.
+
+**Settles:**
+
+1. **Temperature fitting belongs in P2.** Laya ships over-confident and *"refitting one temperature per
+   (question type, option count) moves mean ECE 0.466 → 0.081"*. We measure ECE and bias but fit nothing. A
+   per-(type, option-count) temperature, reported alongside the raw figures, is the cheapest calibration win
+   available and it is one function in `lib/calibrate.js`.
+2. **The criteria dictionary is not cosmetic.** The largest measured lever in the independent audit corpus is
+   *criteria rewrites: paired accuracy 70% → 96%, 83% → 100%*. §4.2 is therefore the highest-value part of P2,
+   not bookkeeping.
+3. **Our abstain rule is validated from the outside.** *"Removing the abstain option took KoBBQ accuracy from
+   0.950 to 0.000 and ECE from 0.023 to 0.793"*, and without a `none` option *"0 of 30 out-of-scope inputs were
+   flagged"*. Our `choice` builder **refuses** a question that does not have exactly one abstain. Keep that.
+4. **Context rot is sharper than §7 states.** The rule is not "documents bad, questions good". It is:
+   **rot bites when the question must LOCALISE a specific item inside a large state.** 40 Korean sentences judged
+   one-per-call: 40/40. The same 40 in one call: 62%. Forty rows broke a ranking gate that one row per call
+   passed. Whereas a 54,000-character document answered 13 whole-document questions identically batched or not.
+   So P3's session target must ask **whole-session** questions ("did this model help?") and must **not** ask
+   localising ones ("which step failed?") over a whole transcript — that one needs a per-segment call.
+5. **`confidence` is a spread statistic, not P(correct)** — the vendor states it, Kev repeats it, an independent
+   pre-registered test found it, and it is why "don't carry a threshold tuned on a Noul over to a Choice" exists.
+   Our calibration figures must say which scalar they are over; they now say it for the right reason.
+
+**Contradicts, and this one is open:**
+
+> Independent audits report **"Noul under-confident, Choice and Score over-confident on the same inputs"** —
+> while our 10-option seam probe measures `bias = −0.1242`, i.e. **Choice under-confident**, on 3,370 calls.
+
+Both cannot be general. Candidate explanations, none verified: our "truth" is the seam an event came from, not a
+human label, so our accuracy is *agreement with our own seam mapping* rather than task accuracy; high-cardinality
+choice is where the research says this family is strongest; and our option labels are long descriptive names,
+which the audit says matters a lot. **This is the sharpest open question in the project** and it is the first
+thing to put to the papers session, because if our probe is measuring something other than calibration, the
+headline number in the README is measuring something other than what it says.
+
+**Also worth carrying:** vendor benchmarks (61.7–76.0% across four workflows) use ground truth that is *"an
+average of the responses of GPT-6 Astra and Claude Fable 5.1, both at high thinking"* — not human labels; and the
+model is **not** claimed to be deterministic (*"std 0.001 to 0.015, 15 distinct answer sets in 50 identical
+requests"*), which is the scale our repeat-and-compare work should expect.
+
+## 9. P3 — the act layer, as its own component
+
+The operator's framing: this repository is **measurement only on purpose** — *"without sound measurement as basis
+acting is groundless"* — and that posture is not a comment but a source scan. The fork is now agreed: build the act
+layer on top, in this repository, as **its own component**.
+
+### 9.1 What a "component" is, because the decision depends on it
+
+The Plugins page lists **loader rows**. `plugin_manager list_plugins` returns exactly that list, one object per
+row, with `entryId`, `moduleName`, `enabled`, and `fiberPhase`. So:
+
+| observation | meaning |
+|---|---|
+| `dsh-system1` shows 3 components | it contributes 3 rows: `system1`, `system1-typesafe`, `system1-laya` |
+| `system1-bridge` shows 2, one "not running" | its provider row and its tool row; **"not running" is `fiberPhase: null`**, which is the failed-import state |
+| a component can be switched off in the UI | the row's `enabled` flag — the mechanism the operator wants |
+
+**So the act layer becomes its own row**, and "a user can switch off act" needs no UI work at all: it is the
+existing per-row toggle. That is the answer to *"shall the second package be the second component"* — the row is
+the togglable unit and the package is the code boundary, and the design needs both: **one bundle, two rows, the
+act row's code in its own package.**
+
+### 9.2 What the act row is
+
+| | observer row | act row |
+|---|---|---|
+| reads | the loop's seams | a question-set artifact + the operator's message |
+| writes | a JSONL trace | a bounded `systemPrompt` context |
+| capabilities | `prompt-section` **forbidden** | `prompt-section` **allowed** |
+| still forbidden | — | `approval-answer`, `tool-argument-rewrite`, `context-prune`, `model-route` |
+
+The last row matters: the act layer **informs**, it does not decide. It may put a reading in front of the agent;
+it may not answer an approval, rewrite a tool argument, prune a context or choose a model.
+
+**It calls through the repository's own functions** (`lib/model/*` — the same `createModel`/`postSystemone` path
+the observer uses), not through `system1_decide`. `system1_decide` is the *agent-facing* tool; the act row is
+plugin code and should use the plugin's own client, so both layers are measured by the same instrument and
+versioned together.
+
+### 9.3 The gate has to widen first
+
+`test/honesty.test.js` scans **two files**:
+
+```js
+for (const file of ['index.js', 'client.js']) { assert.deepEqual(capabilitiesIn(source), [], …) }
+```
+
+The code that touches seams lives in `lib/`. A `systemPrompt.context(` call in `lib/` would not be caught — so the
+guarantee is narrower than it reads, and it gets narrower still the moment a second row shares the tree.
+**P3's first task is to widen the scan to every source file, per package**, before any act code exists. Otherwise
+"measurement only" becomes a claim about two files.
+
+### 9.4 The acceptance gate: shadow mode
+
+The act row ships **off by default** and its first release **injects nothing**. It computes the reading at
+`admit`, records it to the observer's trace — including that it *would* have injected — and stops. Then the
+observer answers the only question that matters:
+
+> for messages where the reading said X, did the handling differ from what the operator wanted?
+
+Cheap behavioural ground truth already exists and costs nothing: **did the operator correct the agent in their
+next message, re-ask, or accept?** And the labelled route is available too — `probeScore` already scores a
+question set against known-answer cases with a floor, κ and reliability bins, so a set drawn from the operator's
+own message history can be tested for separation *before* it is allowed into a context.
+
+**If a question cannot separate on labelled data, injecting it can only add noise.** That gate is the whole point
+of building act inside a measurement repository.
+
+### 9.5 The urgent gap: criteria and question sets
+
+Sourcing beats building here, and the search found one tool that is strikingly aligned:
+
+- [**hermes-labs-ai/hermes-rubric**](https://github.com/hermes-labs-ai/hermes-rubric) (Apache-2.0, on PyPI,
+  pushed 2026-09-29) — *"turns an artifact into cited evidence, dimension scores, honest coverage facts, and
+  caller-controlled feedback. **It measures and explains; your application decides what to do next.**"* That is
+  this repository's posture, in Python: it **synthesizes a rubric**, scores only against quoted evidence, and
+  hedges on thin evidence. It ships a Copilot/agent **skill** as well as a package.
+- The structural template for evaluating a set:
+  [`chr-kelly/jev-cookbook`](https://github.com/chr-kelly/jev-cookbook) — `recipes/_TEMPLATE` (7 recipes,
+  including `agent-tool-guardrail`), plus `eval/` with `benchmarks`, `data`, `lint.py`, `run_eval.py`, `results`.
+- More aggregators than the two in §2: [`AbdelStark/awesome-typesafe-jev`](https://github.com/AbdelStark/awesome-typesafe-jev),
+  [`Amal-David/awesome-jev`](https://github.com/Amal-David/awesome-jev).
+
+**The three pieces already exist; the missing work is the joint between them:**
+
+    hermes-rubric  --synthesizes-->  criteria (dimensions + level descriptions)
+    our builders   --compile----->   a question set artifact (score/noul/choice over those criteria)
+    the observer   --measures---->   does the set separate, on labelled cases, before it is injected
+
+Converting a rubric dimension into a Jev question is mechanical and worth doing once: a graded dimension becomes a
+`score` whose `criteria` are the level descriptions, a yes/no dimension becomes a `noul`, a categorical one a
+`choice` with exactly one abstain. **That converter is the immediate deliverable**, together with a `criteria/`
+dictionary the sets reference by name so two questions sharing a criterion are comparable by construction.
+
+### 9.6 X — the target artifact, and why it is not "your message"
+
+The act row does not read *the operator's message*. It reads **`S` against `X`**, where `X` is an artifact in its
+own right:
+
+| | what it is | where it comes from |
+|---|---|---|
+| `S` | a question-set artifact | §9.5 |
+| **`X`** | **the target: one artifact the questions are about** | **assembled from a named source** |
+
+The observer already has an `X` — it is hard-coded. `probeText(seam, args, decision)` is "the text at the seam that
+just fired", and that is the only target it can ever have. The act layer makes that target **explicit,
+configurable, and composable**, which is the whole difference.
+
+#### The sources, and what already reads them
+
+| source | assembly | already implemented by |
+|---|---|---|
+| a **seam's** text | one seam firing | `probeText(seam, …)` in `lib/seams.js` |
+| a **turn** | admit-boundary segmentation | the `turns` reconstruction in `lib/cost.js` |
+| **operator** messages | session events where the role is user | `agent.session.snapshotEvents(sinceSeq)`, filtered — the peer bridge does exactly this |
+| **agent** messages | session events where the role is assistant | same call, other filter |
+| the **trace** | the measurement view: what was asked, answered, by which model, at what cost | `readTraceWindow` + `traceData` in `lib/trace-report.js` / `lib/trace-data.js` |
+| **something else** | a file, a diff, a tool result | new, last |
+
+So `X` is not a subsystem. It is the same readers this repository and the peer bridge already use, with the
+target promoted from a constant to a value:
+
+```json
+{ "id": "last-turn-exchange", "source": "session", "roles": ["assistant", "user"],
+  "take": "last-turn", "budget": { "maxChars": 8000 } }
+```
+
+#### Four constraints, each from a measurement rather than from taste
+
+1. **One `X` per call.** The audit corpus is blunt: 40 Korean sentences judged **40/40 correct one per call** and
+   **62%** with the whole document in one call, and 40 rows broke a ranking gate that one row per call passed.
+2. **Therefore: whole-artifact questions only.** If a question must LOCALISE something -- *which step failed?* --
+   then `X` is one item and the questions run per item, as N calls. A 54,000-character document answered 13
+   whole-document questions identically batched or not.
+3. **`X` is paid once per call.** Five questions cost the same wall time as one and +55% tokens, so `X` should be
+   as large as the questions need and no larger.
+4. **`X` leaves the machine.** The judge is hosted, so `X` goes through the same `redactPolicy` and `cutHeadTail`
+   the trace copy uses, and its truncation is recorded rather than silent.
+
+#### What `X` means for the helpfulness use case, which is the reason this matters
+
+**For helpfulness, `X` must be the EXCHANGE, not the message.** The signal is not in what the operator asked; it
+is in the operator's **reaction to what the agent delivered** -- corrected, re-asked, or accepted. A set that asks
+*"did this response help?"* over an `X` containing only the request cannot see the evidence it is judging: the
+response and the reaction are both required.
+
+```
+X = { source: session, roles: [assistant, user], take: last-turn }   // my response, and your answer to it
+```
+
+That is also the cheapest ground truth available, and it needs no labelling.
+
+#### And the trace as an `X` is what closes the loop
+
+One of the sources is **the measurement itself**. Read the trace as `X` and the question set is asking *about the
+judge's own record* -- which is exactly the input a recursive rewrite of `S` needs (the operator's point 13):
+evaluate → read `R` → rewrite `S`. `X = trace` **is** `R`. So the same selector that serves the briefer serves the
+self-modification loop, and neither needs a new reader.
+
+#### Provenance: `X` belongs on the call line, not in the run key
+
+`S` defines the experiment, so `questions`/`hooks`/`switches`/`instrument` belong in the run's comparability key.
+`X` **varies per call** -- a different turn, a different seam -- so it belongs beside `hook` and `subject` on the
+call line: an `xId`, an `xHash`, and the truncation, so a judgement is attributable to the target it was about.
+
+### 9.7 `X` is `state`, and the abort signals belong in it
+
+**`X` is the TypeSafe `state` field: it can be anything.** The source table in §9.6 is a set of *assembly helpers*
+for the common cases, not a schema. A caller may hand `X` a literal -- a diff, a paragraph, a JSON object -- and
+the selector form is only there for the targets that are tedious to assemble by hand. Keep a literal path open, or
+the convenience becomes the constraint.
+
+**And the operator's cancellations are the cheapest ground truth in the system.** Not inferred from a later
+message: direct. Checked against the installed Event catalogue (`Event.listEvents`), so these are the real names:
+
+| the signal | where it actually lives |
+|---|---|
+| **skipped or closed a question box** | **`user-questions/request`** -- a waterfall returning `AskUserQuestionAnswer`; the outcome carries whether it was answered, cancelled or skipped |
+| **explicit feedback** | **`feedback/committed`** -- *"observe a durable cold feedback mutation"*. The strongest signal available, and it arrives already durable |
+| pressed stop / interrupted | **the `AbortSignal`** carried on `agent/pre-step`, `agent/request` and `agent/turn-stopping`. There is **no dedicated "user pressed stop" event**; the abort is the signal, and the resulting state change is reported separately by `agent/status` (`idle` ⇄ `running`) and `api-session/status` |
+| a message thrown away | `agent/inbox/discarded` -- *"one message was discarded from the live inbox"* |
+| denied a tool | `tools/pre-execute` -- *"allow, deny, cancel, or ask before dispatch"* |
+| denied an approval | `approval/request` -- the outcome, not just the request |
+| a workflow stopped | `workflow/end` -- settled *"any stop reason"* |
+
+**The split of work follows the repository's own division.** Recording these is *observation*, so it belongs in the
+**observer** -- it is already an event-listening plugin, and a signal line on the trace is the same kind of fact as
+a `skip` line. Consuming them is *action*, so it belongs in the **act row**, which reads them as part of `X`:
+
+    the observer records what the operator did          (measurement)
+    X = { source: trace, include: [signals, exchange] } (the act row's target)
+    S asks whether the response helped                  (the question set)
+
+Which also gives the helpfulness set its ground truth for free: **a closed question box and a corrected answer are
+both labels**, and neither needs a human to annotate anything.
+
+One caution, from this repository's own catalogue: the *absence* of a stop is not evidence that the response
+helped. An operator who simply moves on is the common case and is indistinguishable from one who was satisfied
+enough not to say so. These signals are strong when present and silent when absent -- so a set that treats them as
+a balanced label will be wrong in the direction that flatters the agent.
+
+## 10. The turn trigger, and where a question set lives
+
+### 10.1 The corrected diagnosis, because it narrows the set
+
+Looking closer at the "test session" trajectory, the tool list that 3B produced came from a **system message the
+harness adds** -- it reported its tools faithfully. My earlier reading ("it answered *about* tools instead of using
+them") was unfair, and the correction matters because it changes what `S` has to ask.
+
+Two facts that follow, and both argue for an external judgement rather than a longer prompt:
+
+- **The model exposes no thinking blocks.** We cannot see how it decided. The only observable thing is the state it
+  produced: what it said, what it called, what came back. So the question is not "what did it think" but **"is the
+  request satisfied, or does the search need another iteration"** -- a predicate over the observable.
+- **The real gap is that it did not iterate its own queries.** One search, no result, then advice. That is one
+  predicate, not a general confusion, and the whole of turn 7's nudge is that predicate.
+
+### 10.2 The trigger: every N turns, compose `X`, ask `S`
+
+This is **measurement**, not action -- it reads and writes only the trace -- so it belongs in the observer, beside
+the seam calls.
+
+| | |
+|---|---|
+| **when** | every N turn boundaries, where a turn boundary is the `admit` event the observer already receives |
+| **`X`** | composed for the window: the operator's messages, the agent's messages, **and the tool calls with their results** |
+| **`S`** | a question-set artifact, §9.5 |
+| **where it lands** | a trace line with a **new `hook` value** -- `turn` -- so a scheduled measurement is never confused with a seam measurement |
+| **default** | **off.** It sends conversation to a hosted judge on a schedule, which is a different consent from observing a seam |
+
+Two requirements that are easy to miss and would each be a defect:
+
+1. **The probe scorer must tolerate a non-seam hook.** `probeAnswerOf` maps `hook` through `SEAM_OF_LABEL`; `turn`
+   has no seam, so `expected` is `null`. That must leave the probe's calibration *unchanged* -- excluded, not
+   counted as unreadable -- and it needs a test, because silently inflating `unreadable` would corrupt a published
+   figure.
+2. **`X` composition must reach tool calls**, which the peer bridge's transcript reader does not: it collects text
+   blocks and reports `[+N non-text block(s)]` for everything else. A turn window without the tool calls is not the
+   state the agent was actually in.
+
+### 10.3 Where the questions live, and why not PostgreSQL yet
+
+Three layers, and the right choice differs for each.
+
+| layer | choice | why |
+|---|---|---|
+| **authoring** sets and criteria | **files in git, JSON** | the ecosystem's own convention (`requests/*.json`, `recipes/`); they diff, they review, they ship with the plugin; and a set needs a **content hash as its version**, which a file gives for free |
+| **measurements** | **the JSONL trace stays authoritative** | 7.3 MB / 20,450 lines today; rotation, 0600, redaction and the auditable `rotate` line already exist. A second store would be a second privacy posture for data that already has one |
+| **the analytical index** | **`node:sqlite`, derived and disposable** | measured available on this runtime (`DatabaseSync`, `StatementSync`, …) and **in the standard library**, so it costs no dependency. It answers cross-run questions -- *which set separated best across 50k calls?* -- and can be deleted and rebuilt from the trace at any time |
+
+**PostgreSQL: not yet, and the reason is distribution rather than capability.** A server is listening on 5432, so it
+is there to be used. But this plugin is installed by other people with `dsh plugin add`, and requiring a running
+Postgres makes it uninstallable for exactly the audience it has; it also breaks a dependency posture the README
+advertises as *two dependencies, nothing else*, and adds a second surface for conversation-derived data.
+
+**When it becomes right:** when measurements must be shared across machines, sessions or teams -- concurrent
+writers, many consumers of a financial-parsing corpus, or analytical queries past what SQLite does comfortably.
+**And the migration is cheap precisely because the source of truth is files plus JSONL**: it is an ETL, not a
+rewrite. That is the argument for deferring -- choose the store last, and keep the source portable so the choice
+stays reversible.
+
+One caveat on the SQLite route, stated rather than buried: `node:sqlite` is **experimental** and prints a warning
+on use. That is a real trade against a stable third-party driver, and it should be a deliberate decision with a
+version guard rather than a convenience.
+
+## 11. Model-conditioned nudging, and the plugin's own tools
+
+### 11.1 A question set is per-MODEL, and the trace already knows which model
+
+The operator's point: someone has probably published family- and size-specific weakness measurements, so nudges can
+be chosen per model rather than written once. The search says yes, and per-model breakdowns exist for exactly our
+subject class -- [metamorphic testing of tool-calling agents](https://cbsoft.sbc.org.br/2026/data/papers/sast/When%20the%20Trigger%20Fails%20Metamorphic%20Testing%20of%20Tool-Calling%20AI%20Agents.pdf)
+distributes 600 invocations **per model** by failure mode, and
+[constrained decoding in small LLMs](https://browse-export.arxiv.org/pdf/2609.23742) finds failure classes that are
+**scale-dependent**. (Read from search results, not from the papers themselves -- treat as a lead, not a finding.)
+
+**The routing key is already in our trace.** `subject` records which model wrote the text being judged -- added so
+that an accuracy figure measured against one model's output would not be assumed to transfer to another's. That is
+the same field that should **select the nudge set**: a 3B that stops at a null result needs
+`gave_up_after_null_result`; a frontier model that over-claims needs `claims_match_evidence`. The provenance was
+built for measurement and turns out to be the addressing scheme for action.
+
+So a set carries an applicability clause, and `S` is chosen by matching it against `subject`:
+
+```
+{ "id": "agent-helpfulness", "version": 1,
+  "appliesTo": { "subject.model": ["mistralai/ministral-3b*"] } }   // absent = applies to any model
+```
+
+And the nudge is a **template per detected failure**, not per model. The model determines *which* questions are worth
+asking; the failure determines *what the agent is told*:
+
+| detected | the nudge written back into the agent's context |
+|---|---|
+| `gave_up_after_null_result` | a search returning nothing means the keywords were wrong. Try at least three different phrasings before concluding. |
+| `operator_had_to_nudge` | the operator has asked this once already. Do not restate it; act on it. |
+| `claims_match_evidence` | state only what a tool result shows; mark anything else as unverified. |
+| `citations_are_locatable` | name the exact source, not its title. Check that the address opens the thing it names. |
+| `satisfied_by_action` | answer it by doing it, not by describing how it could be done. |
+
+Both known good nudges in this repository's history are **directions, not numbers**: the operator's turn-7 message
+that finally worked, and the explicit method given to the 3B that made it iterate four times where it had previously
+searched once. A probability in the context does not produce that. **The threshold-to-instruction conversion is the
+act layer's whole job.**
+
+### 11.2 The plugin's own tools
+
+The operator wants this repository to expose agent tools rather than depend on `system1-bridge`. Two, and they are
+different in kind:
+
+**(a) `system1_decide`, owned by this repository.** It is a thin tool over `lib/model/client.js` plus
+`lib/questions.js` -- the same calling path the observer uses -- so the plugin's own instrument and its own tool are
+versioned together. The bridge's row then becomes unnecessary here.
+
+> **A NAME COLLISION IS THE FIRST HAZARD.** Two tools called `system1_decide` mounted in one profile is not a
+> conflict the loader reports; it is a registry with two entries of the same name, and which one answers is not
+> something the caller controls. Mounting this one means **disabling `system1-bridge-tool` in the same change**, and
+> the trace should record which tool served a call.
+
+**(b) A tool to adjust the plugin's own settings on the fly.** Seams on or off, which set for which seam, sampling
+rate, and reading the current config.
+
+> **AND THE SECOND HAZARD IS THE ONE THAT MATTERS: AN INSTRUMENT THE OBSERVED AGENT CAN RECONFIGURE IS A WEAKER
+> INSTRUMENT.** The agent whose helpfulness is being measured is the agent holding this tool. That is not a reason
+> to refuse it -- the operator asked for it, and it is genuinely useful -- but it must be built so the measurement
+> cannot be quietly improved by the measured:
+>
+> - **reads are free; writes are recorded.** Every write emits a config event on the trace, so a run is attributable
+>   to a configuration state and a discontinuity is visible rather than inferred.
+> - **a write cannot be silent.** Turning a seam off is a recorded fact, not an absence of data. Our own `skip` lines
+>   already work this way, which is why the 100 unjudged tool seams were findable instead of invisible.
+> - **`sessions` and the trace path are operator-only.** The agent may retune what is measured; it may not change
+>   *whose* behaviour is measured or where the record goes.
+
+### 11.3 The set: self-authored, because the corpus is guardrail-shaped
+
+`criteria/helpfulness-set@1.json` -- 10 questions (7 noul, 3 score), written from observed failures rather than
+adapted from a published rubric, with the rationale per question in `helpfulness-set@1.md`. It complies with the
+shapes this repository already enforces, and the file validates. **It is written, not validated**: nothing has been
+scored against labelled cases, which is the gate before anything reaches an agent's context.
+
+**Build `operator_had_to_nudge` first.** It is the only question in the set with an **independent** answer -- the
+observer already records the operator's next message, so the model's judgement can be checked against a label nobody
+asked it for. Every other question depends on the model being right about its own call; this one does not, which makes
+it the cheapest real calibration available in this project.

@@ -1,3 +1,7 @@
 node_modules/
 data/
 .superpowers/
+
+# npm pack output: a build artifact, never a source file
+dsh-system1-observer-*.tgz
+*.tgz
