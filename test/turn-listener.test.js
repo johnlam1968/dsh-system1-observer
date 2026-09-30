@@ -22,7 +22,8 @@ test('it fires on every Nth boundary and counts the turns between', () => {
   assert.deepEqual(third.questionIds, ['a_noul', 'a_score'])
   assert.equal(l.turnOf('session-a'), 3)
   assert.deepEqual(l.onAdmit(session), { fire: false, turn: 4 })
-  assert.equal(l.onAdmit(session).fire, true, 'it fires again at the next multiple')
+  assert.deepEqual(l.onAdmit(session), { fire: false, turn: 5 }, 'not a multiple')
+  assert.equal(l.onAdmit(session).fire, true, 'it fires again at 6, the next multiple of 3')
 })
 
 // THE POINT OF FIRING AT AN ADMIT: the admit that wakes this listener ENDS the turn before it, so the turn being
@@ -42,7 +43,9 @@ test('the knob is read at each boundary, so switching it off stops the calls', (
   on = false
   assert.deepEqual(l.onAdmit({ sessionId: 's' }), { fire: false, turn: 3 }, 'counting continues, firing stops')
   on = true
-  assert.equal(l.onAdmit({ sessionId: 's' }).fire, true, 'and it resumes at the next multiple')
+  assert.deepEqual(l.onAdmit({ sessionId: 's' }), { fire: false, turn: 4 }, 'still not a multiple of 3')
+  assert.deepEqual(l.onAdmit({ sessionId: 's' }), { fire: false, turn: 5 })
+  assert.equal(l.onAdmit({ sessionId: 's' }).fire, true, 'and it resumes at 6')
 })
 
 test('the config is read at each boundary, so a settings change needs no restart', () => {
@@ -59,9 +62,10 @@ test('sessions are counted independently', () => {
   const l = listener({ everyNTurns: 2 })
   l.onAdmit({ sessionId: 'a' })
   l.onAdmit({ sessionId: 'b' })
-  assert.equal(l.onAdmit({ sessionId: 'a' }).fire, true, 'a reaches its second')
-  assert.deepEqual(l.onAdmit({ sessionId: 'b' }), { fire: false, turn: 2 })
-  assert.equal(l.onAdmit({ sessionId: 'b' }).fire, true)
+  assert.equal(l.onAdmit({ sessionId: 'a' }).fire, true, 'a reaches its second, every 2')
+  const bSecond = l.onAdmit({ sessionId: 'b' })
+  assert.equal(bSecond.turn, 2, 'b counted independently')
+  assert.equal(bSecond.fire, true, 'and b fires on its own second, not a\'s third')
 })
 
 test('a missing session on the event is a skip with a reason, not a fire', () => {
