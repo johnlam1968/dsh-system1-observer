@@ -13,7 +13,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { configuredQuestionIds } from './lib/questions.js'
-import { readSessions } from './lib/sessions.js'
+import { readSessions, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
 import { minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
@@ -85,6 +85,19 @@ const Config = Schema.object({
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read once, at mount, so this is YAML-only.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read once, at mount, so this is YAML-only.'),
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
+  // THE SCHEDULED TURN MEASUREMENT. Undeclared at first, which made the wiring inert: a field the schema does not
+  // know is not a field a profile can set, so the trigger read `undefined`, computed an interval of 0 and never
+  // fired. A knob that cannot be configured is not a knob.
+  //
+  // VOLATILE, so the settings card can edit it live. The ON/OFF is read at every turn boundary and the INTERVAL at
+  // mount -- a deliberate split: switching a measurement off is a statement about what is being observed now, while
+  // changing how often it fires is a different experiment and belongs with the other mount-time fields.
+  turnEveryNTurns: Schema.number()
+    .min(0)
+    .step(1)
+    .default(0)
+    .description('Fire the scheduled turn measurement every Nth turn boundary. 0, the default, switches it off. The on/off is read at every boundary; the interval itself is read at mount.')
+    .volatile(),
   // THE PER-SEAM QUESTIONS, and the one field whose SHAPE matters to the host rather than to us.
   //
   // A volatile OBJECT rather than nine flat fields, because the settings host projects a form onto the
@@ -413,7 +426,16 @@ async function apply(ctx, config) {
     },
   })
   ctx.on('agent/pre-step', (payload) => {
-    Promise.resolve(turnObserver.onAdmit({ sessionId: payload?.agent?.id })).catch((error) => {
+    const sessionId = payload?.agent?.id
+    // THE SAME SESSION GATE THE OBSERVATION PATH APPLIES, and the schema's own description depends on it: a firing
+    // in a session this row was not pointed at "never reaches the model or the trace". Without this, the scheduled
+    // measurement would send an EXCLUDED conversation to the judge -- the documented promise, broken, and broken by
+    // the one code path that was added last. The reason string is the same one, so a reader can group them.
+    if (!sessionObserved(liveConfig(), sessionId)) {
+      evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: 'session not observed' })
+      return
+    }
+    Promise.resolve(turnObserver.onAdmit({ sessionId })).catch((error) => {
       evidence.trace('skip', { hook: 'turn', reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
     })
   })
