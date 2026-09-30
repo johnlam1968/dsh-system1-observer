@@ -1,0 +1,51 @@
+// THE WIRING, ASSERTED. test/service.test.js proves the SERVICE MODULE has the right shape; it cannot prove the
+// ROW provides it, and a green gate with the provide call deleted would look identical. So this file mounts the
+// row with its own context and config -- self-contained on purpose, so it cannot disturb the shared stubs that
+// five other test files lean on -- and asserts what the row hands to `provide`.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { apply } from '../index.js'
+import { OBSERVER_SERVICE } from '../lib/service.js'
+
+const accessor = (value) => ({ get: () => value })
+
+/** A Cordis-shaped context: it subscribes, it injects, and it records what was provided. */
+function recordingCtx() {
+  const handlers = new Map()
+  const provided = new Map()
+  return {
+    handlers,
+    provided,
+    on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
+    inject() {},
+    provide(name, value) { provided.set(name, value); return () => provided.delete(name) },
+    agents: { currentInitiator: () => ({ id: 'agent-1' }) },
+  }
+}
+
+test('apply provides the observer service, with the four readers and a freeze', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'observer-wiring-'))
+  const ctx = recordingCtx()
+  await apply(ctx, {
+    hooks: accessor(['admit']),
+    tracePath: accessor(join(dir, 'trace.jsonl')),
+    sessions: accessor(['agent-1']),
+    wireUrl: accessor('http://127.0.0.1:9'),
+    timeoutMs: accessor(200),
+  })
+
+  const service = ctx.provided.get(OBSERVER_SERVICE)
+  assert.notEqual(service, undefined, 'the row must provide the service under its declared name')
+  assert.deepEqual(Object.keys(service).sort(), ['config', 'read', 'runs', 'sessions'])
+  assert.equal(Object.isFrozen(service), true, 'a consumer must not be handed something it can mutate')
+  // The readers answer rather than throw, which is the property a consumer depends on.
+  assert.equal(Array.isArray(service.read({}).events), true)
+  assert.equal(Array.isArray(service.runs()), true)
+  assert.equal(typeof service.sessions(), 'object')
+  const config = service.config()
+  assert.deepEqual(config.hooks, ['admit'], 'the mount snapshot reaches the consumer')
+  assert.equal(config.provider, null)
+})
