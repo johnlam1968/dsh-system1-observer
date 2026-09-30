@@ -55,3 +55,25 @@ test('tokens drop stopwords and punctuation, and recurrence counts content', () 
   assert.equal(recurrence('alpha beta', 'delta epsilon'), 0)
   assert.equal(recurrence('', 'anything'), 0, 'no content on one side is no recurrence, not a division by zero')
 })
+
+// FOUND AGAINST THE REAL RECORD, not imagined. Successive peer-bridge messages share the header
+// `[implementer session, dsh-system1-observer (…) via peer-bridge]`, and counting it as content made four unrelated
+// coordination messages read as operator nudges at 60-100% recurrence -- the heuristic measuring the envelope
+// instead of the message.
+test('a shared transport header is not recurrence', () => {
+  const request = '[implementer session, dsh-system1-observer (session-a) via peer-bridge] Here is the plan for review.'
+  const next = '[implementer session, dsh-system1-observer (session-a) via peer-bridge] Please review the acceptance criteria.'
+  const out = deriveNudgeLabel({ request, next })
+  assert.equal(out.label, false, `header alone must not read as a nudge (recurrence was ${out.signals.recurrence})`)
+  assert.equal(contentTokens('[from elsewhere] alpha beta')[0], 'alpha', 'and the header is gone from the tokens')
+  assert.deepEqual(contentTokens('[a] [b] real content'), ['real', 'content'], 'including several of them')
+})
+
+test('a real nudge with the same header is still a nudge', () => {
+  const out = deriveNudgeLabel({
+    request: '[peer-bridge] Find the plugins related to system1.',
+    next: '[peer-bridge] You should mutate the keywords and search again.',
+  })
+  assert.equal(out.label, true, 'stripping the header must not stop a marker being seen')
+  assert.match(out.reason, /corrects/)
+})
