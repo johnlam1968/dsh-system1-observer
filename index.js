@@ -317,6 +317,13 @@ async function apply(ctx, config) {
         const { event, ...fields } = line
         evidence.trace(event, fields)
       },
+      // AND THE RECORD OF A MOVE LANDS IN THE SINK BEING LEFT, which the plan's section 4 requires. It holds by
+      // MECHANISM rather than by intent: `evidence` is built at MOUNT with `resolveTracePath(mount, here)`, and the
+      // live reads above are for `maxTraceBytes`, price and the knobs -- not the path. So a `tracePath` change is
+      // recorded through the evidence that still points at the OLD file, and the new path takes effect when the row
+      // re-mounts. That is the property the constraint wanted. IT IS NOT TESTED, and it is the kind of property a
+      // refactor could remove without noticing -- making `evidence` read its path live would move the record of the
+      // move into the sink the move created, which is exactly the hole the constraint exists to close.
       write: async (change) => {
         if (configEditor === null) {
           throw new Error('system1_observe_config: the configEditor service is not available in this profile, so no change can be persisted.')
