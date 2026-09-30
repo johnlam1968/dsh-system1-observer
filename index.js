@@ -31,7 +31,7 @@ import { createConfigTool } from './lib/config-tool.js'
 import { createConfigWriter } from './lib/config-writer.js'
 import { createTurnObserver } from './lib/turn-observer.js'
 import { createTurnListener } from './lib/turn-listener.js'
-import { registerListeners, readHooks } from './lib/register.js'
+import { registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
 
 const name = 'system1-observer'
 
@@ -425,7 +425,12 @@ async function apply(ctx, config) {
       evidence.trace(event, fields)
     },
   })
-  ctx.on('agent/pre-step', (payload) => {
+  // A WATERFALL LISTENER, so it MUST call `next()`. `agent/pre-step` is declared `mode: 'waterfall'` with the
+  // signature `(payload, next) => Promise<PreStepDecision>`, and a listener that ignores `next` does not merely skip
+  // its own turn -- it hands the listener BEHIND it a payload where the continuation should be, which broke the
+  // observer's own admit handling. Found by driving the wiring rather than the modules: every unit test passed while
+  // this would have failed in a live process, on the seam the whole plugin depends on.
+  ctx.on('agent/pre-step', (payload, next) => {
     const sessionId = payload?.agent?.id
     // THE SAME SESSION GATE THE OBSERVATION PATH APPLIES, and the schema's own description depends on it: a firing
     // in a session this row was not pointed at "never reaches the model or the trace". Without this, the scheduled
@@ -433,11 +438,20 @@ async function apply(ctx, config) {
     // the one code path that was added last. The reason string is the same one, so a reader can group them.
     if (!sessionObserved(liveConfig(), sessionId)) {
       evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: 'session not observed' })
-      return
+      return next()
+    }
+    // AND THE SUBAGENT GATE, from the same module and with the same reason string the observation path uses. It is
+    // off unless the config says exactly `true`, so a scheduled measurement does not silently start watching the
+    // worker sessions an operator never asked about.
+    if (isSubagent(payload?.agent) && readConfigValue(liveConfig().observeSubagents) !== true) {
+      evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: SUBAGENT_SKIP_REASON })
+      return next()
     }
     Promise.resolve(turnObserver.onAdmit({ sessionId })).catch((error) => {
       evidence.trace('skip', { hook: 'turn', reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
     })
+    // THE CHAIN CONTINUES. Everything above is bookkeeping around the seam; the seam's own decision is not ours.
+    return next()
   })
 
   registerListeners(ctx, hooks, {
