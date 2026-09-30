@@ -70,3 +70,29 @@ test('junk events are not evidence and do not throw', () => {
   assert.equal(out.refused, true)
   assert.equal(composeTurnState().refused, true)
 })
+
+// THE RISK THIS CLOSES, found by looking for raw session events and finding none: if the session store types the
+// operator's message as anything other than `user/message`, the composition refuses EVERY turn -- silently and
+// forever, because a refusal is not an error. `agent/pre-step`'s payload declares `messages: UserMessage[]`, so the
+// boundary carries the message whether or not the event stream names it that way.
+test('the operator message can come from the CALLER, when the events do not carry it', () => {
+  const events = [
+    env(1, 'assistant/message', [text('Nothing found; here is how to search.')]),
+    env(2, 'user/message', [{ type: 'tool_result', tool_use_id: 't1', content: 'no results' }]),
+  ]
+  const refused = composeTurnState({ events })
+  assert.equal(refused.refused, true, 'without help, the tool delivery leaves no boundary to read')
+  const out = composeTurnState({ events, nextMessage: 'You should mutate the keywords and try again.' })
+  assert.equal(out.refused, false)
+  assert.equal(out.sections['OPERATOR NEXT MESSAGE'], 'You should mutate the keywords and try again.')
+  assert.match(out.sections['AGENT RESPONSE'], /here is how to search/)
+})
+
+test('a supplied message is taken as text or as a message-like object', () => {
+  const events = [env(1, 'assistant/message', [text('a reply')])]
+  for (const supplied of ['plain text', { text: 'from a text field' }, { content: [text('from content blocks')] }]) {
+    const out = composeTurnState({ events, nextMessage: supplied })
+    assert.equal(out.sections['OPERATOR NEXT MESSAGE'], typeof supplied === 'string' ? supplied : supplied.text ?? 'from content blocks')
+  }
+  assert.equal(composeTurnState({ events, nextMessage: { nope: 1 } }).refused, true, 'an unusable object is no boundary')
+})
