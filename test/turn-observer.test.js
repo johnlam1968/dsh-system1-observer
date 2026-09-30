@@ -102,3 +102,21 @@ test('a dependency that cannot work is refused at construction', () => {
   assert.throws(() => createTurnObserver({ listener: { onAdmit: () => {} }, readEvents: 7, ask: () => {}, record: () => {} }), /`readEvents` must be a function/)
   assert.throws(() => createTurnObserver({ listener: { onAdmit: () => {} }, readEvents: () => [], ask: () => {} }), /`record` must be a function/)
 })
+
+// THE BOUNDARY MESSAGE REACHES THE COMPOSITION. `agent/pre-step` carries the operator's message, and a session
+// stream that names it otherwise would leave every turn uncomposable -- so the wiring must not depend on the events
+// alone, and this asserts the value actually arrives.
+test('the operator message from the boundary reaches the composed target', async () => {
+  const lines = []
+  const listener = createTurnListener({ everyNTurns: 1, readConfig: () => config })
+  const observer = createTurnObserver({
+    listener,
+    // No operator message in the events at all -- only the agent's reply.
+    readEvents: () => [env(1, 'assistant/message', [text('Nothing found; here is how to search.')])],
+    ask: async () => ({ kind: 'answers', answers: { a_noul: { status: 'ok' } } }),
+    record: (line) => lines.push(line),
+  })
+  const out = await observer.onAdmit({ sessionId: 's', nextMessage: { text: 'You should mutate the keywords.' } })
+  assert.equal(out.fired, true, 'the turn composes because the boundary supplied the message')
+  assert.equal(lines.length, 1)
+})

@@ -447,7 +447,10 @@ async function apply(ctx, config) {
       evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: SUBAGENT_SKIP_REASON })
       return next()
     }
-    Promise.resolve(turnObserver.onAdmit({ sessionId })).catch((error) => {
+    // The payload's own messages, taken as they stand: `composeTurnState` accepts text or a message-like object, so
+    // this does not need to know the UserMessage shape -- and must not, since guessing it is what this fix avoids.
+    const messages = Array.isArray(payload?.messages) ? payload.messages : []
+    Promise.resolve(turnObserver.onAdmit({ sessionId, nextMessage: messages[messages.length - 1] })).catch((error) => {
       evidence.trace('skip', { hook: 'turn', reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
     })
     // THE CHAIN CONTINUES. Everything above is bookkeeping around the seam; the seam's own decision is not ours.
