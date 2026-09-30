@@ -636,13 +636,13 @@ subagent produces hundreds in a row, and a line each buries every call in the ru
 verdict a person reads (`before_a_tool_call p=0.88`) rather than the JSON that carries it:
 
 ```
-run 2026-09-29T19-13-15-523Z-c69f82ad   1544 events · 19:13:15.888 → 21:06:58.970
+run 2026-01-02T10-04-15-523Z-a1b2c3d4   1544 events · 10:04:15.888 → 10:31:02.970
   mounted   hooks admit,draft,pre_execute,post_execute · transport service · typesafe/jev-latest
   events    566 calls · 977 skips · 0 errors
   latency   min 181ms · median 273ms · max 15005ms
   model     typesafe/jev-latest → typesafe/jev-1.13-20260917 ×565
 
-21:06:58  CALL  draft         session-17326d  833ms   Much more readable. Two flaws to fix: the execut…
+10:31:02  CALL  draft         session-0123abcd  833ms   Refactored the parser and added two boundary tests…
                                              → model_output p=0.83
 ```
 
