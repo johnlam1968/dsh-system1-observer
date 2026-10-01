@@ -184,6 +184,30 @@ async function apply(ctx, config) {
   // THE LIVE EVENT FEED: the holder for what the harness commits. It is read by `readEvents` below and is empty
   // until something fills it, which is the next commit -- an empty feed is exactly the previous behaviour.
   const feed = createEventFeed()
+  // THE SESSION'S OWN EVENTS, as one function, so the fallback and the comparison cannot drift apart. It is the
+  // only thing here that needs a LIVE session -- which is why the feed exists, and why this is the function to
+  // delete when the adapter reads sessionQuery instead.
+  const sessionEvents = (sessionId) => {
+    try {
+      const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
+      const direct = agents !== undefined && typeof agents.get === 'function' ? agents.get(sessionId) : undefined
+      const agent = direct ?? (agents !== undefined && typeof agents.list === 'function' ? agents.list().find((one) => one?.id === sessionId) : undefined)
+      const session = agent !== undefined && agent !== null ? agent.session : undefined
+      return session !== undefined && typeof session.snapshotEvents === 'function' ? session.snapshotEvents(0) : []
+    } catch {
+      return []
+    }
+  }
+
+  // WHAT AN EVENT SAYS, which is what the judge reads. Two events can share a seq and a type and still describe
+  // different turns -- the harness feed and the live session are the SAME events only if their text matches.
+  // Comparing seq and type alone reported agreement for two different conversations: a detector that cannot
+  // detect the thing it exists for, found by the test that asserts the line says DISAGREE.
+  const textOfEvent = (event) => {
+    const content = event?.data?.message?.content
+    if (!Array.isArray(content)) return ''
+    return content.map((block) => (typeof block?.text === 'string' ? block.text : '')).join('\u0000')
+  }
   const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
   // THE POLICY IS A GETTER because it is live config, read per line; the path is captured because the test suite
   // depends on that ordering. See `lib/evidence.js`.
@@ -449,6 +473,26 @@ async function apply(ctx, config) {
     readEvents: (sessionId) => {
     // THE FEED FIRST, THEN THE SESSION. An empty feed falls through to exactly the behaviour that was here before.
     const held = feed.events(sessionId)
+    // AND THE TWO SOURCES ARE COMPARED ONCE PER JUDGED TURN. When both have something to say, one line records
+    // whether they AGREE -- same order, same seqs, same types, and the SAME TEXT. The text is the criterion that
+    // matters: seq and type are bookkeeping, and agreeing on them while disagreeing on content is exactly the
+    // regression this line exists to catch. Silent when only one source has content, because comparing one thing
+    // with nothing is noise -- and on an empty feed that is every turn.
+    const snapshot = sessionEvents(sessionId)
+    if (held.length > 0 && snapshot.length > 0) {
+      const agree = held.length === snapshot.length
+        && held.every((event, index) => event?.seq === snapshot[index]?.seq
+          && event?.type === snapshot[index]?.type
+          && textOfEvent(event) === textOfEvent(snapshot[index]))
+      evidence.trace('feed-compare', {
+        agentId: sessionId ?? null,
+        agree,
+        feedEvents: held.length,
+        sessionEvents: snapshot.length,
+        feedSeqs: held.map((event) => event?.seq ?? null).slice(-6),
+        sessionSeqs: snapshot.map((event) => event?.seq ?? null).slice(-6),
+      })
+    }
     if (held.length > 0) return held
       try {
         const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
