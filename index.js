@@ -608,6 +608,24 @@ async function apply(ctx, config) {
     // evidence as a node that was never reached.
     Promise.resolve(turnObserver.onAdmit({ sessionId, nextMessage: messages[messages.length - 1] }))
       .then((outcome) => {
+      // THE SUBJECT'S COST, FROM THE HARNESS. `tokenMeter.measure(session)` is O(surface) and SYNCHRONOUS, and its
+      // result says whether the number is usage, estimated or none. It is called HERE -- on the detached path, after
+      // the judgement -- and never inside a listener the harness awaits, where O(surface) work would delay a turn.
+      try {
+        const meter = typeof ctx.get === 'function' ? ctx.get('tokenMeter') : undefined
+        const session = payload?.agent?.session
+        if (meter !== undefined && meter !== null && typeof meter.measure === 'function' && session !== undefined && session !== null) {
+          const measured = meter.measure(session)
+          evidence.trace('subject-cost', {
+            agentId: sessionId ?? null,
+            totalTokens: typeof measured?.totalTokens === 'number' ? measured.totalTokens : null,
+            surfaceTokens: typeof measured?.surfaceTokens === 'number' ? measured.surfaceTokens : null,
+            baseline: typeof measured?.baseline?.kind === 'string' ? measured.baseline.kind : null,
+          })
+        }
+      } catch {
+        // A diagnostic must never be the reason a turn is lost.
+      }
         if (outcome !== undefined && (outcome.refused === true || outcome.failed === true)) {
           evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement did not run: ${outcome.reason ?? 'no reason given'}` })
         }
