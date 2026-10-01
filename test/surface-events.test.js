@@ -94,3 +94,27 @@ test('surfaceSeqs, when given, is the RULE -- and the fold is the fallback', () 
   assert.equal(composeTurnState({ events, surfaceSeqs: [] }).refused, true, 'an empty list falls back to the fold')
   assert.equal(composeTurnState({ events, surfaceSeqs: null }).refused, true, 'and so does null')
 })
+
+// EITHER SHAPE, BECAUSE THE DECLARATION AND THE LIVE RUN DISAGREE. `SessionEventMap` says `'user/message': UserMessage`
+// -- `data` IS the message -- while `assistant/message` and `tool/result` say `data.message`. Every fixture in this
+// suite used the latter, so the DECLARED shape had never been exercised; the composer rejected it and refused the
+// turn with "no operator message in the window". This feeds the declared shape and asserts the exchange composes.
+test('a HARNESS-DECLARED user/message event is read, where `data` is the message itself', () => {
+  const declaredUser = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const declaredAssistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
+  const events = [
+    declaredUser(1, 'THE DECLARED OPERATOR REQUEST'),
+    declaredAssistant(2, 'the answer'),
+    declaredUser(3, 'moved on'),
+  ]
+  const out = composeTurnState({ events })
+  assert.notEqual(out.refused, true, 'a declared-shape exchange must compose, not refuse: ' + String(out.reason))
+  assert.match(String(out.sections?.['OPERATOR REQUEST']), /THE DECLARED OPERATOR REQUEST/, 'the request comes from an event whose data IS the message')
+  assert.match(String(out.sections?.['AGENT RESPONSE']), /the answer/)
+  assert.match(String(out.sections?.['OPERATOR NEXT MESSAGE']), /moved on/)
+
+  // AND THE OTHER SHAPE STILL WORKS, so this widened the reader rather than replacing one assumption with another.
+  const wrapped = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { message: { role: 'user', content: [{ type: 'text', text }] } } })
+  const other = composeTurnState({ events: [wrapped(1, 'THE WRAPPED REQUEST'), declaredAssistant(2, 'an answer'), wrapped(3, 'moved on')] })
+  assert.match(String(other.sections?.['OPERATOR REQUEST']), /THE WRAPPED REQUEST/, 'and the wrapped shape is still read')
+})
