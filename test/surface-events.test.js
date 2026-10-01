@@ -65,3 +65,32 @@ test('a compaction that replaces a request still yields the SUMMARY, which is wh
   assert.doesNotMatch(String(sections['OPERATOR REQUEST']), /SECOND REQUEST/, 'the replaced request is gone')
   assert.match(String(sections['OPERATOR REQUEST']), /COMPACTED SUMMARY/, 'and the summary is what remains')
 })
+
+// THE HOST'S OWN ANSWER, WHEN IT IS GIVEN. `Session.surface.nodes` is the surviving seqs -- precisely what the fold
+// computes -- so a caller holding it passes `surfaceSeqs` and the fold becomes the portable substitute rather than
+// the rule. BOTH DIRECTIONS ON THE SAME FIXTURE, and the second is what makes the first more than a comment: the fold
+// alone refuses a turn whose response a replace dropped, and the host's seqs keep it so the turn composes.
+//
+// THIS TEST EARNED ITS KEEP. The first implementation filtered the fold's OUTPUT, so the host's answer could only
+// ever subtract -- and a message the fold had dropped could never be kept, which is the exact case the parameter
+// exists for. The assertion below failed, and the fix was to make the host's answer replace the fold rather than
+// pass through it.
+test('surfaceSeqs, when given, is the RULE -- and the fold is the fallback', () => {
+  const events = [
+    msg(1, 'user/message', 'the operator request'),
+    msg(2, 'assistant/message', 'the answer'),
+    toolResult(3, 'a tool result', { op: 'replace', startSeq: 2, endSeq: 2 }),
+    msg(4, 'user/message', 'the operator reaction'),
+  ]
+  assert.equal(composeTurnState({ events }).refused, true, 'the fold alone refuses: the response was replaced away')
+
+  const kept = composeTurnState({ events, surfaceSeqs: [1, 2, 4] })
+  assert.notEqual(kept.refused, true, "the host's surface keeps the response, so there is something to judge")
+  assert.match(String(kept.sections?.['AGENT RESPONSE']), /the answer/, 'and it is the message the host kept')
+  assert.match(String(kept.sections?.['OPERATOR NEXT MESSAGE']), /the operator reaction/)
+
+  // AND AN EMPTY LIST IS NOT AN EMPTY SURFACE. Falling back on absent OR empty is deliberate: reading [] as "nothing
+  // survives" would refuse every turn, and both cases are asserted so that cannot be introduced quietly.
+  assert.equal(composeTurnState({ events, surfaceSeqs: [] }).refused, true, 'an empty list falls back to the fold')
+  assert.equal(composeTurnState({ events, surfaceSeqs: null }).refused, true, 'and so does null')
+})
