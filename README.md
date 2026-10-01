@@ -43,11 +43,12 @@ a model route.
 | the questions this sends are the shape the vendor's API accepts | `test/vendor-conformance.test.js`, `deepEqual` against `@typesafe-ai/sdk`'s own builders — which is what found a `score` being sent as a keyed map upstream, a defect its stubbed unit tests had passed over |
 
 ```
-npm test              # 360 tests
-npm run coverage      # the floor: 90% lines, 75% branches, 75% functions over lib/
+npm test               # the suite; the run prints the count, so this line cannot go stale
+npm run coverage       # the floor: 90% lines, 75% branches, 75% functions over lib/
 npm run check:citations
 npm run check:compat
-npm run ci            # all four, in that order
+npm run check:composition
+npm run ci             # all five, in that order
 ```
 
 **A machine runs them now.** `.github/workflows/ci.yml` exercises the two supported Node lines from `engines`

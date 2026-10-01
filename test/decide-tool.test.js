@@ -210,3 +210,26 @@ test('a live signal is handed to the backend, not swallowed', async () => {
   // controller from the one the transport listens to.
   assert.equal(seen[0].options.signal, controller.signal, "the caller's own signal reaches decide")
 })
+
+// DELTA 6b, THE OTHER HALF: what happens when the signal fires DURING the call. Only the wire forwards an external
+// abort; the `system1` service path cannot interrupt work in flight, so a cancelled call used to come back looking
+// like any other -- an operator who walked away was indistinguishable from one who waited. The answer is kept, since
+// the backend was already paid for it; the record now says `cancelled: true`, which is the difference between a lost
+// call and an invisible one.
+test('a signal aborted DURING the call is recorded, not silently absorbed', async () => {
+  const lines = []
+  const controller = new AbortController()
+  const tool = createDecideTool({
+    decide: async () => {
+      controller.abort()
+      return { kind: 'answers', answers: { asked: { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.9 } } }, envelope: {} }
+    },
+    record: (line) => lines.push(line),
+  })
+  const out = await tool.execute({ state: 'x', questions: [spec] }, { signal: controller.signal })
+  assert.equal(out.failure, undefined, 'the answer the backend already produced is not thrown away')
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].cancelled, true, 'a cancellation the transport could not act on is visible in the record')
+  const { probeViolations } = await import('../lib/turn-record.js')
+  assert.deepEqual(probeViolations(lines), [], 'and the extra field does not break the acceptance check')
+})

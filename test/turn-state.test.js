@@ -96,3 +96,19 @@ test('a supplied message is taken as text or as a message-like object', () => {
   }
   assert.equal(composeTurnState({ events, nextMessage: { nope: 1 } }).refused, true, 'an unusable object is no boundary')
 })
+
+// A REQUEST WITH NO SEQ. `windowStart` used to fall back to `?? 0`, which anchored the window at the beginning of
+// the LOG -- so the TOOL CALLS section quoted every earlier tool call in the session as though it belonged to this
+// exchange. Nothing caught it because every fixture drives numeric seqs; an independent review found it by reading
+// the line, and the guard this file already used for seq (`typeof … === 'number'`) is what the refusal uses too.
+test('an operator request with no seq REFUSES rather than anchoring the window at the start of the log', () => {
+  const events = [
+    env(null, 'user/message', [text('the request, in a shape that carries no seq')]),
+    env(2, 'assistant/message', [text('a reply')]),
+    env(3, 'user/message', [text('a reaction')]),
+  ]
+  const out = composeTurnState({ events })
+  assert.equal(out.refused, true)
+  assert.match(out.reason, /carries no seq/)
+  assert.equal(out.state, undefined, 'a refusal carries no state to judge')
+})
