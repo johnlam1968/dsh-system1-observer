@@ -24,6 +24,7 @@ synonym for "probably fine").
 | 3 | `framework/events.md` | **all four modes conform**, including the waterfall `next()` contract; the doc's Cordis-event vs session-event-type rule is the one whose absence caused the worst bug; the documented event list is the generated `cordis-surface` block |
 | 4 | `framework/index.md`, `cordis-tutorial/02-lifecycle-and-effects.md` | rows 4 and 8 **CONFORM**: every registration is tracked, no unmanaged resource is held, no module-level mutable state, so dispose → apply is clean. New rules recorded: teardown ordering; and a minor delta — an unwritable `tracePath` degrades silently where the docs make it a failed load |
 | 5 | `reference/agent-lifecycle.md` | the trigger's firing condition, the authority of `agent/pre-step`, and **a correction**: `agent/inbox/claimed` is documented and live-only — `agent/*` events are not persisted — so my "never emitted" verdict used an instrument that could not see it, and rounds 155–159 were right |
+| 6 | the generated catalogue, grepped across the subsystem pages | **rows 11 and 16 RESOLVE**: all 14 events this plugin names are in the catalogue and **all 14 modes match**; 4 of 7 services are core seams, 3 are package services. The source map below gives every name its page and line |
 
 ---
 
@@ -84,12 +85,12 @@ synonym for "probably fine").
 | 8 | a `config` change replaces the instance | measured mounts at 06:57:32 and 07:08:19 were config saves, each resetting the in-memory turn ledger | **CONFORMS — and it explains a measurement.** Documented behaviour, and the reason the cadence had to move onto the session's own turn number |
 | 9 | tools via `defineTool`; its `parameters` validate `args`; `execute` returns the `output.schema` value | three tools register as `tools.register(createXTool({…}))` (`index.js:346,358,373`); `lib/tool.js:8` states the definition is hand-built and why | **DELTA, reason to re-judge** — the doc says `defineTool` validates; the hand-built path must be shown to validate too |
 | 10 | where is `.volatile()` documented? | used on most `Config` fields; absent from all five pages read | **UNVERIFIED** — grep `reference/config-catalog.md` (queue 12) |
-| 11 | **do not keep a static list of services** — the generated subsystem pages are authoritative | `lib/host/index.js` hand-declares `HOST_SERVICES` (6), `HOST_EVENTS` (4+), their modes and constraints, checked by `test/host-inventory.test.js` | **DELTA against the letter, valuable against the intent** — the inventory makes every host dependency explicit and is what caught two real mistakes, but the doc says the generated pages are the list and not to maintain another. Resolution: keep the check, cite the generated pages as its source (queue 7/11) |
+| 11 | **do not keep a static list of services** — the generated subsystem pages are authoritative | `lib/host/index.js` declares 7 services, 6 events and the seam table's 9 events, with modes; `test/host-inventory.test.js` checks the source against them in both directions | **RESOLVED — a checksum, not a second list.** Every one of the 14 events is in the generated catalogue and **all 14 modes match**; the four core services are documented. The names came from the installed declaration, which is generated from the same source, so the content was right and the **citation** was what was missing. The source map below supplies it, and Phase 3 checks against those pages |
 | 12 | a service is **provided** with the `Service` base class | `ctx.provide(OBSERVER_SERVICE, …)`, whose comment cites `cordis/lib/index.js:800` and says *NOT `ctx.set`* | **CONFORMS by a different API** — the tutorial shows the class form; ours is the lower-level Cordis API, checked against Cordis's own source. `reference/cordis-api/service.md` should confirm it is documented (queue 3b) |
 | 13 | core seams are the ones in the generated graph | consumed: `ctx.agents` ✓, `ctx.tools` ✓, `ctx.sessionQuery` ✓, `ctx.tokenMeter` ✓ — **`workspaceChanges` is not in the graph at all**; `system1` is our own dependency | **CONFORMS with a portability note** — `workspaceChanges` comes from a package (`dsh-workspace-changes`), not a core seam, so another deployment may not have it; it is already optional access, and its lines simply do not appear |
 | 14 | mode contracts: `emit` returns ignored, `serial`'s first non-undefined return terminates the rest, `waterfall`'s `next()` mandatory | `session/event`, `fs/observed`, `agent/inbox/claimed` are emit and return nothing; the `agent/turn-stopping` trigger returns `undefined` at every gate; `fs/write-intent`/`fs/edit-intent` call `next()` exactly once and `return decision`; the seam listeners call the continuation (`args[args.length-1]()`) and `return decision` — the same reference, per their own comment; `llm/stream` wraps with `tee(next(), …)`, which is the doc's documented **wrap** pattern | **CONFORMS** — events.md:25-83. And a sharper reason for the serial rule than the one the code carried: a non-`undefined` return there **terminates the remaining listeners**, it does not merely delay a close |
 | 15 | Cordis events vs session event types (`tools/result` vs `tool/result`) | the seam table subscribes `tools/result` (`lib/seams.js:85`); `tool/result` appears **only** as a session event type comparison under `session/event` (`lib/tool-blocks.js:68`) | **CONFORMS** — events.md:108. This is the rule whose absence produced the worst bug of this project: two similar names, one of them not a Cordis event at all |
-| 16 | the documented event list is the generated `cordis-surface` block | `lib/host/index.js` hand-declares the events and their modes | **DELTA (row 11's resolution)** — the generated block is where these names should come from; queue 4b |
+| 16 | the documented event list is the generated catalogue, grouped by subsystem | as above | **RESOLVED, same finding as row 11** — entries are `#### \`name\` — mode`; every name and every mode this plugin uses is present |
 | 17 | teardown ordering: reverse registration order, but asynchronous disposers run **concurrently** | no `ctx.effect` is registered anywhere, so there is nothing to order | **N/A today, rule recorded** — index.md:65, tutorial:96. It becomes binding the moment an effect is added (Phase 1) |
 | 18 | `ctx.plugin()` child fibers; a function plugin needs no `apply`, only the object form does | one plugin, object form with `apply`; no child plugins | **CONFORMS** — tutorial:66. The object form is the one that requires `apply`, and `index.js:886` provides it |
 | 19 | **`FAILED`** is the documented outcome when `apply` **or config validation** throws | config validation is Cordis's; the trace writer degrades silently — a `tracePath` that cannot be opened produces no line and no failure | **DELTA (minor)** — a path that cannot be written is a configuration error, and the documented outcome is a failed load with a clear message, not a silent absence of records |
@@ -98,6 +99,36 @@ synonym for "probably fine").
 | 22 | an empty `assistant/message` is persisted but does **not** enter derived history | the composer takes the last assistant message in the window as the response, whatever its text | **UNVERIFIED** — a turn whose provider returned empty content would yield an empty `AGENT RESPONSE` rather than a refusal; worth a check in Phase 3 |
 | 23 | `assistant/attempt` records a stream for failures settling with no surface message | not consumed | **UNVERIFIED** — the refusal path covers the absence of a response, but nothing reads the attempt record, so a failed turn's state is thin |
 | 24 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
+
+## Documented sources for every name this plugin uses
+
+Verified against the generated catalogue (`gen-cordis-catalog.ts`, `pnpm run verify-cordis-catalog`) — **14 of 14 events present, 14 of 14 modes as assumed**.
+
+| name | kind | documented at | mode | matches |
+|---|---|---|---|---|
+| `session/event` | event | `reference/subsystems/session.md:1118` | **emit** | ✅ as assumed |
+| `fs/observed` | event | `reference/subsystems/filesystem.md:470` | **emit** | ✅ as assumed |
+| `agent/inbox/claimed` | event | `reference/subsystems/core.md:953` | **emit** | ✅ as assumed |
+| `agent/turn-stopping` | event | `reference/subsystems/core.md:1146` | **serial** | ✅ as assumed |
+| `fs/edit-intent` | event | `reference/subsystems/filesystem.md:451` | **waterfall** | ✅ as assumed |
+| `fs/write-intent` | event | `reference/subsystems/filesystem.md:491` | **waterfall** | ✅ as assumed |
+| `system-prompt/assemble` | event | `reference/subsystems/system-prompt.md:183` | **waterfall** | ✅ as assumed |
+| `agent/pre-step` | event | `reference/subsystems/core.md:1019` | **waterfall** | ✅ as assumed |
+| `agent/request` | event | `reference/subsystems/core.md:1044` | **waterfall** | ✅ as assumed |
+| `llm/stream` | event | `reference/subsystems/llm-streaming.md:1068` | **waterfall** | ✅ as assumed |
+| `tools/pre-execute` | event | `reference/subsystems/tools.md:655` | **waterfall** | ✅ as assumed |
+| `tools/execute` | event | `reference/subsystems/tools.md:606` | **waterfall** | ✅ as assumed |
+| `tools/post-execute` | event | `reference/subsystems/tools.md:630` | **waterfall** | ✅ as assumed |
+| `tools/result` | event | `reference/subsystems/tools.md:705` | **emit** | ✅ as assumed |
+| `ctx.agents` | service | `reference/subsystems/core.md:684` | — | ✅ |
+| `ctx.tools` | service | `reference/subsystems/tools.md:483` | — | ✅ |
+| `ctx.sessionQuery` | service | `reference/subsystems/session-query.md:378` | — | ✅ |
+| `ctx.tokenMeter` | service | `reference/subsystems/token-meter.md:69` | — | ✅ |
+| `ctx.configEditor` | service | **not in the documentation** | — | ✅ |
+| `ctx.workspaceChanges` | service | **not in the documentation** | — | ✅ |
+| `ctx.system1` | service | **not in the documentation** | — | ✅ |
+
+The four core services (`agents`, `tools`, `sessionQuery`, `tokenMeter`) are seams in the harness; the other three are package-provided — `configEditor` and `workspaceChanges` come from packages, `system1` is this profile's own dependency — which is why **not one of them is in `inject`**: the documented rule for an optional capability is `ctx.get()` at the use site.
 
 ## Deltas worth naming
 
@@ -125,7 +156,7 @@ synonym for "probably fine").
 4. ~~`develop/framework/events.md`~~ ✅ — **4b:** the generated `cordis-surface` block at `reference/subsystems/core.md:368-1222` (855 lines, to be grepped) — the documented source for every event and service name and its mode, and therefore the source `lib/host/index.js` should cite
 5. ~~`develop/framework/index.md` + `develop/cordis-tutorial/02-lifecycle-and-effects.md`~~ ✅
 6. ~~`reference/agent-lifecycle.md`~~ ✅ — and it is the authority for the trigger's firing condition, for the authority of `agent/pre-step`, and for `agent/*` being live-only
-7. `reference/subsystems/{session,session-query,token-meter,tools}.md` — grep; the consumed capabilities, plus `ctx.tools.guard` (the graph calls `ctx.tools` *"Tool registry and guarded execution pipeline"*, giving `lib/seams.js:75` a documented home)
+7. ~~the generated catalogue across `{core,session,filesystem,system-prompt,llm-streaming,tools}.md`~~ ✅ for **every name and mode this plugin declares** — the source map above is the result. **7b remains:** `ctx.tools.guard`, which `lib/seams.js:75` uses as a *literal name* (`ctx.tools.guard` is NOT among the events; the tools page is where the guarded pipeline is described)
 8. `develop/basic/publish.md` — packaging, the route the profile uses
 9. `reference/cookbook/adding-a-settings-card.md` — the card
 10. `extra/testing.md` + `extra/defensive-patterns.md` — testing strategy, defence patterns
