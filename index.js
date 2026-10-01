@@ -1,3 +1,4 @@
+import { createFsJournal } from './lib/host/fs-journal.js'
 import { createEventFeed } from './lib/host/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
@@ -184,6 +185,7 @@ async function apply(ctx, config) {
   // THE LIVE EVENT FEED: the holder for what the harness commits. It is read by `readEvents` below and is empty
   // until something fills it, which is the next commit -- an empty feed is exactly the previous behaviour.
   const feed = createEventFeed()
+  const fsJournal = createFsJournal()
   // THE SESSION'S OWN EVENTS, as one function, so the fallback and the comparison cannot drift apart. It is the
   // only thing here that needs a LIVE session -- which is why the feed exists, and why this is the function to
   // delete when the adapter reads sessionQuery instead.
@@ -559,6 +561,13 @@ async function apply(ctx, config) {
     } catch {
       // A listener the harness awaits must not become the reason a turn fails to close.
     }
+  })
+
+  // `fs/observed` LISTENERS MUST BE SYNCHRONOUS RECORDERS, quoted from the harness: "throws fail the tool call and
+  // returned promises are not awaited". A bug here would break the AGENT'S filesystem call rather than this
+  // plugin's record, so this is synchronous, returns nothing, and every access inside is guarded.
+  ctx.on('fs/observed', (target, observation, actor) => {
+    fsJournal.record(target, observation, actor)
   })
 
   ctx.on('agent/pre-step', (payload, next) => {
