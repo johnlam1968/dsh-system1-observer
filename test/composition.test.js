@@ -1,0 +1,142 @@
+// THE REAL-COMPOSITION TEST: the plugin mounted into a REAL Cordis context.
+//
+// WHY THIS EXISTS, IN THE POLICY'S OWN WORDS. `extra/testing.md:38`: "Hand-built ctx.plugin(...) suites are
+// insufficient: boot test-only cordis.yml through Loader and app/process, mock only external services or
+// nondeterministic inputs, and assert model-visible request/log, durable state, or user-visible output."
+//
+// Every other test in this repo hands `apply` a hand-written object that IMPLEMENTS this repo's beliefs about
+// Cordis. That is how four shape bugs survived 509 passing tests: the double agreed with the code. This file
+// mounts the real runtime instead, so the framework itself can disagree. What it exercises that no double can:
+//
+//   - `inject` is a real contract: the plugin stays PENDING until a service named `agents` exists;
+//   - registrations are real effects: a listener stops firing after the fiber is disposed;
+//   - `ctx.provide` really registers a service, and disposal really retracts it;
+//   - an async `apply` really does reach ACTIVE (the dsh-plugin-authoring skill claims otherwise for one
+//     plugin; here the runtime answers instead of an anecdote);
+//   - a configuration the plugin cannot honour really does fail the load, and `fiber.await()` throws it.
+//
+// THE JUDGE IS THE ONLY THING NOT REAL, and it is not reached at all here: the row is mounted with no seam
+// hooks, so the seam listeners do not exist and no HTTP call can happen. A seam-firing composition with a stub
+// judge server is the next increment, not this one.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import plugin from '../index.js'
+import { OBSERVER_SERVICE } from '../lib/service.js'
+
+/**
+ * The real Cordis runtime, from the harness install rather than from a dependency of this repo.
+ *
+ * The plugin is installed in a profile as a bundle, and the harness provides this package to it. A test that
+ * declared its own copy would be testing a different Cordis than the one that loads the plugin, so the runtime
+ * is resolved from the install. WHEN IT CANNOT BE FOUND THIS TEST FAILS rather than skipping: a skip would read
+ * as "checked" in a summary line, and this is the one check that can disagree with everything else here.
+ */
+async function realCordis() {
+  const candidates = []
+  if (process.env.DSH_CORDIS) candidates.push(process.env.DSH_CORDIS)
+  try {
+    const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
+    candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/cordis/package.json'))
+    candidates.push(join(root, '@deepseek-ai/cordis/package.json'))
+  } catch { /* no npm on PATH: the env var or nothing */ }
+  for (const manifest of candidates) {
+    if (!manifest.includes('package.json') || !existsSync(manifest)) continue
+    const entry = createRequire(manifest).resolve('@deepseek-ai/cordis')
+    return import(pathToFileURL(entry).href)
+  }
+  throw new Error(
+    'no reachable @deepseek-ai/cordis: set DSH_CORDIS to its package.json, or install a harness that provides it.\n' +
+    `looked in: ${candidates.join(', ') || '(nothing: no DSH_CORDIS and no npm root -g)'}`)
+}
+
+const { Context } = await realCordis()
+
+const AGENT = { id: 'session-a', session: { snapshotEvents: () => [] } }
+
+/** Mount the row the way the Loader does — `ctx.plugin(module, config)` — and wait for it to settle. */
+async function mount(config) {
+  const ctx = new Context()
+  // `inject = ['agents']` is a real contract: without this the fiber stays PENDING and `await` never settles.
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+  const fiber = ctx.plugin(plugin, config)
+  await fiber.await()
+  return { ctx, fiber }
+}
+
+const configFor = (tracePath) => ({ hooks: [], sessions: ['*'], turnEveryNTurns: 0, questions: { turn: [] }, tracePath })
+
+const lines = (path) => (existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').filter(Boolean) : [])
+const claim = { agent: AGENT, message: { id: 'peer-x', seq: 42, role: 'user', content: [{ type: 'text', text: 'the claimed one' }] }, turn: 7 }
+
+test('the real runtime mounts the row, and its service is reachable by key', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-'))
+  const { ctx, fiber } = await mount(configFor(join(dir, 'trace.jsonl')))
+  assert.ok(ctx.get(OBSERVER_SERVICE), `ctx.provide really registers a service other plugins can inject (${OBSERVER_SERVICE})`)
+  await fiber.dispose()
+})
+
+test('a live event reaches the trace: the world is asserted, not the return value', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-live-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const { ctx, fiber } = await mount(configFor(tracePath))
+
+  ctx.emit('agent/inbox/claimed', claim)
+  const after = lines(tracePath).map((line) => JSON.parse(line)).filter((line) => line.event === 'claimed')
+  assert.equal(after.length, 1, 'the listener the row registered inside the REAL runtime ran: ' + JSON.stringify(lines(tracePath)))
+  assert.equal(after[0].turn, 7)
+
+  await fiber.dispose()
+})
+
+test('dispose releases everything: the same event no longer reaches the trace (HMR safety)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-dispose-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const { ctx, fiber } = await mount(configFor(tracePath))
+
+  ctx.emit('agent/inbox/claimed', claim)
+  const before = lines(tracePath).length
+  assert.ok(before > 0)
+
+  await fiber.dispose()
+  ctx.emit('agent/inbox/claimed', { ...claim, turn: 8 })
+  assert.equal(lines(tracePath).length, before,
+    'a disposed row must not still be listening: every registration is supposed to be an effect (index.md:42-65)')
+  assert.equal(ctx.get(OBSERVER_SERVICE), undefined, 'and its service is retracted, not left dangling')
+})
+
+test('a disposed context can mount the row again: apply is re-entrant', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-again-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const first = await mount(configFor(tracePath))
+  await first.fiber.dispose()
+
+  // The same Context, the same services: a config save replaces the instance, so apply runs again against a
+  // context that has already seen it once (and a missing module-level state assumption would show up here).
+  const fiber = first.ctx.plugin(plugin, configFor(tracePath))
+  await fiber.await()
+  assert.ok(first.ctx.get(OBSERVER_SERVICE), 'the second mount registered its service')
+  await fiber.dispose()
+})
+
+test('a configuration the row cannot honour fails the LOAD, and await() carries the reason', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-fail-'))
+  writeFileSync(join(dir, 'blocker'), 'a file where a directory must be\n')
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+  const fiber = ctx.plugin(plugin, configFor(join(dir, 'blocker', 'trace.jsonl')))
+
+  // framework/index.md:24 -- FAILED is the documented outcome when apply throws; config.md:96-98 makes
+  // configuration errors loud. In a real boot this is the non-zero exit extra/testing.md:40 asks for.
+  await assert.rejects(fiber.await(), (error) => {
+    assert.match(String(error.message), /cannot write the trace/)
+    return true
+  })
+})
