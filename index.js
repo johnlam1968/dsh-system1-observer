@@ -609,6 +609,41 @@ async function apply(ctx, config) {
     fsJournal.record(target, observation, actor)
   })
 
+  // THE INTENT WATERFALLS: WHAT IS ABOUT TO HAPPEN, BESIDE WHAT DID. `fs/write-intent` and `fs/edit-intent` are
+  // SINGLE-SLOT decisions -- quoted from the harness: "the first listener that returns an intent owns the decision
+  // rather than composing with peers", and "calling next() yields the bare provider's unconditional write". So this
+  // records and hands the decision back UNTOUCHED: same call, same reference.
+  //
+  // THE SESSION IS NOT ON THIS EVENT. `actor` is declared "the opaque tool-execution context", so the record is keyed
+  // by `target.displayPath` -- the same FsTarget `fs/observed` already records. Intent and observation are therefore
+  // joinable on the path, which is the pair that makes "I created X" checkable rather than merely plausible. The
+  // event carries no content, so "what is about to be written" would have been the wrong claim.
+  //
+  // THE DECIDED INTENT IS RECORDED FROM THE PROMISE, DETACHED, AND THE ORIGINAL IS RETURNED. Returning a `.then()`
+  // chain would hand back a DIFFERENT promise resolving to the same value, and under first-returned-guard-wins that
+  // is exactly the substitution the contract forbids.
+  const intents = new Map()
+  const recordIntent = (kind, target, decision) => {
+    Promise.resolve(decision)
+      .then((intent) => {
+        const path = typeof target?.displayPath === 'string' ? target.displayPath : null
+        if (path === null) return
+        intents.set(path, { kind, intent: intent ?? null, at: Date.now() })
+      })
+      .catch(() => {})
+  }
+  const intentListener = (kind) => (target, actor, next) => {
+    // RECORDING IS BEST-EFFORT AND MUST NOT BECOME THE REASON A WRITE FAILS; the decision is the harness's.
+    const decision = typeof next === 'function' ? next() : undefined
+    try { recordIntent(kind, target, decision) } catch { /* recording is never load-bearing */ }
+    return decision
+  }
+  // TWO LITERAL SUBSCRIPTIONS, NOT A LOOP OVER NAMES. The inventory scans `ctx.on('...')` LITERALS and is right to:
+  // a host dependency reached through a variable is invisible to the audit, and the first version of this used a
+  // loop -- the declaration then read as stale, which is that check working.
+  ctx.on('fs/write-intent', intentListener('write'))
+  ctx.on('fs/edit-intent', intentListener('edit'))
+
   // THE TRIGGER IS THE HARNESS'S OWN TURN BOUNDARY, which is what step 2 of the adoption plan asked for.
   // `agent/pre-step` fires once per STEP, so counting its calls was a proxy for turns; `agent/turn-stopping` IS the
   // turn ending, carrying `{agent, turn, signal}` -- so the count and the thing counted are the same event.
