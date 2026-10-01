@@ -773,7 +773,7 @@ async function apply(ctx, config) {
     // and an operator could not tell a schedule that has not come round from one that will never fire. Measured:
     // with a set configured and the interval at 1, this handler produced ZERO trace lines, which is the same
     // evidence as a node that was never reached.
-    Promise.resolve(turnObserver.onAdmit({ sessionId, nextMessage: messages[messages.length - 1] }))
+    Promise.resolve(turnObserver.onAdmit({ sessionId, harnessTurn: payload?.turn, nextMessage: messages[messages.length - 1] }))
       .then((outcome) => {
       // THE SUBJECT'S COST, FROM THE HARNESS. `tokenMeter.measure(session)` is O(surface) and SYNCHRONOUS, and its
       // result says whether the number is usage, estimated or none. It is called HERE -- on the detached path, after
