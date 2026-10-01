@@ -170,26 +170,56 @@ test('events: every catalogue name this plugin relies on appears in the sources'
 //    import is wrong for a `link:` install, and a test is not the row.
 // ---------------------------------------------------------------------------------------------------------
 
-async function registryGate() {
+async function harnessPackage(name) {
   const candidates = []
   try {
     const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
-    candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/package.json'))
-    candidates.push(join(root, '@deepseek-ai/dsh-tools/package.json'))
+    candidates.push(join(root, `@deepseek-ai/dsh/node_modules/${name}/package.json`))
+    candidates.push(join(root, `${name}/package.json`))
   } catch { /* no npm on PATH */ }
   for (const manifest of candidates) {
     if (!existsSync(manifest)) continue
-    const entry = createRequire(manifest).resolve('@deepseek-ai/dsh-tools')
-    return import(pathToFileURL(entry).href)
+    return import(pathToFileURL(createRequire(manifest).resolve(name)).href)
   }
-  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it')
+  throw new Error(`no reachable ${name}: install a harness that provides it`)
 }
 
 test('every tool declaration passes the registry\'s own object-schema gate', async () => {
-  const { assertObjectJsonSchema } = await registryGate()
+  const { assertObjectJsonSchema } = await harnessPackage('@deepseek-ai/dsh-tools')
   const tools = [TRACE_TOOL, CONFIG_TOOL, DECIDE_TOOL]
   for (const tool of tools) {
     assert.equal(tool.parameters.type, 'object', `${tool.name} must be object-rooted`)
     assertObjectJsonSchema(tool.parameters)
   }
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 6. The Loader's own export unwrapping, on this build.
+//    `docs/dsh-plugin-contracts.md:39` asks for "a real Loader export-shape test", and this is one: the
+//    harness's Loader is imported and its own `unwrapExports` is called on THIS module's namespace. It is the
+//    authority three sources disagree about -- one template contracts page says a plugin has no default export,
+//    the official form list names three forms including the object one -- and it answers by measurement:
+//    `exports.default ?? exports`, so a default object IS what gets mounted, and the hazard belongs to the
+//    function form, whose named exports are discarded if a stray default sits beside them.
+// ---------------------------------------------------------------------------------------------------------
+
+test('the Loader takes the object form: unwrapExports returns this module\'s default, by identity', async () => {
+  const { default: Loader } = await harnessPackage('@deepseek-ai/cordis-plugin-loader')
+  const unwrap = Loader.prototype.unwrapExports
+  assert.equal(typeof unwrap, 'function', 'the Loader unwraps exports itself; this is that function, not a copy of it')
+  const loader = Object.create(Loader.prototype)
+
+  const namespace = await import(new URL('../index.js', import.meta.url).href)
+  const mounted = unwrap.call(loader, namespace)
+  assert.equal(mounted, plugin, 'the Loader mounts the DEFAULT object -- by identity, not a rebuilt copy')
+  for (const key of ['name', 'inject', 'apply', 'Config']) {
+    assert.ok(mounted[key] !== undefined, `the mounted value carries ${key}`)
+  }
+
+  // AND THE HAZARD THE OTHER RULE IS ABOUT, measured rather than repeated: a function-form namespace that also
+  // carries a default mounts the DEFAULT and loses `name`, `inject` and `Config` -- which is why the two rules
+  // are not in conflict, only about different forms.
+  const strayed = unwrap.call(loader, { default: { apply: () => {} }, name: 'x', inject: [], Config: () => {} })
+  assert.equal(strayed.name, undefined, 'a function plugin with a stray default loses its namespace exports')
+  assert.equal(typeof strayed.apply, 'function', 'and mounts the default instead')
 })
