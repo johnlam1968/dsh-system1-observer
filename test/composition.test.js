@@ -29,6 +29,9 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import plugin from '../index.js'
+import { TRACE_TOOL_NAME } from '../lib/tool.js'
+import { CONFIG_TOOL_NAME } from '../lib/config-tool.js'
+import { DECIDE_TOOL_NAME } from '../lib/decide-tool.js'
 import { OBSERVER_SERVICE } from '../lib/service.js'
 
 /**
@@ -139,4 +142,64 @@ test('a configuration the row cannot honour fails the LOAD, and await() carries 
     assert.match(String(error.message), /cannot write the trace/)
     return true
   })
+})
+
+
+/**
+ * The harness's OWN tool registry, from the install rather than from a dependency of this repo -- the same rule as
+ * `realCordis` above, for the same reason: a different registry would be a different test.
+ */
+async function realToolRegistry() {
+  const candidates = []
+  try {
+    const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
+    candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/package.json'))
+    candidates.push(join(root, '@deepseek-ai/dsh-tools/package.json'))
+  } catch { /* no npm on PATH */ }
+  for (const manifest of candidates) {
+    if (!existsSync(manifest)) continue
+    const entry = createRequire(manifest).resolve('@deepseek-ai/dsh-tools')
+    return import(pathToFileURL(entry).href)
+  }
+  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it')
+}
+
+const { ToolRuntime } = await realToolRegistry()
+
+/** A systemPrompt stub carrying only what the registry calls on it, taken from its own source. */
+const systemPromptStub = () => ({ tools: () => {}, section: () => {}, getSectionOrder: () => 0 })
+
+test('the REAL tool registry registers the row\'s tools, and dispose takes them back out', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'composition-registry-'))
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+  ctx.provide('systemPrompt', systemPromptStub())
+
+  const registryFiber = ctx.plugin(ToolRuntime)
+  await registryFiber.await()
+  const registry = ctx.get('tools')
+  assert.ok(registry, 'the real registry is mounted as `tools`')
+
+  // THE ROW'S OWN `ctx.inject(['tools'], ...)` IS WHAT PUTS THEM HERE, so this also exercises the optional-access
+  // path against a REAL service rather than against a double that always answers.
+  const fiber = ctx.plugin(plugin, configFor(join(dir, 'trace.jsonl')))
+  await fiber.await()
+  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME]) {
+    assert.ok(registry.get(name), `${name} is registered while the row is mounted`)
+  }
+
+  await fiber.dispose()
+
+  // THE HMR-SAFETY ASSERTION FOR THIS REGISTRY, which `extra/testing.md:9` requires of every one of them
+  // ("dispose the contributing fiber, assert cleanup"). Disposal is the REGISTRY's work, tracked by Cordis against
+  // the contributing fiber -- which is precisely why a hand-written double cannot check it: a double would have to
+  // implement the tracking that is under test.
+  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME]) {
+    assert.equal(registry.get(name), undefined, `${name} is gone once the row is disposed`)
+  }
+  // AND THE REGISTRY IS STILL THERE, which is the control: the three absences above are our disposal, not the whole
+  // registry having gone away with the row.
+  assert.ok(ctx.get('tools'), 'the registry itself outlives the row it served')
+
+  await registryFiber.dispose()
 })
