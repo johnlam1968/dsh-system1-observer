@@ -27,6 +27,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { createServer } from 'node:http'
 
 import plugin from '../index.js'
 import { TRACE_TOOL_NAME } from '../lib/tool.js'
@@ -202,4 +203,80 @@ test('the REAL tool registry registers the row\'s tools, and dispose takes them 
   assert.ok(ctx.get('tools'), 'the registry itself outlives the row it served')
 
   await registryFiber.dispose()
+})
+
+
+test('a seam fires through the real runtime: the judge answers, the trace records it, and the decision returns BY IDENTITY', async () => {
+  // THE JUDGE IS THE ONE EXTERNAL SERVICE, and it is stubbed at the only boundary it has: an HTTP endpoint. This is
+  // the composition the plugin exists for -- the harness loop reaching a decision model -- run inside the harness's
+  // own runtime rather than against a hand-built context.
+  const seen = []
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', (chunk) => { body += chunk })
+    req.on('end', () => {
+      seen.push(JSON.parse(body))
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ answers: { a_noul: { noul: 0.9 } } }))
+    })
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+  const dir = mkdtempSync(join(tmpdir(), 'composition-seam-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+
+  const fiber = ctx.plugin(plugin, {
+    hooks: ['admit'], sessions: ['*'], tracePath,
+    questions: { admit: [{ id: 'a_noul', type: 'noul', instructions: 'Is this true?' }] },
+    wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: 5000, turnEveryNTurns: 0,
+  })
+  await fiber.await()
+
+  // THE WATERFALL, DISPATCHED THE WAY THE HARNESS DISPATCHES IT (`events.md:70-79`: `next()` is mandatory, and a
+  // listener that returns without calling it short-circuits the pipeline).
+  const decision = { verdict: 'enter', messages: [{ role: 'user', content: [{ type: 'text', text: 'the request' }] }] }
+  const payload = { agent: AGENT, turn: 3, step: 1, messages: decision.messages }
+  const returned = await ctx.waterfall('agent/pre-step', payload, async () => decision)
+
+  // IDENTITY, NOT SHAPE. `events.md:68` says a waterfall listener may WRAP the downstream value; the code's own
+  // comment claims it returns the same reference and never a copy, "so nothing downstream sees a different object".
+  // A deep-equal assertion would pass on a rebuilt object, which is the failure the claim is about.
+  assert.equal(returned, decision, 'the downstream decision must come back as the SAME object')
+
+  // THE OBSERVATION IS AWAITED BEFORE THE DECISION IS RETURNED, so the record already exists and this needs no poll:
+  // a poll here would hide a listener that returned early and judged afterwards.
+  const lines = existsSync(tracePath) ? readFileSync(tracePath, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []
+  assert.equal(seen.length, 1, 'the judge was called exactly once: ' + JSON.stringify(lines.map((l) => l.event)))
+  assert.ok(lines.some((l) => l.event === 'call' || l.hook === 'admit'),
+    'the trace records the seam it asked about: ' + JSON.stringify(lines.map((l) => l.event)))
+
+  await fiber.dispose()
+  await new Promise((resolve) => server.close(resolve))
+})
+
+
+test('the serial turn trigger returns undefined, so the listeners BEHIND it still run', async () => {
+  // `events.md:58-64`: a serial dispatch awaits its listeners in order, and "the first return that is not null, false
+  // or undefined TERMINATES the rest". So the row's trigger returning a value would silently suppress every listener
+  // registered after it -- which is why the code returns undefined at every gate, and why the consequence is asserted
+  // here rather than the return value. A test of the return value alone would pass on a listener that returns
+  // `undefined` and still blocks the chain some other way.
+  const dir = mkdtempSync(join(tmpdir(), 'composition-serial-'))
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+
+  const fiber = ctx.plugin(plugin, configFor(join(dir, 'trace.jsonl')))
+  await fiber.await()
+
+  // REGISTERED AFTER THE ROW'S OWN LISTENER, because the row registers at mount -- so this one is behind it in the
+  // order the harness dispatches.
+  let laterRan = false
+  ctx.on('agent/turn-stopping', () => { laterRan = true })
+
+  await ctx.serial('agent/turn-stopping', { agent: AGENT, turn: 5, messages: [{ text: 'the reaction' }] })
+  assert.equal(laterRan, true, 'a value returned by an earlier serial listener would have terminated this one')
+
+  await fiber.dispose()
 })

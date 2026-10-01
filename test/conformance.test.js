@@ -161,18 +161,6 @@ test('events: every catalogue name this plugin relies on appears in the sources'
   }
 })
 
-test('events: the two contracts the documentation makes mandatory are visible in the source', () => {
-  // TEXTUAL, AND THEREFORE WEAK. These would not catch a subtler ordering bug. They catch the catastrophic
-  // version of each: a waterfall listener that never calls next() SHORT-CIRCUITS the whole pipeline
-  // (events.md:68-83), and a serial listener that returns a value TERMINATES the listeners behind it, which is
-  // why the turn trigger must return undefined at every gate (events.md:58-64). One grep each, and the
-  // alternative is asserting the harness's dispatch behaviour without a harness.
-  assert.ok(read('index.js').includes("typeof next === 'function' ? next() : undefined"),
-    'the waterfall listener must call next() and return its result')
-  const fromTrigger = read('index.js').slice(read('index.js').indexOf("ctx.on('agent/turn-stopping'"))
-  assert.ok(fromTrigger.includes('return undefined'), 'the serial trigger must return undefined')
-})
-
 // ---------------------------------------------------------------------------------------------------------
 // 5. The tool declarations, against the registry's OWN schema gate.
 //    `adding-a-tool.md:44`: an explicit object node must declare `additionalProperties`, and a raw registration
@@ -194,7 +182,7 @@ async function registryGate() {
     const entry = createRequire(manifest).resolve('@deepseek-ai/dsh-tools')
     return import(pathToFileURL(entry).href)
   }
-  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it, or skip this check explicitly')
+  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it')
 }
 
 test('every tool declaration passes the registry\'s own object-schema gate', async () => {
