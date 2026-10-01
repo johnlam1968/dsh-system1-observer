@@ -1,0 +1,1 @@
+id: my-plugin\nname: My Plugin\nversion: 1.0.0\nexit: file: src/index.js
