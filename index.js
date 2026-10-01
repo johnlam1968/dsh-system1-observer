@@ -472,6 +472,16 @@ async function apply(ctx, config) {
     }),
     // The session's events, obtained the way the peer bridge does: the agents service by session id, then the
     // agent's own session. A missing service or session yields no events, which `composeTurnState` refuses on.
+    readSurfaceSeqs: (sessionId) => {
+      try {
+        const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
+        const agent = agents !== undefined && typeof agents.get === 'function' ? agents.get(sessionId) : undefined
+        const nodes = agent?.session?.surface?.nodes
+        return Array.isArray(nodes) ? [...nodes] : null
+      } catch {
+        return null
+      }
+    },
     readEvents: (sessionId) => {
     // THE FEED FIRST, THEN THE SESSION. An empty feed falls through to exactly the behaviour that was here before.
     const held = feed.events(sessionId)

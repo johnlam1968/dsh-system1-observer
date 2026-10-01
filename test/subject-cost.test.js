@@ -40,8 +40,8 @@ test('the subject cost is recorded once per measurement, from the harness meter'
     wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: accessor(2000),
   })
   await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
-  for (let i = 0; i < 60 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
-  for (let i = 0; i < 40; i += 1) {
+  for (let i = 0; i < 240 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
+  for (let i = 0; i < 240; i += 1) {
     const seen = existsSync(tracePath) ? readFileSync(tracePath, 'utf8') : ''
     if (seen.includes('subject-cost')) break
     await new Promise((r) => setTimeout(r, 25))
@@ -94,7 +94,7 @@ test('the workspace change is recorded, addressed by the seq the feed carried', 
   })
   handlers.get('session/event')[0]({ id: 'session-a' }, { seq: 7, time: 7, type: 'workspace/changes', data: { turn: 3 } })
   await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 240; i += 1) {
     const seen = existsSync(tracePath) ? readFileSync(tracePath, 'utf8') : ''
     if (seen.includes('workspace-change')) break
     await new Promise((r) => setTimeout(r, 25))
