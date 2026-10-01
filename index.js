@@ -644,10 +644,10 @@ async function apply(ctx, config) {
   // UNDEFINED: no promise, and no work that could delay a close. An 800ms judge call here would hold every turn
   // open, which is why the measurement is dispatched nowhere near it.
   //
-  // THIS IS THE SHADOW, and it changes no behaviour: it records the turn the harness says is ending, so the
-  // numbering can be compared against the counter the trigger uses today. The trigger still runs on `pre-step`
-  // until those two agree, because swapping a trigger on the strength of a contract I have read is not the same
-  // as swapping it on one I have watched.
+  // THIS IS THE SHADOW, and it changes no behaviour: it records the turn the harness says is ending, beside the
+  // trigger that now runs on this SAME event. Both listeners are subscribed to `agent/turn-stopping`, so the trace
+  // carries the harness's own numbering next to the counter the trigger keeps -- which is the comparison that was
+  // once the reason for not switching, and is now the check that the switch is faithful.
   ctx.on('agent/turn-stopping', (payload) => {
     try {
       evidence.trace('turn-stopping', {
@@ -798,6 +798,24 @@ async function apply(ctx, config) {
 
         if (outcome !== undefined && (outcome.refused === true || outcome.failed === true)) {
           evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement did not run: ${outcome.reason ?? 'no reason given'}` })
+        }
+        // AND A CADENCE REFUSAL IS RECORDED TOO -- which the comment above this chain CLAIMS and the code did not do.
+        // `shouldFire` saying "not this turn" is by far the commonest outcome, and it wrote nothing: measured live,
+        // six consecutive boundaries of a live session produced no line at all, so "the schedule has not come round"
+        // and "the trigger is dead" were indistinguishable in the trace. The boundary number is the point of the
+        // line: it is what shows the counter advancing, and against what interval.
+        if (outcome !== undefined
+          && outcome.fired !== true
+          && outcome.refused !== true
+          && outcome.failed !== true
+          && typeof outcome.turn === 'number'
+          && outcome.turn > 0) {
+          evidence.trace('skip', {
+            hook: 'turn',
+            agentId: sessionId ?? null,
+            turn: outcome.turn,
+            reason: `not this turn: boundary ${outcome.turn} of every ${everyNTurns}`,
+          })
         }
       })
       .catch((error) => {
