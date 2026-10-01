@@ -248,7 +248,7 @@ async function apply(ctx, config) {
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
   // site working across the two transports; assigning the client itself to `decide` made every call throw
   // "decide is not a function", which no unit test saw because `apply` was never executed.
-  let decide = (request) => wire.decide(request)
+  let decide = (request, options) => wire.decide({ ...request, ...(options?.signal === undefined ? {} : { signal: options.signal }) })
 
   // THE MOUNT LINE IS WRITTEN WHEN THE TRANSPORT IS KNOWN -- NOT WHEN `apply` RETURNS. `ctx.inject`'s
   // callback runs through a cordis fiber, so at the end of `apply` the transport is still `wire`: measured
@@ -366,7 +366,7 @@ async function apply(ctx, config) {
     // prevent. `mount` supplies the defaults the row was configured with, so the tool's own description names the
     // backend it will actually reach.
     tools.register(createDecideTool({
-      decide: (request) => decide(request),
+      decide: (request, options) => decide(request, options),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
       // The line goes to the same sink as every other one, so a reader finds it where it already looks.
@@ -457,6 +457,9 @@ async function apply(ctx, config) {
       provider: mount.provider ?? undefined,
       model: mount.model ?? undefined,
     })
+    // THE SERVICE PATH CANNOT CARRY A SIGNAL. `dsh-system1`'s `decide(request)` is another plugin's API and takes no
+    // signal, so a call made through the service cannot be aborted in flight -- the tool's entry check is what a
+    // cancelled call gets, and saying so is better than pretending the transport is uniform.
     decide = (request) => viaService.decide(request)
     transport.kind = 'service'
     writeMount()
@@ -475,7 +478,7 @@ async function apply(ctx, config) {
     provider,
     model,
   })
-  const observer = createObserver({ decide: (request) => decide(request), trace: evidence.trace, readConfig })
+  const observer = createObserver({ decide: (request, options) => decide(request, options), trace: evidence.trace, readConfig })
 
   // THE TURN TRIGGER. It fires on `agent/pre-step` -- the event the `admit` seam maps to -- because an admit ENDS
   // the turn before it, so the exchange being judged has closed by the time this runs.

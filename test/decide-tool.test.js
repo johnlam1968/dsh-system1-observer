@@ -178,3 +178,35 @@ test('the provenance is read from a NESTED envelope as well as a flat one', asyn
   assert.equal(flatOut.executed, undefined, 'a top-level executed is NOT projected: the envelope is the only source')
   assert.equal(flatOut.durationMs, undefined)
 })
+
+// DELTA 6b: THE CALLER'S CANCELLATION. `adding-a-tool.md:49` makes `exec.signal` mandatory rather than advisory,
+// and the transport has honoured one since it was written -- these two tests are about the wiring in between,
+// which dropped it in three places: the tool's `execute` took only `args`, and both `decide` assignments in
+// index.js forwarded the request without the options that carry it.
+test('a signal already aborted means the backend is NEVER called', async () => {
+  const { calls, decide } = stub({ kind: 'answers', answers: {} })
+  const tool = createDecideTool({ decide })
+  const controller = new AbortController()
+  controller.abort()
+
+  await assert.rejects(tool.execute({ state: 'x', questions: [spec] }, { signal: controller.signal }),
+    /cancelled before it started/)
+  assert.equal(calls.length, 0, 'a cancelled call must not reach the model at all: ' + JSON.stringify(calls))
+})
+
+test('a live signal is handed to the backend, not swallowed', async () => {
+  // ITS OWN SPY, because the shared `stub` records only the first argument -- and the signal travels in the
+  // SECOND, as `decide(request, options)`. My first version of this test read `calls[0].signal` and failed for
+  // exactly that reason: the assertion was wrong about an interface I had just changed.
+  const seen = []
+  const tool = createDecideTool({
+    decide: async (request, options) => { seen.push({ request, options }); return { kind: 'answers', answers: {} } },
+  })
+  const controller = new AbortController()
+
+  await tool.execute({ state: 'x', questions: [spec] }, { signal: controller.signal })
+  assert.equal(seen.length, 1)
+  // THE SAME OBJECT, asserted by identity: a copy would satisfy a structural check while separating the caller's
+  // controller from the one the transport listens to.
+  assert.equal(seen[0].options.signal, controller.signal, "the caller's own signal reaches decide")
+})
