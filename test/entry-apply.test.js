@@ -324,9 +324,13 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   assert.match(after.text, /1 errors/, 'the failed call the row recorded is what the agent sees')
   assert.match(after.text, /sessions live now: session-aaa, session-bbb/, 'live sessions come from the agents service')
 
-  // JUNK ARGUMENTS MUST NOT THROW: `execute` receives whatever the model sent.
-  const junk = await tool.execute({ run: 42, tail: 'lots', full: 'yes' })
-  assert.match(junk.text, /trace /)
+  // JUNK ARGUMENTS ARE REFUSED. THIS TEST ASSERTED THE OPPOSITE, and the comment above the old line said so:
+  // "junk arguments must not throw: execute receives whatever the model sent." That was written before the tool
+  // reference was read. `reference/cookbook/adding-a-tool.md:44` makes a raw registration responsible for validating
+  // its own arguments, and `tail: 'lots'` being quietly ignored is exactly how a call that LOOKS fulfilled returns
+  // the wrong window -- the failure mode this repository keeps finding. `:48` makes a throw the documented failure
+  // path: the registry catches it and the model sees `isError`.
+  await assert.rejects(tool.execute({ run: 42, tail: 'lots', full: 'yes' }), /must be/, 'a malformed call is refused, not silently adjusted')
 
   // RENDER TURNS THE VALUE INTO A TEXT BLOCK, which is what the model actually reads.
   const blocks = tool.output.render({}, { text: after.text })
