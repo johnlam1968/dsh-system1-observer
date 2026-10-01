@@ -184,6 +184,9 @@ async function apply(ctx, config) {
   const mount = plainConfig(config)
   // THE LIVE EVENT FEED: the holder for what the harness commits. It is read by `readEvents` below and is empty
   // until something fills it, which is the next commit -- an empty feed is exactly the previous behaviour.
+  // THE ANNOUNCED TURN BOUNDARY, held per session. Declared HERE because the observer below is
+  // constructed before the listener that fills it, and `readClaimed` closes over this binding.
+  const claimed = new Map()
   const feed = createEventFeed()
   const fsJournal = createFsJournal()
   // THE SESSION'S OWN EVENTS, as one function, so the fallback and the comparison cannot drift apart. It is the
@@ -472,6 +475,9 @@ async function apply(ctx, config) {
     }),
     // The session's events, obtained the way the peer bridge does: the agents service by session id, then the
     // agent's own session. A missing service or session yields no events, which `composeTurnState` refuses on.
+    // WHAT THE HARNESS ANNOUNCED AS THE TURN'S OPENING MESSAGE. Held by the `agent/inbox/claimed` recorder below;
+    // null when nothing was announced, which leaves the composer's own inference in charge.
+    readClaimed: (sessionId) => claimed.get(sessionId) ?? null,
     readSurfaceSeqs: (sessionId) => {
       try {
         const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
@@ -561,7 +567,6 @@ async function apply(ctx, config) {
   //
   // HELD, NOT YET CONSUMED, and that is deliberate: the boundary rule has three rounds of history and moves on its
   // own, with a test that the announced message wins and a control that its absence falls back to the inference.
-  const claimed = new Map()
   ctx.on('agent/inbox/claimed', (payload) => {
     try {
       const sessionId = payload?.agent?.id
