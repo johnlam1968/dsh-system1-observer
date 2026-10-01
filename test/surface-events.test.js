@@ -156,3 +156,33 @@ test('the tool window reads the DECLARED shapes: tool-call blocks and tool/resul
   assert.match(String(assumed['TOOL CALLS']), /find_dsh_plugin/, 'the assumed block shape is still read')
   assert.match(String(assumed['TOOL CALLS']), /nothing/, 'and its result')
 })
+
+// THE ANNOUNCED REQUEST WINS, AND THE FALLBACK STILL DECIDES WHEN NOTHING IS ANNOUNCED.
+//
+// THE TWO PATHS READ THE SAME FOUR EVENTS AS DIFFERENT EXCHANGES, and that is the point of the signal. `nextMessage`
+// is the REACTION; `agent/inbox/claimed`'s message is the REQUEST. With no reaction supplied, the inference takes the
+// newest operator message AS the reaction -- so a NEW REQUEST is silently read as a reply to the previous turn, and
+// the wrong exchange is judged with no sign that it was. Announcing the second request is what separates them.
+test('the announced request pins the window, and its absence falls back to the inference', () => {
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const assistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
+  const events = [user(1, 'THE FIRST REQUEST'), assistant(2, 'the reply to it'), user(3, 'THE SECOND REQUEST'), assistant(4, 'the reply to that')]
+
+  // ANNOUNCED: seq 3 opens the turn, so the SECOND exchange is judged and seq 3 is its REQUEST.
+  const announced = composeTurnState({ events, claimedRequest: { message: { text: 'THE SECOND REQUEST', seq: 3 }, seq: 3, turn: 2 } })
+  assert.notEqual(announced.refused, true, 'an announced request composes: ' + String(announced.reason))
+  assert.match(String(announced.sections?.['OPERATOR REQUEST']), /THE SECOND REQUEST/, 'the announced message is the request')
+  assert.match(String(announced.sections?.['AGENT RESPONSE']), /the reply to that/, 'and the response is the one that FOLLOWS it')
+
+  // INFERRED: with nothing announced, seq 3 is taken as the REACTION, so the FIRST exchange is judged instead --
+  // and seq 3 appears as the operator's NEXT MESSAGE rather than as a request.
+  const inferred = composeTurnState({ events })
+  assert.match(String(inferred.sections?.['OPERATOR REQUEST']), /THE FIRST REQUEST/, 'the inference judges the exchange BEFORE the newest operator message')
+  assert.match(String(inferred.sections?.['AGENT RESPONSE']), /the reply to it/)
+  assert.match(String(inferred.sections?.['OPERATOR NEXT MESSAGE']), /THE SECOND REQUEST/, 'which it reads as the reaction')
+
+  // THE CONTRAST: same events, different exchanges. Without this, the announced case could pass because both paths
+  // happened to agree -- which is exactly what my first version of this test assumed, wrongly.
+  assert.notEqual(String(announced.sections?.['OPERATOR REQUEST']), String(inferred.sections?.['OPERATOR REQUEST']), 'the two paths judge different requests')
+  assert.notEqual(String(announced.sections?.['AGENT RESPONSE']), String(inferred.sections?.['AGENT RESPONSE']), 'and different responses')
+})
