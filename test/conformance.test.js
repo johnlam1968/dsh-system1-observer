@@ -19,6 +19,12 @@ import { readConfigValue } from '../lib/config-value.js'
 import { HOST_EVENTS } from '../lib/host/index.js'
 import { DEFAULT_MAX_PER_SESSION } from '../lib/host/feed.js'
 import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../lib/host/fs-journal.js'
+import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
+import { createTraceTool } from '../lib/tool.js'
+import { createConfigTool } from '../lib/config-tool.js'
+import { createDecideTool } from '../lib/decide-tool.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const read = (p) => readFileSync(join(ROOT, p), 'utf8')
@@ -35,6 +41,10 @@ const plugin = (await import(new URL('../index.js', import.meta.url).href)).defa
  *   llm-streaming.md:1068 llm/stream · tools.md:606 tools/execute · tools.md:630 tools/post-execute
  *   tools.md:655 tools/pre-execute · tools.md:705 tools/result
  */
+const TRACE_TOOL = createTraceTool({ path: '/tmp/none.jsonl', runId: () => 'r', liveAgents: () => [] })
+const CONFIG_TOOL = createConfigTool({ read: () => ({}), write: () => ({}), record: () => {} })
+const DECIDE_TOOL = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }), record: () => {} })
+
 const CATALOGUE = Object.freeze({
   'agent/inbox/claimed': 'emit',
   'agent/pre-step': 'waterfall',
@@ -161,4 +171,37 @@ test('events: the two contracts the documentation makes mandatory are visible in
     'the waterfall listener must call next() and return its result')
   const fromTrigger = read('index.js').slice(read('index.js').indexOf("ctx.on('agent/turn-stopping'"))
   assert.ok(fromTrigger.includes('return undefined'), 'the serial trigger must return undefined')
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 5. The tool declarations, against the registry's OWN schema gate.
+//    `adding-a-tool.md:44`: an explicit object node must declare `additionalProperties`, and a raw registration
+//    skips the DSL path that would have compiled and checked it. The harness ships the gate itself --
+//    `assertObjectJsonSchema` -- so the declaration is checked by the code that will receive it, not by a second
+//    opinion of ours. Imported here and NOT by the plugin: `lib/tool.js:8` records why a module-level harness
+//    import is wrong for a `link:` install, and a test is not the row.
+// ---------------------------------------------------------------------------------------------------------
+
+async function registryGate() {
+  const candidates = []
+  try {
+    const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
+    candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/package.json'))
+    candidates.push(join(root, '@deepseek-ai/dsh-tools/package.json'))
+  } catch { /* no npm on PATH */ }
+  for (const manifest of candidates) {
+    if (!existsSync(manifest)) continue
+    const entry = createRequire(manifest).resolve('@deepseek-ai/dsh-tools')
+    return import(pathToFileURL(entry).href)
+  }
+  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it, or skip this check explicitly')
+}
+
+test('every tool declaration passes the registry\'s own object-schema gate', async () => {
+  const { assertObjectJsonSchema } = await registryGate()
+  const tools = [TRACE_TOOL, CONFIG_TOOL, DECIDE_TOOL]
+  for (const tool of tools) {
+    assert.equal(tool.parameters.type, 'object', `${tool.name} must be object-rooted`)
+    assertObjectJsonSchema(tool.parameters)
+  }
 })
