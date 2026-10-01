@@ -23,6 +23,7 @@ synonym for "probably fine").
 | 2 | `framework/service.md`, `reference/capability-seams.md` | the `inject` vs `ctx.get` split **CONFORMS** — the plugin's most-questioned pattern is exactly what the docs prescribe; the generated-service rule lands on our hand-written inventory |
 | 3 | `framework/events.md` | **all four modes conform**, including the waterfall `next()` contract; the doc's Cordis-event vs session-event-type rule is the one whose absence caused the worst bug; the documented event list is the generated `cordis-surface` block |
 | 4 | `framework/index.md`, `cordis-tutorial/02-lifecycle-and-effects.md` | rows 4 and 8 **CONFORM**: every registration is tracked, no unmanaged resource is held, no module-level mutable state, so dispose → apply is clean. New rules recorded: teardown ordering; and a minor delta — an unwritable `tracePath` degrades silently where the docs make it a failed load |
+| 5 | `reference/agent-lifecycle.md` | the trigger's firing condition, the authority of `agent/pre-step`, and **a correction**: `agent/inbox/claimed` is documented and live-only — `agent/*` events are not persisted — so my "never emitted" verdict used an instrument that could not see it, and rounds 155–159 were right |
 
 ---
 
@@ -39,6 +40,7 @@ synonym for "probably fine").
 | `site/develop/framework/events.md` | the four event modes and their contracts, `ctx.on` as an effect, and **Cordis events vs session event types** |
 | `site/develop/framework/index.md` | fiber states, the enumerated tracked-registration list, teardown ordering, `ctx.plugin` child fibers, HMR |
 | `site/develop/cordis-tutorial/02-lifecycle-and-effects.md` | effects in practice: effect bodies run at load, disposers at unload, and why you rarely need to write one |
+| `site/reference/agent-lifecycle.md` | the turn/step sequence diagram: `agent/*` as live coordination, `session/event` as the replayable record, and the exact condition under which `turn-stopping` fires |
 
 ## Conventions extracted
 
@@ -62,6 +64,11 @@ synonym for "probably fine").
 18. **Teardown ordering**: disposers begin in **reverse registration order**, but multiple **asynchronous** disposers run **concurrently** and are not guaranteed to complete one at a time. Steps with an order dependency must live in a **single** `ctx.effect()` disposer that awaits them sequentially (index.md:65, tutorial:96).
 19. **Fiber states**: `PENDING → LOADING → ACTIVE`, `ACTIVE → UNLOADING → DISPOSED`, and **`FAILED` when `apply` or config validation throws**. PENDING means a required service is not ready — the standing answer to "why does my plugin produce nothing" (index.md:9-27, tutorial:70-84,81).
 20. **`ctx.plugin()` mounts a child fiber** with its own lifecycle, disposed with its parent; `fiber.dispose()` resolves only after all asynchronous cleanup and recurses into children. A **function** plugin needs no `apply`; only the **object** form requires one (index.md:67-99, tutorial:66-68).
+21. **The turn/step sequence** (agent-lifecycle.md:12-78): `turn/start` → claim queued input → `agent/pre-step` waterfall → `step/start` → one `user/message` per entered message → `system-prompt/assemble` waterfall → `agent/request` waterfall → `llm/stream` waterfall → `assistant/message` → `tool/call` → ordered pre, concurrent execute, ordered post → `tool/result` → `step/end` → optionally `agent/turn-stopping` → `turn/end`.
+22. **`agent/turn-stopping` is a *serial terminal checkpoint* that fires only on a natural stop with an empty next-step inbox** (agent-lifecycle.md:65-67) — not for turns ended by error, abort or `max-tokens`.
+23. **`agent/pre-step`'s returned decision is authoritative**, and a listener that wraps `next()` **preserves downstream messages and `startsRequestSeries`** unless it deliberately replaces them (agent-lifecycle.md:32-36,84).
+24. **`agent/*` is live coordination; `session/event` is the replayable record.** An SDK consumer needing a transcript reads `session/event` (agent-lifecycle.md:10,86).
+25. **`assistant/message` is written for every successful provider call — including empty content and `max-tokens` finishes — and empty content does NOT enter derived history**; a failure, retry, cancel or stream error that settles with no surface message is recorded as `assistant/attempt` (agent-lifecycle.md:80). Compaction handles pressure through `agent/pre-step` and canonical overflow through `agent/request-error`, opening a retry turn only when pruning or summary advanced the **surface replacement generation** (agent-lifecycle.md:82).
 
 ## Where this plugin stands
 
@@ -86,7 +93,11 @@ synonym for "probably fine").
 | 17 | teardown ordering: reverse registration order, but asynchronous disposers run **concurrently** | no `ctx.effect` is registered anywhere, so there is nothing to order | **N/A today, rule recorded** — index.md:65, tutorial:96. It becomes binding the moment an effect is added (Phase 1) |
 | 18 | `ctx.plugin()` child fibers; a function plugin needs no `apply`, only the object form does | one plugin, object form with `apply`; no child plugins | **CONFORMS** — tutorial:66. The object form is the one that requires `apply`, and `index.js:886` provides it |
 | 19 | **`FAILED`** is the documented outcome when `apply` **or config validation** throws | config validation is Cordis's; the trace writer degrades silently — a `tracePath` that cannot be opened produces no line and no failure | **DELTA (minor)** — a path that cannot be written is a configuration error, and the documented outcome is a failed load with a clear message, not a silent absence of records |
-| 20 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
+| 20 | `agent/turn-stopping` fires on a natural stop with an empty inbox | the trigger is `agent/turn-stopping`, and every in-scope boundary writes a `turn-boundary` line | **CONFORMS** — agent-lifecycle.md:65-67, with a coverage caveat worth stating plainly: the cadence counts **naturally completed** turns, so a turn ended by error, abort or `max-tokens` is not counted at all |
+| 21 | `agent/pre-step` returns an authoritative decision; wrapping `next()` preserves downstream | the admit seam wraps `next()` and returns it untouched (`lib/register.js`, the waterfall branch) | **CONFORMS** — agent-lifecycle.md:84 |
+| 22 | an empty `assistant/message` is persisted but does **not** enter derived history | the composer takes the last assistant message in the window as the response, whatever its text | **UNVERIFIED** — a turn whose provider returned empty content would yield an empty `AGENT RESPONSE` rather than a refusal; worth a check in Phase 3 |
+| 23 | `assistant/attempt` records a stream for failures settling with no surface message | not consumed | **UNVERIFIED** — the refusal path covers the absence of a response, but nothing reads the attempt record, so a failed turn's state is thin |
+| 24 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
 
 ## Deltas worth naming
 
@@ -104,16 +115,16 @@ synonym for "probably fine").
 | tool blocks are `tool_use` with `input` | `ContentBlockMap` declares `tool-call` with `arguments` as a JSON **string** | `TOOL CALLS` was **empty on every measurement ever taken** |
 | a user message wraps its payload in `data.message` | `'user/message': UserMessage` — `data` **is** the message | declared-shape messages were dropped |
 | `readSurface` returns `{ nodes }` | `SessionSurfaceSnapshot` = `{ session, inheritedEventCount, capturedThroughSeq, events }` | the oracle reported disagreement it never measured |
-| `agent/inbox/claimed` announces each turn's opening message | declared, and **never emitted** — zero in every session log on disk | rounds 155–159 built on a signal that does not fire |
+| ~~`agent/inbox/claimed` never fires~~ | **the event is documented and live** (agent-lifecycle.md:31,70) and `agent/*` events are **not persisted to the session log** (agent-lifecycle.md:86) — so grepping session logs could only ever find nothing | **my verdict was the error, not the code.** Rounds 155–159 were right; the *retraction* of them was wrong. The recorder now writes a `claimed` trace line, which is the probe that can see a live-only event |
 
 ## Reading queue
 
 1. ~~`develop/basic/tool.md`~~ ✅ (round 2); `reference/cookbook/adding-a-tool.md` remains for nested schemas, canonical values, policy hooks, PTC mode, UI cards
 2. ~~`develop/basic/config.md`~~ ✅
 3. ~~`develop/framework/service.md` + `reference/capability-seams.md`~~ ✅ — **3b:** `reference/cordis-api/service.md` to confirm `ctx.provide` is documented
-4. ~~`develop/framework/events.md`~~ ✅ — **4b:** the generated `cordis-surface` block in `reference/subsystems/core.md`, which is the documented source for every event name and mode (and therefore the source `lib/host/index.js` should cite)
+4. ~~`develop/framework/events.md`~~ ✅ — **4b:** the generated `cordis-surface` block at `reference/subsystems/core.md:368-1222` (855 lines, to be grepped) — the documented source for every event and service name and its mode, and therefore the source `lib/host/index.js` should cite
 5. ~~`develop/framework/index.md` + `develop/cordis-tutorial/02-lifecycle-and-effects.md`~~ ✅
-6. `reference/agent-lifecycle.md` — the loop this observer hangs off
+6. ~~`reference/agent-lifecycle.md`~~ ✅ — and it is the authority for the trigger's firing condition, for the authority of `agent/pre-step`, and for `agent/*` being live-only
 7. `reference/subsystems/{session,session-query,token-meter,tools}.md` — grep; the consumed capabilities, plus `ctx.tools.guard` (the graph calls `ctx.tools` *"Tool registry and guarded execution pipeline"*, giving `lib/seams.js:75` a documented home)
 8. `develop/basic/publish.md` — packaging, the route the profile uses
 9. `reference/cookbook/adding-a-settings-card.md` — the card
