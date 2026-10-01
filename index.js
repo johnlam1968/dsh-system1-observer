@@ -509,9 +509,21 @@ async function apply(ctx, config) {
           const foldedSeqs = surfaceEvents(sessionEvents(sessionId)).map((event) => (typeof event?.seq === 'number' ? event.seq : null))
           Promise.resolve(query.readSurface(sessionId))
             .then((surface) => {
-              const oracleSeqs = Array.isArray(surface?.nodes) ? surface.nodes.map((seq) => (typeof seq === 'number' ? seq : null)) : null
-              const agree = oracleSeqs !== null && oracleSeqs.length === foldedSeqs.length && oracleSeqs.every((seq, index) => seq === foldedSeqs[index])
-              evidence.trace('surface-compare', { agentId: sessionId ?? null, agree, hostSeqs, foldedSeqs, oracleSeqs })
+              // `SessionSurfaceSnapshot = { session, inheritedEventCount, capturedThroughSeq, events: SurfaceEvent[] }`
+              // -- the sequence numbers are on the EVENTS, not in a `nodes` list. My first version read `nodes`, got
+              // null, and recorded `agree: false`: an instrument announcing a disagreement it had not measured.
+              const oracleEvents = Array.isArray(surface?.events) ? surface.events : null
+              const oracleSeqs = oracleEvents === null ? null : oracleEvents.map((event) => (typeof event?.seq === 'number' ? event.seq : null))
+              const comparable = oracleSeqs !== null
+              evidence.trace('surface-compare', {
+                agentId: sessionId ?? null,
+                // NULL, NOT FALSE, when there was nothing to compare against.
+                agree: comparable ? oracleSeqs.length === foldedSeqs.length && oracleSeqs.every((seq, index) => seq === foldedSeqs[index]) : null,
+                comparable,
+                hostSeqs,
+                foldedSeqs,
+                oracleSeqs,
+              })
             })
             .catch(() => {
               // A comparison that cannot be made is not a comparison that agreed: recording nothing is the honest
@@ -533,15 +545,25 @@ async function apply(ctx, config) {
     // with nothing is noise -- and on an empty feed that is every turn.
     const snapshot = sessionEvents(sessionId)
     if (held.length > 0 && snapshot.length > 0) {
-      const agree = held.length === snapshot.length
-        && held.every((event, index) => event?.seq === snapshot[index]?.seq
-          && event?.type === snapshot[index]?.type
-          && textOfEvent(event) === textOfEvent(snapshot[index]))
+      // THE FEED IS A SUFFIX OF THE SESSION, NOT A COPY OF IT. Live measurement, first run: the feed held 57 events,
+      // the session held 452, and both ended on seqs 446-451. Comparing LENGTHS therefore reported `agree: false`
+      // on every measurement -- an instrument that cannot tell "these disagree" from "one of them is shorter".
+      // The overlap is the only part both sources claim to describe, so that is what is compared.
+      const firstSeq = held[0]?.seq
+      const overlap = typeof firstSeq === 'number' ? snapshot.filter((event) => (event?.seq ?? -1) >= firstSeq) : []
+      const agree = overlap.length === held.length
+        && held.every((event, index) => event?.seq === overlap[index]?.seq
+          && event?.type === overlap[index]?.type
+          && textOfEvent(event) === textOfEvent(overlap[index]))
       evidence.trace('feed-compare', {
         agentId: sessionId ?? null,
         agree,
         feedEvents: held.length,
         sessionEvents: snapshot.length,
+        overlapEvents: overlap.length,
+        // `agree` is about the overlap; this says whether the feed was even the same size, so a short feed cannot
+        // masquerade as a disagreement or hide one.
+        feedIsSubset: overlap.length === held.length,
         feedSeqs: held.map((event) => event?.seq ?? null).slice(-6),
         sessionSeqs: snapshot.map((event) => event?.seq ?? null).slice(-6),
       })

@@ -38,7 +38,8 @@ async function mounted({ oracleNodes }) {
     inject() {}, provide: () => () => {},
     get: (name) => {
       if (name === 'agents') return { get: () => agent, list: () => [agent] }
-      if (name === 'sessionQuery') return { readSurface: async () => ({ nodes: oracleNodes }) }
+      // THE DECLARED SHAPE: `SessionSurfaceSnapshot.events`, full events, seq on each event.
+      if (name === 'sessionQuery') return { readSurface: async () => ({ session: { id: 'session-a' }, inheritedEventCount: 0, capturedThroughSeq: 4, events: oracleNodes.map((seq) => ({ seq, type: 'user/message', time: seq, data: {} })) }) }
       return undefined
     },
     agents: { currentInitiator: () => agent },
