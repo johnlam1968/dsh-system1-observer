@@ -626,6 +626,34 @@ async function apply(ctx, config) {
       } catch {
         // A diagnostic must never be the reason a turn is lost.
       }
+        // THE DISK TRUTH, BESIDE THE COST. `workspaceChanges.summary` is EVENT-ADDRESSED -- it takes the seq of a
+        // `workspace/changes` event -- and SYNCHRONOUS, so it belongs on this detached path for the same reason the
+        // meter does. The feed supplies the address: the events the harness published carry the seqs. Together with
+        // `fs/observed` (what was LOOKED AT) this is what was CHANGED, which is what makes "I created X" and "I changed
+        // nothing else" checkable instead of merely plausible.
+        try {
+          const changes = typeof ctx.get === 'function' ? ctx.get('workspaceChanges') : undefined
+          if (changes !== undefined && changes !== null && typeof changes.summary === 'function') {
+            const newest = feed.events(sessionId).filter((event) => event?.type === 'workspace/changes').map((event) => event?.seq).filter((seq) => typeof seq === 'number').pop()
+            if (newest !== undefined) {
+              const summary = changes.summary(sessionId, newest)
+              if (summary !== undefined && summary !== null) {
+                evidence.trace('workspace-change', {
+                  agentId: sessionId ?? null,
+                  seq: newest,
+                  turn: typeof summary.turn === 'number' ? summary.turn : null,
+                  total: typeof summary.total === 'number' ? summary.total : null,
+                  added: typeof summary.added === 'number' ? summary.added : null,
+                  deleted: typeof summary.deleted === 'number' ? summary.deleted : null,
+                  files: Array.isArray(summary.files) ? summary.files.map((file) => file?.display ?? file?.path ?? null).filter((name) => typeof name === 'string').slice(0, 20) : [],
+                })
+              }
+            }
+          }
+        } catch {
+          // A diagnostic must never be the reason a turn is lost.
+        }
+
         if (outcome !== undefined && (outcome.refused === true || outcome.failed === true)) {
           evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement did not run: ${outcome.reason ?? 'no reason given'}` })
         }
