@@ -743,6 +743,31 @@ async function apply(ctx, config) {
     // The payload's own messages, taken as they stand: `composeTurnState` accepts text or a message-like object, so
     // this does not need to know the UserMessage shape -- and must not, since guessing it is what this fix avoids.
     const messages = Array.isArray(payload?.messages) ? payload.messages : []
+
+    // WHICH COHORT THIS BOUNDARY BELONGS TO. Peer-opened turns are COUNTED -- that is the operator's decision -- so
+    // they must also be LABELLED, or a judgement about a peer's request cannot be told from one about the operator's
+    // while both sit in the same series under questions that say "OPERATOR REQUEST".
+    //
+    // THE DISCRIMINATOR IS THE MESSAGE ID, read from the live feed rather than from the session: `peer-<id>` is what
+    // the bridge writes for a delivered message, while an operator's own message carries a uuid and a `source` with
+    // `rpcId` and `clientTimeZone`. Verified against 33 user messages of one session: peer ids all begin `peer-`,
+    // operator ids are uuids, and the two never overlap. Bounded to the last few events, and NULL when the feed
+    // cannot say -- a cohort nobody measured must not be reported as one we did.
+    const cohortOf = (sessionId) => {
+      const events = feed.events(sessionId)
+      for (let index = events.length - 1; index >= 0 && index >= events.length - 40; index -= 1) {
+        const event = events[index]
+        if (event?.type !== 'user/message') continue
+        const data = event?.data ?? {}
+        const message = data.message ?? data
+        const id = typeof message?.id === 'string' ? message.id : ''
+        const text = textOfEvent(event)
+        const peer = id.startsWith('peer-') || text.startsWith('[peer-bridge:')
+        return { seq: typeof event?.seq === 'number' ? event.seq : null, peer, how: id !== '' ? 'id' : 'text' }
+      }
+      return { seq: null, peer: null, how: 'unknown' }
+    }
+    const cohort = cohortOf(sessionId)
     // EVERY OUTCOME THAT ASKS NOTHING IS RECORDED, not only the ones that throw. A REFUSAL WROTE NOTHING AT ALL --
     // no boundary yet, no set configured under `turn`, and a malformed set were all indistinguishable from silence,
     // and an operator could not tell a schedule that has not come round from one that will never fire. Measured:
@@ -799,22 +824,22 @@ async function apply(ctx, config) {
         if (outcome !== undefined && (outcome.refused === true || outcome.failed === true)) {
           evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement did not run: ${outcome.reason ?? 'no reason given'}` })
         }
-        // AND A CADENCE REFUSAL IS RECORDED TOO -- which the comment above this chain CLAIMS and the code did not do.
-        // `shouldFire` saying "not this turn" is by far the commonest outcome, and it wrote nothing: measured live,
-        // six consecutive boundaries of a live session produced no line at all, so "the schedule has not come round"
-        // and "the trigger is dead" were indistinguishable in the trace. The boundary number is the point of the
-        // line: it is what shows the counter advancing, and against what interval.
-        if (outcome !== undefined
-          && outcome.fired !== true
-          && outcome.refused !== true
-          && outcome.failed !== true
-          && typeof outcome.turn === 'number'
-          && outcome.turn > 0) {
-          evidence.trace('skip', {
-            hook: 'turn',
+        // ONE LINE PER IN-SCOPE TURN, FIRED OR NOT. The cadence answer used to be silence -- the comment above this
+        // chain claims every outcome that asks nothing is recorded, and the code recorded only refusals and failures
+        // -- so "the schedule has not come round" and "the trigger is dead" were the same evidence. Measured: six
+        // consecutive boundaries of a live session produced no line at all.
+        //
+        // AND IT CARRIES THE COHORT, because the series mixes peer-opened and operator-opened turns by decision. The
+        // line is written for every boundary, so the counter is observable whether or not the judge was asked.
+        if (outcome !== undefined && typeof outcome.turn === 'number' && outcome.turn > 0) {
+          evidence.trace('turn-boundary', {
             agentId: sessionId ?? null,
-            turn: outcome.turn,
-            reason: `not this turn: boundary ${outcome.turn} of every ${everyNTurns}`,
+            boundary: outcome.turn,
+            everyNTurns,
+            fired: outcome.fired === true,
+            requestSeq: cohort?.seq ?? null,
+            requestIsPeer: cohort?.peer ?? null,
+            cohortSource: cohort?.how ?? 'unknown',
           })
         }
       })
