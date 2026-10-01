@@ -1,4 +1,5 @@
 import { createFsJournal } from './lib/host/fs-journal.js'
+import { surfaceEvents } from './lib/host/surface.js'
 import { createEventFeed } from './lib/host/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
@@ -483,7 +484,32 @@ async function apply(ctx, config) {
         const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
         const agent = agents !== undefined && typeof agents.get === 'function' ? agents.get(sessionId) : undefined
         const nodes = agent?.session?.surface?.nodes
-        return Array.isArray(nodes) ? [...nodes] : null
+        const hostSeqs = Array.isArray(nodes) ? [...nodes] : null
+
+        // THE ORACLE, AND THE COMPARISON IT EXISTS FOR. `sessionQuery.readSurface` answers the same question the fold
+        // answers -- which seqs survive -- and this line records whether the two AGREE. It is the surface's twin of
+        // `feed-compare`, and it is here because this is the only place both answers are reachable: the fold from the
+        // events, the oracle from the service.
+        //
+        // DETACHED, because the service read is asynchronous and this function is not: the host's seqs are returned
+        // unchanged, and the line is written when the answer arrives. A trace line does not need to hold a turn.
+        //
+        // OPTIONAL ACCESS, per the plan: a deployment without `sessionQuery` keeps exactly the behaviour it had.
+        const query = typeof ctx.get === 'function' ? ctx.get('sessionQuery') : undefined
+        if (query !== undefined && query !== null && typeof query.readSurface === 'function') {
+          const foldedSeqs = surfaceEvents(sessionEvents(sessionId)).map((event) => (typeof event?.seq === 'number' ? event.seq : null))
+          Promise.resolve(query.readSurface(sessionId))
+            .then((surface) => {
+              const oracleSeqs = Array.isArray(surface?.nodes) ? surface.nodes.map((seq) => (typeof seq === 'number' ? seq : null)) : null
+              const agree = oracleSeqs !== null && oracleSeqs.length === foldedSeqs.length && oracleSeqs.every((seq, index) => seq === foldedSeqs[index])
+              evidence.trace('surface-compare', { agentId: sessionId ?? null, agree, hostSeqs, foldedSeqs, oracleSeqs })
+            })
+            .catch(() => {
+              // A comparison that cannot be made is not a comparison that agreed: recording nothing is the honest
+              // outcome, and that is why this is a `.catch` rather than a `try`.
+            })
+        }
+        return hostSeqs
       } catch {
         return null
       }
