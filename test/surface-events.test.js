@@ -118,3 +118,41 @@ test('a HARNESS-DECLARED user/message event is read, where `data` is the message
   const other = composeTurnState({ events: [wrapped(1, 'THE WRAPPED REQUEST'), declaredAssistant(2, 'an answer'), wrapped(3, 'moved on')] })
   assert.match(String(other.sections?.['OPERATOR REQUEST']), /THE WRAPPED REQUEST/, 'and the wrapped shape is still read')
 })
+
+// THE TEST THAT SHOULD HAVE EXISTED FROM THE START, BUILT FROM THE HARNESS'S DECLARATION RATHER THAN FROM MY FIXTURE.
+//
+// lib/tool-blocks.js said in its own header that the block types were NOT VERIFIED and reported what it could not
+// classify -- honest, and it still matched nothing real, because every fixture in this suite used the Anthropic-style
+// `tool_use`/`input` while ContentBlockMap declares `'tool-call'` with `arguments` as a JSON STRING. Measured with
+// declared shapes, the TOOL CALLS section came out EMPTY: the call name absent, the result dropped. That is the state
+// the one live measurement was judged on -- which is what `done_claim_without_tool_evidence: 0.86` was reporting.
+//
+// Both shapes are asserted, so this widened the reader rather than trading one assumption for another.
+test('the tool window reads the DECLARED shapes: tool-call blocks and tool/result events', () => {
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const assistant = (seq, blocks) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: blocks }, stream: [] } })
+  const declaredCall = (seq, name, args) => ({ seq, time: seq, type: 'tool/call', data: { turn: 1, step: 1, callId: 't1', name, arguments: args } })
+  const declaredResult = (seq, text) => ({ seq, time: seq, type: 'tool/result', data: { turn: 1, step: 1, message: { role: 'tool', toolCallId: 't1', content: [{ type: 'text', text }] } } })
+
+  const declared = composeTurnState({ events: [
+    user(1, 'find me a plugin'),
+    assistant(2, [{ type: 'text', text: 'searching' }, { type: 'tool-call', id: 't1', name: 'find_dsh_plugin', arguments: '{"query":"system1"}' }]),
+    declaredCall(3, 'find_dsh_plugin', '{"query":"system1"}'),
+    declaredResult(4, 'no results for system1'),
+    assistant(5, [{ type: 'text', text: 'nothing found' }]),
+    user(6, 'try other keywords'),
+  ] }).sections ?? {}
+  assert.match(String(declared['TOOL CALLS']), /find_dsh_plugin/, 'the DECLARED call block names the tool')
+  assert.match(String(declared['TOOL CALLS']), /no results for system1/, 'and the DECLARED result EVENT reaches the window')
+
+  // AND THE SHAPE I HAD ASSUMED STILL WORKS, so the reader widened rather than swapped.
+  const assumed = composeTurnState({ events: [
+    user(1, 'a request'),
+    assistant(2, [{ type: 'tool_use', id: 't2', name: 'find_dsh_plugin', input: { query: 'x' } }]),
+    { seq: 3, time: 3, type: 'user/message', surfaceOp: 'append', data: { message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: 'nothing' }] } } },
+    assistant(4, [{ type: 'text', text: 'an answer' }]),
+    user(5, 'moved on'),
+  ] }).sections ?? {}
+  assert.match(String(assumed['TOOL CALLS']), /find_dsh_plugin/, 'the assumed block shape is still read')
+  assert.match(String(assumed['TOOL CALLS']), /nothing/, 'and its result')
+})
