@@ -635,6 +635,20 @@ async function apply(ctx, config) {
         turn: typeof payload?.turn === 'number' ? payload.turn : null,
         seq: typeof message.seq === 'number' ? message.seq : null,
       })
+      // AND IT IS RECORDED, BECAUSE THE SESSION LOGS COULD NOT SETTLE WHETHER THIS EVENT FIRES. `agent` namespace events
+      // LIVE COORDINATION and are not persisted to the session log -- agent-lifecycle.md:86 says SDK users who need a
+      // replayable transcript must consume `session/event`, and that `agent/*` is the live interface for queueing,
+      // status, prompt interception, steering and error handling. So grepping session logs for `agent/inbox/claimed`
+      // could only ever return nothing, and I read that nothing as "declared and never emitted". The lifecycle page
+      // documents it firing once per claimed message, with `{ message, turn }` (agent-lifecycle.md:31,70).
+      //
+      // One line per claimed message, which is one per turn: cheap enough for an `emit` listener, and the instrument
+      // that can actually see a live-only event.
+      evidence.trace('claimed', {
+        agentId: sessionId,
+        turn: typeof payload?.turn === 'number' ? payload.turn : null,
+        seq: typeof message.seq === 'number' ? message.seq : null,
+      })
     } catch {
       // An emitter's listener must never become the reason a turn fails.
     }

@@ -19,8 +19,45 @@ import { HOST_SERVICES, HOST_EVENTS, HOST_SYMBOL_REACHED, ADAPTER_MODULES } from
 const ROOT = process.cwd()
 const NAME = '[A-Za-z0-9_-]+'
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : '')
-/** Comments are PROSE. They are stripped before extraction, because a module that documents an event does not subscribe to it. */
-const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n')
+/**
+ * Comments are PROSE and are stripped before extraction, because a module that documents an event does not subscribe
+ * to it.
+ *
+ * THE STRIPPER IS LINE-AWARE, AND IT HAS TO BE. An earlier version removed block comments with one regex over the
+ * WHOLE FILE, so a block-comment opener written INSIDE a line comment -- as prose, while quoting a namespace -- began
+ * a block that ran to the next closer and swallowed everything between. Measured: it hid the `fs/observed`
+ * subscription, which is plainly still subscribed, and the inventory reported it as a stale declaration. A checker
+ * whose own input can be desynchronized by a comment is not checking the code.
+ *
+ * Quotes are tracked so that a `//` inside a string -- a URL, most often -- does not truncate the line. Known limit:
+ * a regex literal containing `//` or a comment opener is still read as a comment, and a template literal spanning
+ * lines is not tracked; neither can hide a `ctx.on('…')` or `ctx.get('…')` in practice, and naming the limit is
+ * better than pretending to a tokenizer.
+ */
+const code = (text) => {
+  let inBlock = false
+  let quote = null
+  return text.split('\n').map((line) => {
+    let out = ''
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i]
+      const two = line.slice(i, i + 2)
+      if (inBlock) { if (two === '*/') { inBlock = false; i += 1 } continue }
+      if (quote !== null) {
+        out += ch
+        if (ch === '\\') { out += line[i + 1] ?? ''; i += 1; continue }
+        if (ch === quote) quote = null
+        continue
+      }
+      if (two === '/*') { inBlock = true; i += 1; continue }
+      if (two === '//') break
+      if (ch === '"' || ch === "'" || ch === '`') { quote = ch; out += ch; continue }
+      out += ch
+    }
+    if (quote !== null && quote !== '`') quote = null
+    return out
+  }).join('\n')
+}
 
 function jsFiles(dir) {
   if (!existsSync(dir)) return []
