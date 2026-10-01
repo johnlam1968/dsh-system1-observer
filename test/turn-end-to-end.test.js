@@ -71,9 +71,9 @@ test('a mounted row fires the trigger on an admit and records a usable turn line
     wireUrl: baseUrl, timeoutMs: accessor(2000),
   })
 
-  const handler = handlers.get('agent/pre-step')?.[0]
+  const handler = handlers.get('agent/turn-stopping')?.[1]
   assert.equal(typeof handler, 'function', 'the row subscribes the event the admit seam maps to')
-  await handler({ agent, messages: [{ text: 'You should mutate the keywords and search again.' }] }, () => Promise.resolve())
+  await handler({ agent, messages: [{ text: 'You should mutate the keywords and search again.' }] })
   await new Promise((resolve) => setTimeout(resolve, 60))
   server.close()
 

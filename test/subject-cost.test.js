@@ -39,7 +39,7 @@ test('the subject cost is recorded once per measurement, from the harness meter'
     turnEveryNTurns: accessor(1), questions: { turn: [{ id: 'a_noul', type: 'noul', instructions: 'x?' }] }, observeSubagents: accessor(true),
     wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: accessor(2000),
   })
-  await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')[1]({ agent, turn: 5, messages: [{ text: 'the reaction' }] })
   for (let i = 0; i < 240 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
   for (let i = 0; i < 240; i += 1) {
     const seen = existsSync(tracePath) ? readFileSync(tracePath, 'utf8') : ''
@@ -93,7 +93,7 @@ test('the workspace change is recorded, addressed by the seq the feed carried', 
     wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: accessor(2000),
   })
   handlers.get('session/event')[0]({ id: 'session-a' }, { seq: 7, time: 7, type: 'workspace/changes', data: { turn: 3 } })
-  await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')[1]({ agent, turn: 5, messages: [{ text: 'the reaction' }] })
   for (let i = 0; i < 240; i += 1) {
     const seen = existsSync(tracePath) ? readFileSync(tracePath, 'utf8') : ''
     if (seen.includes('workspace-change')) break

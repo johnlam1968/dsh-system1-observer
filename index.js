@@ -580,7 +580,18 @@ async function apply(ctx, config) {
     fsJournal.record(target, observation, actor)
   })
 
-  ctx.on('agent/pre-step', (payload, next) => {
+  // THE TRIGGER IS THE HARNESS'S OWN TURN BOUNDARY, which is what step 2 of the adoption plan asked for.
+  // `agent/pre-step` fires once per STEP, so counting its calls was a proxy for turns; `agent/turn-stopping` IS the
+  // turn ending, carrying `{agent, turn, signal}` -- so the count and the thing counted are the same event.
+  //
+  // SERIAL, SO `next()` DOES NOT EXIST HERE. A waterfall hands its listener a continuation to call; a serial seam
+  // hands it a payload and AWAITS ITS RETURN. Calling next() would throw, so every gate below returns undefined --
+  // the property turn-stopping-shadow.test.js already pins for the shadow listener beside it.
+  //
+  // AND THIS PAYLOAD CARRIES NO `messages`, so a scheduled turn's reaction comes from the events, in either declared
+  // shape -- the path e405b04 landed for exactly this class of seam. The `messages` read stays because a driver may
+  // supply one and the supplied-reaction path is a real capability; surface-nodes-is-read pins the no-messages case.
+  ctx.on('agent/turn-stopping', (payload) => {
     // THE MOUNT LINE PRECEDES ANY SKIP THIS HANDLER WRITES, as the seam path arranges at its own observe and
     // skip. This handler wrote its gate skip straight to the trace, so a row whose FIRST event is a turn skip
     // -- which a scope pointing at a dead session produces, 145 times over -- recorded no mount line at all,
@@ -599,14 +610,14 @@ async function apply(ctx, config) {
         reason: 'session not observed',
         ...(note === null ? {} : { note }),
       })
-      return next()
+      return undefined
     }
     // AND THE SUBAGENT GATE, from the same module and with the same reason string the observation path uses. It is
     // off unless the config says exactly `true`, so a scheduled measurement does not silently start watching the
     // worker sessions an operator never asked about.
     if (isSubagent(payload?.agent) && readConfigValue(liveConfig().observeSubagents) !== true) {
       evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: SUBAGENT_SKIP_REASON })
-      return next()
+      return undefined
     }
     // The payload's own messages, taken as they stand: `composeTurnState` accepts text or a message-like object, so
     // this does not need to know the UserMessage shape -- and must not, since guessing it is what this fix avoids.
@@ -672,7 +683,7 @@ async function apply(ctx, config) {
         evidence.trace('skip', { hook: 'turn', agentId: sessionId ?? null, reason: `the turn measurement failed: ${error instanceof Error ? error.message : String(error)}` })
       })
     // THE CHAIN CONTINUES. Everything above is bookkeeping around the seam; the seam's own decision is not ours.
-    return next()
+    return undefined
   })
 
   registerListeners(ctx, hooks, {

@@ -53,7 +53,7 @@ test('an EXCLUDED session records a skip and never reaches the judge', async () 
   const row = mount({ sessions: ['session-someone-else'] })
   await apply(row.ctx, row.config)
   // The TRIGGER's listener is registered before the seam's, so it is first in the list.
-  const handler = row.ctx.handlers.get('agent/pre-step')?.[0]
+  const handler = row.ctx.handlers.get('agent/turn-stopping')?.[1]
   assert.equal(typeof handler, 'function', 'the row must subscribe the event the admit seam maps to')
   const next = () => Promise.resolve()
   handler({ agent: { id: 'session-not-watched' } }, next)
@@ -67,7 +67,7 @@ test('an EXCLUDED session records a skip and never reaches the judge', async () 
 test('an observed session with no turn set refuses rather than asking the probe', async () => {
   const row = mount({ questions: [] })
   await apply(row.ctx, row.config)
-  row.ctx.handlers.get('agent/pre-step')[0]({ agent: { id: 'session-a' } }, () => Promise.resolve())
+  row.ctx.handlers.get('agent/turn-stopping')[1]({ agent: { id: 'session-a' }, turn: 5 })
   await tick()
   assert.equal(row.lines().some((line) => line.event === 'call'), false, 'no call line, and never a probe call')
 })
@@ -75,8 +75,8 @@ test('an observed session with no turn set refuses rather than asking the probe'
 test('the trigger is off by default: turnEveryNTurns 0 mounts and watches nothing', async () => {
   const row = mount({ turn: 0 })
   await apply(row.ctx, row.config)
-  assert.equal(typeof row.ctx.handlers.get('agent/pre-step')?.[0], 'function', 'the handler exists')
-  row.ctx.handlers.get('agent/pre-step')[0]({ agent: { id: 'session-a' } }, () => Promise.resolve())
+  assert.equal(typeof row.ctx.handlers.get('agent/turn-stopping')?.[1], 'function', 'the handler exists')
+  row.ctx.handlers.get('agent/turn-stopping')[1]({ agent: { id: 'session-a' }, turn: 5 })
   await tick()
   // THE PROPERTY IS "NO MEASUREMENT", NOT "NO LINES". A skip is not a measurement -- it is the record that nothing
   // was sent, which is the behaviour the observation path has too. Asserting silence made this test depend on the

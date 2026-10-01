@@ -57,9 +57,9 @@ test('a mounted row asks the SERVICE, and the line carries what the service answ
     hooks: accessor(['admit']), tracePath: accessor(tracePath), sessions: accessor(['*']),
     turnEveryNTurns: accessor(1), questions: { turn: SPECS }, observeSubagents: accessor(true),
   })
-  const handler = handlers.get('agent/pre-step')?.[0]
+  const handler = handlers.get('agent/turn-stopping')?.[1]
   assert.equal(typeof handler, 'function', 'the row subscribes the event the admit seam maps to')
-  await handler({ agent, messages: [{ text: 'You should mutate the keywords and search again.' }] }, () => Promise.resolve())
+  await handler({ agent, messages: [{ text: 'You should mutate the keywords and search again.' }] })
   const recorded = () => existsSync(tracePath) && readFileSync(tracePath, 'utf8').includes('"hook":"turn"')
   for (let attempt = 0; attempt < 40 && !recorded(); attempt += 1) await new Promise((r) => setTimeout(r, 25))
 

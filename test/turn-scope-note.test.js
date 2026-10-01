@@ -30,7 +30,7 @@ async function fire({ configured, liveId, eventId }) {
     hooks: accessor(['admit']), tracePath: accessor(tracePath), sessions: accessor(configured),
     turnEveryNTurns: accessor(1), questions: { turn: [{ id: 'a', type: 'noul', instructions: 'x?' }] },
   })
-  await handlers.get('agent/pre-step')?.[0]({ agent: { id: eventId, session: agent.session }, messages: [{ text: 'no' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')?.[1]({ agent: { id: eventId, session: agent.session }, messages: [{ text: 'no' }] })
   const all = read(tracePath)
   return all.filter((line) => line.event === 'skip' && line.hook === 'turn').concat(all.filter((line) => line.event === 'mount'))
 }

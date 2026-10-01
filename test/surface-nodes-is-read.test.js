@@ -49,7 +49,7 @@ async function run({ surface }) {
     turnEveryNTurns: accessor(1), questions: { turn: SPECS }, observeSubagents: accessor(true),
     wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: accessor(2000),
   })
-  await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')[1]({ agent, turn: 5, messages: [{ text: 'the reaction' }] })
   for (let i = 0; i < 240 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
   server.close()
   return posted

@@ -42,7 +42,7 @@ async function run({ feedEvents }) {
     wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: accessor(2000),
   })
   for (const event of feedEvents) handlers.get('session/event')[0]({ id: 'session-a' }, event)
-  await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')[1]({ agent, turn: 5, messages: [{ text: 'the reaction' }] })
   for (let i = 0; i < 60 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
   server.close()
   return posted
@@ -101,7 +101,7 @@ test('a disagreement between the feed and the session is recorded once, and read
   })
   handlers.get('session/event')[0]({ id: 'session-a' }, env(1, 'user/message', 'THE FEED REQUEST'))
   handlers.get('session/event')[0]({ id: 'session-a' }, env(2, 'assistant/message', 'THE FEED ANSWER'))
-  await handlers.get('agent/pre-step')[0]({ agent, messages: [{ text: 'the reaction' }] }, () => Promise.resolve())
+  await handlers.get('agent/turn-stopping')[1]({ agent, turn: 5, messages: [{ text: 'the reaction' }] })
   for (let i = 0; i < 60 && posted === null; i += 1) await new Promise((r) => setTimeout(r, 25))
   server.close()
   const compares = (existsSync(tracePath) ? readFileSync(tracePath, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []).filter((l) => l.event === 'feed-compare')
