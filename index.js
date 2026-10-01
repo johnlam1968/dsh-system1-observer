@@ -542,6 +542,25 @@ async function apply(ctx, config) {
     feed.record(session?.id, event)
   })
 
+  // `agent/turn-stopping` IS SERIAL -- THE HARNESS AWAITS THIS LISTENER BEFORE CLOSING THE TURN. So it returns
+  // UNDEFINED: no promise, and no work that could delay a close. An 800ms judge call here would hold every turn
+  // open, which is why the measurement is dispatched nowhere near it.
+  //
+  // THIS IS THE SHADOW, and it changes no behaviour: it records the turn the harness says is ending, so the
+  // numbering can be compared against the counter the trigger uses today. The trigger still runs on `pre-step`
+  // until those two agree, because swapping a trigger on the strength of a contract I have read is not the same
+  // as swapping it on one I have watched.
+  ctx.on('agent/turn-stopping', (payload) => {
+    try {
+      evidence.trace('turn-stopping', {
+        agentId: payload?.agent?.id ?? null,
+        turn: typeof payload?.turn === 'number' ? payload.turn : null,
+      })
+    } catch {
+      // A listener the harness awaits must not become the reason a turn fails to close.
+    }
+  })
+
   ctx.on('agent/pre-step', (payload, next) => {
     // THE MOUNT LINE PRECEDES ANY SKIP THIS HANDLER WRITES, as the seam path arranges at its own observe and
     // skip. This handler wrote its gate skip straight to the trace, so a row whose FIRST event is a turn skip
