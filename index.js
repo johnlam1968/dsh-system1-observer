@@ -487,6 +487,15 @@ async function apply(ctx, config) {
   // A THROW HERE MUST NOT FAIL THE TURN -- the one thing this plugin must never do -- but it must not vanish
   // either, so a failure is recorded as a skip line with its reason rather than swallowed.
   const everyNTurns = Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0)
+  // A TRACE PATH NOBODY CAN WRITE IS A CONFIGURATION ERROR, NOT A RUNTIME HICCUP (delta 3). The per-line writes
+  // stay best-effort so a full disk cannot fail a turn; this probe is what keeps "records nothing while looking
+  // healthy" from being a supported outcome.
+  try {
+    evidence.probe()
+  } catch (error) {
+    throw new Error(`cannot write the trace to ${evidence.path}: ${error?.message ?? String(error)}`)
+  }
+
   const turnObserver = createTurnObserver({
     // THE TWO SIZES OF THE COMPOSED STATE, from config rather than from the modules' own defaults. Plain fields,
     // because a size read once at mount must not be offered as a live edit -- see the schema's note.

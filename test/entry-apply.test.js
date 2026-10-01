@@ -306,9 +306,15 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   assert.equal(tool.parameters.type, 'object', 'a tool schema is object-rooted')
   assert.deepEqual(tool.parameters.properties.hook.enum, [...PROBE_SEAMS], 'the seam enum comes from the runtime list')
 
-  // NO TRACE YET: a report, not a throw.
+  // NOTHING OBSERVED YET: a report, not a throw, naming the path it looked at.
+  //
+  // This asserted the sentence "no trace at <path>", which described a file that did not exist yet. `apply` now
+  // PROVES the path at mount by creating it (lib/evidence.js `probe`), so a mounted row always has a trace file and
+  // the honest report is "no run matching ... runs present: (none)". The property is unchanged -- a report rather
+  // than a throw -- so the assertion now checks the property instead of one of its two wordings.
   const empty = await tool.execute({})
-  assert.match(empty.text, /no trace at /)
+  assert.match(empty.text, /no (trace at|run matching)/, 'a report rather than a throw')
+  assert.ok(empty.text.includes('trace.jsonl'), 'and it names the path it looked at: ' + empty.text)
 
   // THEN A REAL OBSERVATION, through the listener the row registered. `wireUrl` points at a closed port, so
   // the call fails and the trace gets an error line -- which is the point: the tool reads what the row wrote.
