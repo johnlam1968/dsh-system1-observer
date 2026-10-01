@@ -46,6 +46,9 @@ test('every boundary is recorded -- fired or not -- so the schedule is observabl
   assert.deepEqual(boundaries.map((l) => l.boundary), [1, 2, 3], 'one line per boundary, in order: ' + JSON.stringify(boundaries))
   assert.deepEqual(boundaries.map((l) => l.fired), [false, false, false], 'interval 3 with an empty question set fires nothing here, but every boundary is still recorded')
   assert.ok(boundaries.every((l) => l.everyNTurns === 3), 'and the interval is on the line, so "not this turn" is checkable')
+  // AND THE HARNESS'S OWN TURN NUMBER, which is a DIFFERENT number from the boundary counter: the counter is in memory
+  // and restarts at 1 on every mount, while the harness's continues. Measured live: boundary 3 against session turn 30.
+  assert.deepEqual(boundaries.map((l) => l.harnessTurn), [20, 21, 22], 'the harness turn is recorded beside the count: ' + JSON.stringify(boundaries.map((l) => [l.boundary, l.harnessTurn])))
 })
 
 test('a PEER-delivered opening message is labelled, and an operator one is not', async () => {

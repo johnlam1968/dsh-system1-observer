@@ -835,6 +835,12 @@ async function apply(ctx, config) {
           evidence.trace('turn-boundary', {
             agentId: sessionId ?? null,
             boundary: outcome.turn,
+            // THE HARNESS'S OWN TURN NUMBER, BESIDE THE ONE THIS LISTENER COUNTS. They are different numbers: the
+            // boundary counter is in memory and STARTS AT 1 AT EVERY MOUNT, while the harness's number is the
+            // session's, and continues. Measured: this process was at boundary 3 while the session was at turn 30.
+            // Carrying both makes the two comparable without joining on timestamps -- and the cadence currently uses
+            // the counter, so "every 5" means every 5 boundaries this process has SEEN.
+            harnessTurn: typeof payload?.turn === 'number' ? payload.turn : null,
             everyNTurns,
             fired: outcome.fired === true,
             requestSeq: cohort?.seq ?? null,
