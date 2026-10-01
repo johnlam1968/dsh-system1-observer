@@ -1,0 +1,164 @@
+// THE CONFORMANCE TEST: this plugin's SHAPE, checked against the documented conventions.
+//
+// WHY THIS FILE EXISTS. Four shape bugs and one flake survived 509 passing tests in this repo, because the
+// tests were written from the same beliefs as the code -- a test that asserts the ledger [1,2,3] agrees with
+// code that counts the ledger, whether or not the harness numbers turns that way. Every one of those bugs was
+// eventually caught by reading a declaration. This file is that reading, made executable.
+//
+// Each test names the convention it checks and where the convention is written down. Citations are to the
+// dsh-plugin-dev-kb mirror; the catalogue table below is a CHECKSUM of the generated `cordis-surface` entries,
+// kept here so this file runs without the knowledge base installed. `docs/conventions.md` carries the record.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { readConfigValue } from '../lib/config-value.js'
+import { HOST_EVENTS } from '../lib/host/index.js'
+import { DEFAULT_MAX_PER_SESSION } from '../lib/host/feed.js'
+import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../lib/host/fs-journal.js'
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+const read = (p) => readFileSync(join(ROOT, p), 'utf8')
+const pkg = JSON.parse(read('package.json'))
+const plugin = (await import(new URL('../index.js', import.meta.url).href)).default
+
+/**
+ * Every event this plugin names, with the mode the generated catalogue gives it.
+ *
+ * `#### `name` -- mode` is the catalogue's entry form. Sources, for re-checking after a harness upgrade:
+ *   core.md:953 agent/inbox/claimed · core.md:1019 agent/pre-step · core.md:1044 agent/request
+ *   core.md:1146 agent/turn-stopping · session.md:1118 session/event · filesystem.md:470 fs/observed
+ *   filesystem.md:451 fs/edit-intent · filesystem.md:491 fs/write-intent · system-prompt.md:183
+ *   llm-streaming.md:1068 llm/stream · tools.md:606 tools/execute · tools.md:630 tools/post-execute
+ *   tools.md:655 tools/pre-execute · tools.md:705 tools/result
+ */
+const CATALOGUE = Object.freeze({
+  'agent/inbox/claimed': 'emit',
+  'agent/pre-step': 'waterfall',
+  'agent/request': 'waterfall',
+  'agent/turn-stopping': 'serial',
+  'session/event': 'emit',
+  'fs/observed': 'emit',
+  'fs/edit-intent': 'waterfall',
+  'fs/write-intent': 'waterfall',
+  'system-prompt/assemble': 'waterfall',
+  'llm/stream': 'waterfall',
+  'tools/execute': 'waterfall',
+  'tools/post-execute': 'waterfall',
+  'tools/pre-execute': 'waterfall',
+  'tools/result': 'emit',
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 1. Module shape -- basic/index.md:19-31, basic/config.md:31, framework/service.md:95
+// ---------------------------------------------------------------------------------------------------------
+
+test('module shape: the object form, with apply(ctx, config)', () => {
+  // The documented object form is `export default { name, inject, apply }`, and config.md:31 gives apply its
+  // resolved config as the SECOND argument. `export function apply` alone would also be legal; what would not
+  // be legal is a default export that is not the object, or an apply that takes one argument.
+  assert.equal(typeof plugin, 'object', 'the documented form is a default-exported object')
+  assert.equal(typeof plugin.name, 'string')
+  assert.ok(plugin.name.length > 0, 'name is required for diagnostics')
+  assert.equal(typeof plugin.apply, 'function')
+  assert.equal(plugin.apply.length, 2, 'apply(ctx, config) -- config.md:31')
+  assert.ok(Array.isArray(plugin.inject), 'inject declares REQUIRED services -- service.md:95')
+  for (const service of plugin.inject) assert.equal(typeof service, 'string')
+  assert.equal(typeof plugin.Config, 'function', 'Config must be a Standard Schema, not a plain object -- config.md:47')
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 2. Packaging -- basic/publish.md:20-64, and the dsh-plugin-settings-card skill's checklist item 3
+// ---------------------------------------------------------------------------------------------------------
+
+test('packaging: a bundle that names its patch, and a declared client half', () => {
+  assert.equal(pkg.type, 'module')
+  assert.equal(typeof pkg.main, 'string', 'publish.md:42 -- main names the entry')
+  assert.equal(typeof pkg.dsh.bundle.patch, 'string',
+    'the patch must be NAMED: `"bundle": true` reads no patch at all, silently (skill)')
+  assert.ok(existsSync(join(ROOT, pkg.dsh.bundle.patch)), 'the named patch file exists')
+  assert.ok(pkg.exports['./client'], 'the browser half is exported as ./client')
+  assert.equal(pkg.dsh.client.platform, 'web', 'dsh.client declares the platform')
+  for (const file of ['index.js', 'client.js', 'cordis.patch.yml']) {
+    assert.ok(pkg.files.includes(file), `files must ship ${file}`)
+  }
+})
+
+test('packaging: the patch inserts a row the profile can target by id', () => {
+  const patch = read(pkg.dsh.bundle.patch)
+  assert.ok(patch.includes(`id: ${plugin.name}`),
+    'the profile overrides this row by id, so the id must be the one publish.md:127 describes')
+  assert.ok(patch.includes(pkg.name),
+    'the inserted row names the PACKAGE, so Node resolves the installed code -- publish.md:58')
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 3. Config -- config.md:11-47, and the volatile accessor rule (skill section 3.1: the published mirror
+//    documents `volatile` NOWHERE, which is why lib/config-value.js quotes the installed source instead)
+// ---------------------------------------------------------------------------------------------------------
+
+test('config: a volatile field is an accessor, and readConfigValue unwraps it', () => {
+  // Composed through the REAL schema rather than a hand-built { get: () => v } stand-in, which would only
+  // check the model of the boundary and not the boundary (skill, on schemastery materialising optionals).
+  const config = plugin.Config({ callsEnabled: true, maxFieldChars: 42, seamEnabled: { assemble: false } })
+  assert.equal(readConfigValue(config.callsEnabled), true,
+    'a .volatile() field arrives as an accessor; read plain it is an object, and every comparison fails')
+  assert.equal(readConfigValue(config.maxFieldChars), 42)
+  assert.equal(readConfigValue(config.seamEnabled).assemble, false, 'a nested volatile object unwraps too')
+  assert.equal(readConfigValue('plain'), 'plain', 'ordinary values must pass through untouched')
+})
+
+test('config: no tunable is reachable only by editing code', () => {
+  // config.md:80-94 states the convention and its test: "can you change this value in cordis.yml without
+  // changing code?" Five values failed that test. The defaults here must equal the module constants, so the
+  // schema cannot drift away from the factory defaults it is standing in for.
+  const config = plugin.Config({})
+  assert.equal(readConfigValue(config.feedMaxPerSession), DEFAULT_MAX_PER_SESSION)
+  assert.equal(readConfigValue(config.fsJournalMaxPaths), DEFAULT_MAX_PATHS)
+  assert.equal(readConfigValue(config.fsJournalMaxPerPath), DEFAULT_MAX_PER_PATH)
+  assert.equal(typeof readConfigValue(config.composeMaxChars), 'number')
+  assert.equal(typeof readConfigValue(config.toolBlockMaxChars), 'number')
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 4. Events -- the generated catalogue (source lines above), and framework/events.md:104-108 for the
+//    Cordis-event versus persisted-session-event-type distinction
+// ---------------------------------------------------------------------------------------------------------
+
+test('events: every declared event is in the generated catalogue, with its mode', () => {
+  const declared = Object.keys(HOST_EVENTS)
+  assert.ok(declared.length > 0)
+  for (const name of declared) {
+    assert.ok(CATALOGUE[name], `${name} is declared but is not in the catalogue checksum`)
+    // The mode is checked WHERE THE DECLARATION STATES ONE. Requiring every description to name its mode was my
+    // first version of this assertion and it failed on `session/event`, whose declaration describes what the event
+    // carries rather than how it dispatches -- a test asserting a house style, not a convention.
+    const stated = /^(emit|serial|waterfall|bail)\b/.exec(String(HOST_EVENTS[name]).trim())
+    if (stated !== null) {
+      assert.equal(stated[1], CATALOGUE[name],
+        `${name} is declared ${stated[1]} and the catalogue documents ${CATALOGUE[name]}`)
+    }
+  }
+})
+
+test('events: every catalogue name this plugin relies on appears in the sources', () => {
+  const sources = read('index.js') + read('lib/seams.js')
+  for (const name of Object.keys(CATALOGUE)) {
+    assert.ok(sources.includes(`'${name}'`), `${name} is in the checksum but nowhere in the row or the seam table`)
+  }
+})
+
+test('events: the two contracts the documentation makes mandatory are visible in the source', () => {
+  // TEXTUAL, AND THEREFORE WEAK. These would not catch a subtler ordering bug. They catch the catastrophic
+  // version of each: a waterfall listener that never calls next() SHORT-CIRCUITS the whole pipeline
+  // (events.md:68-83), and a serial listener that returns a value TERMINATES the listeners behind it, which is
+  // why the turn trigger must return undefined at every gate (events.md:58-64). One grep each, and the
+  // alternative is asserting the harness's dispatch behaviour without a harness.
+  assert.ok(read('index.js').includes("typeof next === 'function' ? next() : undefined"),
+    'the waterfall listener must call next() and return its result')
+  const fromTrigger = read('index.js').slice(read('index.js').indexOf("ctx.on('agent/turn-stopping'"))
+  assert.ok(fromTrigger.includes('return undefined'), 'the serial trigger must return undefined')
+})

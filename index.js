@@ -1,6 +1,6 @@
-import { createFsJournal } from './lib/host/fs-journal.js'
+import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './lib/host/fs-journal.js'
 import { surfaceEvents } from './lib/host/surface.js'
-import { createEventFeed } from './lib/host/feed.js'
+import { createEventFeed, DEFAULT_MAX_PER_SESSION } from './lib/host/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //
@@ -165,6 +165,16 @@ const Config = Schema.object({
   includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
   observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
   maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
+  // THE SIZES THIS PLUGIN KEEPS ARE DEPLOYMENT CHOICES, NOT CONSTANTS. config.md:80-94 states the convention
+  // and gives its test: can you change this in cordis.yml without editing code? These five could not, and each
+  // was already a factory argument with a module default -- so the defaults below ARE the module constants, and
+  // the conformance test asserts they stay equal. Plain rather than `.volatile()`: every one is read once at
+  // mount, so declaring it writable from the settings card would offer an edit the running plugin ignores.
+  feedMaxPerSession: Schema.number().min(1).default(DEFAULT_MAX_PER_SESSION).description('Events kept per session in the in-memory feed, newest kept. Read once, at mount, so this is YAML-only.'),
+  fsJournalMaxPaths: Schema.number().min(1).default(DEFAULT_MAX_PATHS).description('Paths the filesystem journal remembers, least recently touched dropped first. Read once, at mount, so this is YAML-only.'),
+  fsJournalMaxPerPath: Schema.number().min(1).default(DEFAULT_MAX_PER_PATH).description('Versions remembered per path in the filesystem journal. Read once, at mount, so this is YAML-only.'),
+  composeMaxChars: Schema.number().min(1).default(8000).description('Longest composed state handed to the model at one seam, in characters; longer state is cut. Read once, at mount, so this is YAML-only.'),
+  toolBlockMaxChars: Schema.number().min(1).default(4000).description('Longest tool-call window rendered into that state, in characters. Read once, at mount, so this is YAML-only.'),
   // THE RECORD'S OWN SWITCHES, all three volatile because all three must be live: a trace that had to be
   // restarted to stop leaking is a trace that leaks until somebody notices.
   redactEnabled: Schema.boolean().default(true).volatile().description('Redact the trace copy. ON by default, and it NEVER touches what the model is asked: `state` stays raw, because a model asked to classify `[REDACTED]` measures the scrubber. Off lets credential shapes through on purpose — truncation still applies, because a kill switch that also removed the size cap would be a foot-gun.'),
@@ -197,8 +207,8 @@ async function apply(ctx, config) {
   // THE ANNOUNCED TURN BOUNDARY, held per session. Declared HERE because the observer below is
   // constructed before the listener that fills it, and `readClaimed` closes over this binding.
   const claimed = new Map()
-  const feed = createEventFeed()
-  const fsJournal = createFsJournal()
+  const feed = createEventFeed({ maxPerSession: readConfigValue(config.feedMaxPerSession) })
+  const fsJournal = createFsJournal({ maxPaths: readConfigValue(config.fsJournalMaxPaths), maxPerPath: readConfigValue(config.fsJournalMaxPerPath) })
   // THE SESSION'S OWN EVENTS, as one function, so the fallback and the comparison cannot drift apart. It is the
   // only thing here that needs a LIVE session -- which is why the feed exists, and why this is the function to
   // delete when the adapter reads sessionQuery instead.
@@ -478,6 +488,10 @@ async function apply(ctx, config) {
   // either, so a failure is recorded as a skip line with its reason rather than swallowed.
   const everyNTurns = Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0)
   const turnObserver = createTurnObserver({
+    // THE TWO SIZES OF THE COMPOSED STATE, from config rather than from the modules' own defaults. Plain fields,
+    // because a size read once at mount must not be offered as a live edit -- see the schema's note.
+    maxChars: readConfigValue(config.composeMaxChars),
+    toolMaxChars: readConfigValue(config.toolBlockMaxChars),
     listener: createTurnListener({
       everyNTurns,
       isEnabled: () => Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0) > 0,
