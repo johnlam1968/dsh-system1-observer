@@ -186,3 +186,24 @@ test('the announced request pins the window, and its absence falls back to the i
   assert.notEqual(String(announced.sections?.['OPERATOR REQUEST']), String(inferred.sections?.['OPERATOR REQUEST']), 'the two paths judge different requests')
   assert.notEqual(String(announced.sections?.['AGENT RESPONSE']), String(inferred.sections?.['AGENT RESPONSE']), 'and different responses')
 })
+
+// A CLOSING TURN HAS NO NEXT MESSAGE, AND THE SECTION MUST SAY SO RATHER THAN REPEAT THE REQUEST.
+//
+// `agent/turn-stopping` is the turn ENDING, so the operator's reply does not exist yet. Without this the section
+// carries the turn's own request under a heading that says NEXT, and `operator_next_message_kind` -- whose abstain
+// option is "OPERATOR NEXT MESSAGE is 'none yet' or absent" -- answers about a message that is not a reaction.
+test('a closing turn with an announced request reports NO next message, not its own request again', () => {
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const assistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
+  const events = [user(1, 'THE REQUEST THAT OPENED THE TURN'), assistant(2, 'the answer being judged')]
+
+  const closing = composeTurnState({ events, claimedRequest: { message: { text: 'THE REQUEST THAT OPENED THE TURN', seq: 1 }, seq: 1, turn: 7 } })
+  assert.notEqual(closing.refused, true, 'a closing turn composes: ' + String(closing.reason))
+  assert.match(String(closing.sections?.['OPERATOR REQUEST']), /THE REQUEST THAT OPENED THE TURN/, 'the exchange is the announced one')
+  assert.match(String(closing.sections?.['AGENT RESPONSE']), /the answer being judged/)
+  assert.match(String(closing.sections?.['OPERATOR NEXT MESSAGE']), /none yet/, 'and no reply has happened, so the section says so')
+
+  // AND A SUPPLIED REACTION STILL WINS, which is the case the old trigger produced.
+  const supplied = composeTurnState({ events, nextMessage: { text: 'the operator replied' } })
+  assert.match(String(supplied.sections?.['OPERATOR NEXT MESSAGE']), /the operator replied/, 'a supplied reaction is still the next message')
+})
