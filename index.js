@@ -554,6 +554,30 @@ async function apply(ctx, config) {
     feed.record(session?.id, event)
   })
 
+  // `agent/inbox/claimed` ANNOUNCES WHICH MESSAGE OPENS A TURN, as `{agent, message, turn}`. Step 1 of the adoption
+  // plan names it for exactly that: the composer INFERS the boundary by searching backwards for the newest operator
+  // message, and this is the harness saying which one it is. The mode is `emit` -- fire and forget -- so this is a
+  // synchronous recorder like `fs/observed`, and a throw must not escape into the loop.
+  //
+  // HELD, NOT YET CONSUMED, and that is deliberate: the boundary rule has three rounds of history and moves on its
+  // own, with a test that the announced message wins and a control that its absence falls back to the inference.
+  const claimed = new Map()
+  ctx.on('agent/inbox/claimed', (payload) => {
+    try {
+      const sessionId = payload?.agent?.id
+      if (typeof sessionId !== 'string' || sessionId === '') return
+      const message = payload?.message
+      if (message === null || message === undefined) return
+      claimed.set(sessionId, {
+        message,
+        turn: typeof payload?.turn === 'number' ? payload.turn : null,
+        seq: typeof message.seq === 'number' ? message.seq : null,
+      })
+    } catch {
+      // An emitter's listener must never become the reason a turn fails.
+    }
+  })
+
   // `agent/turn-stopping` IS SERIAL -- THE HARNESS AWAITS THIS LISTENER BEFORE CLOSING THE TURN. So it returns
   // UNDEFINED: no promise, and no work that could delay a close. An 800ms judge call here would hold every turn
   // open, which is why the measurement is dispatched nowhere near it.
