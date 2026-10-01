@@ -1,0 +1,86 @@
+// THE ADAPTER'S INVENTORY, CHECKED AGAINST THE CODE.
+//
+// The objective says to route every host call through one adapter so porting means re-deriving that file. A list in a
+// comment would drift the first time someone added a call, so this greps the source and fails on a literal call that
+// is not declared, or a declaration with nothing behind it.
+//
+// THE SCANNER READ CODE AS TEXT, AND THREE BUGS FOLLOWED -- each found by printing the exact bytes rather than
+// reasoning about them:
+//   1. `lib/*.js` was not recursive, so `lib/model/service.js` was invisible.
+//   2. `[A-Za-z]+` cannot match `system1`. A service name with a DIGIT was hidden by a character class.
+//   3. comments counted as code: `lib/host/feed.js` documents `ctx.on('session/event', ...)` in its header, which the
+//      purity check read as a subscription. Comments are stripped before extraction now.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { HOST_SERVICES, HOST_EVENTS, HOST_SYMBOL_REACHED, ADAPTER_MODULES } from '../lib/host/index.js'
+
+const ROOT = process.cwd()
+const NAME = '[A-Za-z0-9_-]+'
+const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : '')
+/** Comments are PROSE. They are stripped before extraction, because a module that documents an event does not subscribe to it. */
+const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n')
+
+function jsFiles(dir) {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) return jsFiles(full)
+    return entry.isFile() && entry.name.endsWith('.js') ? [full] : []
+  })
+}
+
+const ROW = code(read(join(ROOT, 'index.js')))
+const LIB = jsFiles(join(ROOT, 'lib'))
+  .filter((file) => !file.includes(join('lib', 'host')))
+  .map((file) => code(read(file)))
+  .join('\n')
+
+const grab = (text, pattern) => [...text.matchAll(pattern)].map((m) => m[1])
+const servicesIn = (text) => grab(text, new RegExp(`ctx\\.get\\('(${NAME})'\\)`, 'g'))
+const injectedIn = (text) => [...text.matchAll(new RegExp(`inject\\(\\[([^\\]]*)\\]`, 'g'))].flatMap((m) => grab(m[1], new RegExp(`'(${NAME})'`, 'g')))
+const eventsIn = (text) => grab(text, new RegExp(`ctx\\.on\\('(${NAME}(?:/${NAME})*)'`, 'g'))
+const unique = (list) => [...new Set(list)].sort()
+
+test('every service reached BY LITERAL is declared, and no declaration is stale', () => {
+  const used = unique([...servicesIn(ROW), ...injectedIn(ROW), ...servicesIn(LIB), ...injectedIn(LIB)])
+  const declared = Object.keys(HOST_SERVICES)
+  assert.deepEqual(used.filter((name) => !declared.includes(name)), [], 'an undeclared service is a host dependency nobody wrote down')
+  assert.deepEqual(declared.filter((name) => !used.includes(name)), [], 'and a stale declaration claims one the plugin does not have')
+  assert.ok(used.includes('system1'), 'system1 is reached by a literal in the row -- the digit is why it was invisible for three rounds')
+})
+
+test('every event subscribed BY LITERAL is declared, and no declaration is stale', () => {
+  const used = unique([...eventsIn(ROW), ...eventsIn(LIB)])
+  const declared = Object.keys(HOST_EVENTS)
+  assert.deepEqual(used.filter((name) => !declared.includes(name)), [], 'an undeclared event is a host dependency nobody wrote down')
+  assert.deepEqual(declared.filter((name) => !used.includes(name)), [], 'and a stale declaration claims one the plugin does not have')
+})
+
+test('the symbol-reached tier names real files, and records the dynamic service resolution', () => {
+  const entries = Object.entries(HOST_SYMBOL_REACHED)
+  assert.ok(entries.length >= 3, 'constants, a variable and a table are all declared rather than omitted')
+  assert.ok(Object.keys(HOST_SYMBOL_REACHED).some((key) => key.includes('ctx.get(name)')), 'the dynamic service key in lib/model/service.js is declared')
+  for (const [key, description] of entries) {
+    for (const match of description.matchAll(/\b((?:lib|test)\/[A-Za-z0-9/._-]+\.js)\b/g)) {
+      assert.ok(existsSync(join(ROOT, match[1])), `${key} names ${match[1]}, which should exist`)
+    }
+  }
+})
+
+test('the adapter modules are PURE: no host service, no event subscription, comments notwithstanding', () => {
+  for (const relative of ADAPTER_MODULES) {
+    const text = code(read(join(ROOT, relative)))
+    assert.notEqual(text, '', relative + ' should exist')
+    assert.deepEqual(servicesIn(text), [], relative + ' must not read a host service')
+    assert.deepEqual(injectedIn(text), [], relative + ' must not inject a host service')
+    assert.deepEqual(eventsIn(text), [], relative + ' must not subscribe to a host event')
+  }
+})
+
+test('the scan is RECURSIVE, so a nested lib file cannot hide a host call', () => {
+  const nested = jsFiles(join(ROOT, 'lib')).filter((file) => file.includes(join('lib', 'model')))
+  assert.ok(nested.length > 0, 'lib/model holds files')
+  assert.ok(nested.some((file) => code(read(file)).includes('ctx.get(')), 'and at least one reaches a host service -- which the first, non-recursive scan could not see')
+})
