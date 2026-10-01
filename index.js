@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { probeFingerprint } from './lib/probe-score.js'
-import { configuredQuestionIds } from './lib/questions.js'
+import { FIREABLE_HOOKS, configuredQuestionIds } from './lib/questions.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -115,7 +115,16 @@ const Config = Schema.object({
   // `questions` answers `isVolatilePath` true, a nine-key map round-trips through `projectForm` verbatim,
   // and an undeclared tenth seam comes back `undefined`.
   questions: Schema.object(
-    Object.fromEntries(PROBE_SEAMS.map(seam => [seam, Schema.array(Schema.any())])),
+    // THE TURN HOOK IS NOT A PROBE SEAM, AND IT STILL NEEDS A KEY HERE. The nine seams take the probe question when
+    // unconfigured; the SCHEDULED MEASUREMENT takes a set of its own, and `turnSpecs` reads it from
+    // `config.questions[TURN_HOOK]`. Undeclared, `projectForm` drops it -- so a stored turn set vanishes the next time
+    // any other field is saved, which is what this schema test's own comment warns about: "a seam missing here is a
+    // seam whose stored questions vanish on the next save by any other field."
+    //
+    // `FIREABLE_HOOKS` IS ALREADY THAT LIST -- `[...PROBE_SEAMS, TURN_HOOK]`, exported by lib/questions.js -- so this
+    // names one list rather than reconstructing it. Measured: the plugin's only live measurement (22:13, turn 5)
+    // asked twelve questions from criteria/helpfulness-set@2.json, and today the resolved config carries no turn key.
+    Object.fromEntries(FIREABLE_HOOKS.map(hook => [hook, Schema.array(Schema.any())])),
   ).volatile().description('Per-seam questions, keyed by seam name. An array of `{id, type, instructions}` where `type` is `noul` (optional `criteria`), `choice` (`options`: `{label, criterion, abstain}`) or `score` (`levels`). A seam left empty asks nothing. Legacy mode -- the probe question, or `question` -- applies until at least one seam carries a question.'),
   // THE KILL SWITCH. `!= false` in `lib/observe.js`, NOT `=== true`: an absent field has to leave the
   // observer ON, because a switch that turns itself off when nobody set it is worse than no switch. There

@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Config } from '../index.js'
 import { PROBE_SEAMS } from '../lib/seams.js'
+import { FIREABLE_HOOKS, TURN_HOOK } from '../lib/questions.js'
 
 // WHY THIS EXISTS: the settings host projects a form onto this schema before every read and every write
 // (`dsh-settings` `volatileForm` + `projectForm`), and that projection has two silent behaviours that this
@@ -23,8 +24,11 @@ test('every probe seam is declared under `questions`, so no seam can be silently
   assert.equal(questions.meta?.volatile, true, '`questions` must be volatile or no write can reach it')
   assert.deepEqual(
     Object.keys(questions.dict ?? {}),
-    [...PROBE_SEAMS],
-    'the schema keys and PROBE_SEAMS must be the same list, in the same order -- a seam on one side only is a seam that does not work',
+    // EVERY FIREABLE HOOK, NOT ONLY THE SEAMS. The turn hook carries a question set and is not a probe seam, so a list
+    // of seams alone looks correct while dropping it -- and `turnSpecs` reads `config.questions[TURN_HOOK]`, so an
+    // undeclared turn key is a scheduled measurement that cannot be configured at all.
+    [...FIREABLE_HOOKS],
+    'the schema keys must be every hook that can carry questions, in order -- a hook on one side only is a hook that does not work',
   )
 })
 
@@ -74,4 +78,17 @@ test('`sessions` is a volatile list of ANYTHING, because an entry may carry a ti
   // resolution -- the row would fail to load the moment the menu wrote one.
   assert.equal(field.inner?.type, 'any', 'an entry is narrowed in `lib/sessions.js`, not by the schema')
   assert.equal(field.meta?.volatile, true)
+})
+
+
+// THE TURN SET SURVIVES A ROUND TRIP THROUGH THE SCHEMA. Every other test of the scheduled measurement passes
+// `questions: { turn: [...] }` STRAIGHT to the plugin, which bypasses `projectForm` -- so the one path that drops an
+// undeclared key was never exercised, and a configuration the card can write but the schema cannot hold goes
+// unnoticed until a save by some other field silently deletes it.
+//
+// VOLATILITY LIVES ON THE PARENT, not on the leaf array -- my first version asserted it of the leaf and failed, which
+// is the same shape of mistake as reading one line of a four-line chain.
+test('the turn hook is declared under `questions`, so its stored set can survive a save', () => {
+  assert.notEqual(dict.questions.dict?.[TURN_HOOK], undefined, 'the schema declares no key for the turn hook, so its stored set is dropped on the next save')
+  assert.equal(dict.questions.meta?.volatile, true, '`questions` must be volatile or no live write can reach any hook, the turn included')
 })
