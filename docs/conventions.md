@@ -22,6 +22,7 @@ synonym for "probably fine").
 | 1 | `meta/topics.md`, `basic/index.md`, `basic/config.md`, `basic/tool.md` | module shape and `Config` **CONFORM**; three deltas (five tunables unreachable from YAML, `tools` probed, tools hand-built); **HMR citation** for the ledger reset |
 | 2 | `framework/service.md`, `reference/capability-seams.md` | the `inject` vs `ctx.get` split **CONFORMS** — the plugin's most-questioned pattern is exactly what the docs prescribe; the generated-service rule lands on our hand-written inventory |
 | 3 | `framework/events.md` | **all four modes conform**, including the waterfall `next()` contract; the doc's Cordis-event vs session-event-type rule is the one whose absence caused the worst bug; the documented event list is the generated `cordis-surface` block |
+| 4 | `framework/index.md`, `cordis-tutorial/02-lifecycle-and-effects.md` | rows 4 and 8 **CONFORM**: every registration is tracked, no unmanaged resource is held, no module-level mutable state, so dispose → apply is clean. New rules recorded: teardown ordering; and a minor delta — an unwritable `tracePath` degrades silently where the docs make it a failed load |
 
 ---
 
@@ -36,6 +37,8 @@ synonym for "probably fine").
 | `site/develop/framework/service.md` | **required vs optional dependencies**, provider disposal semantics, providing a service, service isolation, and *do not maintain a second static list of services* |
 | `site/reference/capability-seams.md` | the generated package → service graph (547 lines): which services are core seams |
 | `site/develop/framework/events.md` | the four event modes and their contracts, `ctx.on` as an effect, and **Cordis events vs session event types** |
+| `site/develop/framework/index.md` | fiber states, the enumerated tracked-registration list, teardown ordering, `ctx.plugin` child fibers, HMR |
+| `site/develop/cordis-tutorial/02-lifecycle-and-effects.md` | effects in practice: effect bodies run at load, disposers at unload, and why you rarely need to write one |
 
 ## Conventions extracted
 
@@ -55,6 +58,10 @@ synonym for "probably fine").
 14. **Events are named `namespace/action`** (events.md:104-106), and the complete signatures and modes live in the generated **`cordis-surface`** block of `reference/subsystems/core.md`.
 15. **Cordis events and persisted session event types are different things with confusingly similar names** (events.md:108): `turn/*`, `step/*`, `tool/call`, `tool/result` and `compaction/*` are **session event types, not Cordis events** — to observe them you listen to `session/event` and check `event.type`. The Cordis event is `tools/result`.
 16. **Listeners are effects**: `ctx.on` registrations are removed automatically when the plugin disposes (events.md:110-119). Type-safe events come from `declare module '@deepseek-ai/cordis' { interface Events {…} }` — TypeScript only (events.md:85-102).
+17. **Everything registered through `ctx` is an effect, and the tracked set is enumerated**: `ctx.on`, `ctx.tools.register`, `ctx.llm.registerAdapter`, and **service registration**; `ctx.effect(fn)` is only for resources Cordis does not manage — timers, connections, watchers (index.md:42-65, tutorial:86-94).
+18. **Teardown ordering**: disposers begin in **reverse registration order**, but multiple **asynchronous** disposers run **concurrently** and are not guaranteed to complete one at a time. Steps with an order dependency must live in a **single** `ctx.effect()` disposer that awaits them sequentially (index.md:65, tutorial:96).
+19. **Fiber states**: `PENDING → LOADING → ACTIVE`, `ACTIVE → UNLOADING → DISPOSED`, and **`FAILED` when `apply` or config validation throws**. PENDING means a required service is not ready — the standing answer to "why does my plugin produce nothing" (index.md:9-27, tutorial:70-84,81).
+20. **`ctx.plugin()` mounts a child fiber** with its own lifecycle, disposed with its parent; `fiber.dispose()` resolves only after all asynchronous cleanup and recurses into children. A **function** plugin needs no `apply`; only the **object** form requires one (index.md:67-99, tutorial:66-68).
 
 ## Where this plugin stands
 
@@ -63,7 +70,7 @@ synonym for "probably fine").
 | 1 | module shape and `apply(ctx, config)` | `index.js:886` — `export default { apply, name, inject, Config }` | **CONFORMS** |
 | 2 | the plugin is a **TypeScript** module | plain ESM JavaScript; no `Config` interface is possible | **DELTA** — pending publish.md (queue 8) |
 | 3 | `inject` for required services, `ctx.get` at the use site for optional | `agents` in `inject`, with the row's own comment giving the reason (the context proxy throws on an undeclared service); `system1`, `tools`, `sessionQuery`, `tokenMeter`, `workspaceChanges` each `ctx.get(name)` behind a guard | **CONFORMS** — service.md:91-102 states this exact split. *(Round 1 called this PARTIAL and named `tools` as wrongly probed; the docs say the opposite — an optional registry is queried at the use site.)* |
-| 4 | auto-cleanup; `ctx.effect` for manual resources; **and re-entrancy across dispose/reload** | every subscription is `ctx.on(...)`; the trace writer opens a file and there is no unload path, no unload test, and no apply → dispose → apply test | **UNVERIFIED** — now sharper, because convention 10 says a required service's disappearance *will* dispose and reload this plugin |
+| 4 | auto-cleanup; `ctx.effect` for unmanaged resources; re-entrancy across dispose/reload | every registration is tracked: `ctx.on` ×7, `ctx.tools.register` ×3 (`index.js:346,358,373`), and the service through `ctx.provide`. **No unmanaged resource is held** — the trace write path is synchronous open/write/close (`lib/evidence.js:142`, imports `closeSync`), and the only `setTimeout` is per-request (`lib/model/wire.js:6`). **No module-level mutable state** in `lib/*` or `lib/host/*`: every Map, Set and array is created inside `apply` | **CONFORMS by inspection** — index.md:59-63 and tutorial:86-92 enumerate exactly `ctx.on`, `ctx.tools.register`, service registration and `ctx.effect` as the tracked set. The remaining gap is a **test**, not a mechanism: nothing exercises unload or apply → dispose → apply |
 | 5 | dev registration by `- insert:` patch with an absolute path | the profile installs this repo as a package (`link:…`) and the row is `- id: system1-observer` | **UNVERIFIED** — publish.md (queue 8) |
 | 6 | `Config` is a Schemastery schema, validated at load, loud on error | `Schema.object` with `.default()`, `.min()`, `.description()` | **CONFORMS** |
 | 7 | no hardcoded tunables | **five**: feed cap (`lib/host/feed.js:31`), fs journal `DEFAULT_MAX_PATHS`/`DEFAULT_MAX_PER_PATH` (`lib/host/fs-journal.js:31`), composer `maxChars = 8000` (`lib/turn-state.js:64`), tool-block `maxChars = 4000` (`lib/tool-blocks.js:50`) | **DELTA** — each already injectable in code, none reachable from YAML |
@@ -76,7 +83,10 @@ synonym for "probably fine").
 | 14 | mode contracts: `emit` returns ignored, `serial`'s first non-undefined return terminates the rest, `waterfall`'s `next()` mandatory | `session/event`, `fs/observed`, `agent/inbox/claimed` are emit and return nothing; the `agent/turn-stopping` trigger returns `undefined` at every gate; `fs/write-intent`/`fs/edit-intent` call `next()` exactly once and `return decision`; the seam listeners call the continuation (`args[args.length-1]()`) and `return decision` — the same reference, per their own comment; `llm/stream` wraps with `tee(next(), …)`, which is the doc's documented **wrap** pattern | **CONFORMS** — events.md:25-83. And a sharper reason for the serial rule than the one the code carried: a non-`undefined` return there **terminates the remaining listeners**, it does not merely delay a close |
 | 15 | Cordis events vs session event types (`tools/result` vs `tool/result`) | the seam table subscribes `tools/result` (`lib/seams.js:85`); `tool/result` appears **only** as a session event type comparison under `session/event` (`lib/tool-blocks.js:68`) | **CONFORMS** — events.md:108. This is the rule whose absence produced the worst bug of this project: two similar names, one of them not a Cordis event at all |
 | 16 | the documented event list is the generated `cordis-surface` block | `lib/host/index.js` hand-declares the events and their modes | **DELTA (row 11's resolution)** — the generated block is where these names should come from; queue 4b |
-| 17 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
+| 17 | teardown ordering: reverse registration order, but asynchronous disposers run **concurrently** | no `ctx.effect` is registered anywhere, so there is nothing to order | **N/A today, rule recorded** — index.md:65, tutorial:96. It becomes binding the moment an effect is added (Phase 1) |
+| 18 | `ctx.plugin()` child fibers; a function plugin needs no `apply`, only the object form does | one plugin, object form with `apply`; no child plugins | **CONFORMS** — tutorial:66. The object form is the one that requires `apply`, and `index.js:886` provides it |
+| 19 | **`FAILED`** is the documented outcome when `apply` **or config validation** throws | config validation is Cordis's; the trace writer degrades silently — a `tracePath` that cannot be opened produces no line and no failure | **DELTA (minor)** — a path that cannot be written is a configuration error, and the documented outcome is a failed load with a clear message, not a silent absence of records |
+| 20 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
 
 ## Deltas worth naming
 
@@ -102,7 +112,7 @@ synonym for "probably fine").
 2. ~~`develop/basic/config.md`~~ ✅
 3. ~~`develop/framework/service.md` + `reference/capability-seams.md`~~ ✅ — **3b:** `reference/cordis-api/service.md` to confirm `ctx.provide` is documented
 4. ~~`develop/framework/events.md`~~ ✅ — **4b:** the generated `cordis-surface` block in `reference/subsystems/core.md`, which is the documented source for every event name and mode (and therefore the source `lib/host/index.js` should cite)
-5. `develop/framework/index.md` + `develop/cordis-tutorial/02-lifecycle-and-effects.md` — lifecycle, `ctx.effect`, unload, re-entrancy
+5. ~~`develop/framework/index.md` + `develop/cordis-tutorial/02-lifecycle-and-effects.md`~~ ✅
 6. `reference/agent-lifecycle.md` — the loop this observer hangs off
 7. `reference/subsystems/{session,session-query,token-meter,tools}.md` — grep; the consumed capabilities, plus `ctx.tools.guard` (the graph calls `ctx.tools` *"Tool registry and guarded execution pipeline"*, giving `lib/seams.js:75` a documented home)
 8. `develop/basic/publish.md` — packaging, the route the profile uses
