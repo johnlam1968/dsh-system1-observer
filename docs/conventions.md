@@ -27,6 +27,7 @@ synonym for "probably fine").
 | 6 | the generated catalogue, grepped across the subsystem pages | **rows 11 and 16 RESOLVE**: all 14 events this plugin names are in the catalogue and **all 14 modes match**; 4 of 7 services are core seams, 3 are package services. The source map below gives every name its page and line |
 | 7 | `develop/basic/publish.md`, `reference/cordis-api/service.md`, and the shipped `cordis-composition-reference` skill | **the TypeScript delta was not a delta** — the documented publishable bundle is `index.js`; rows 2, 5 and 12 CONFORM. The skill supplies the patch-by-id semantics that explain two config mysteries, and publish.md supplies Phase 1's proof of loading (`--dump-config`) |
 | 8 | `reference/cookbook/adding-a-settings-card.md` and `extra/testing.md` | **the last two convention rows resolve.** The card's browser half matches the documented factory form, and two declarations are missing (`applies: 'restart'` on mount-bound fields). Testing is the largest delta left: a product-visible plugin is required to have a **non-unit real-composition test**, and **per-registry HMR-safety tests** — and the policy names the `subject-cost` flake I chased |
+| 9 | three queue items closed by grep | `ctx.tools.guard` is documented and its contract **confirms** why this plugin excludes it; the card's namespace spelling already handles both forms; and **`.volatile()` is not in the published documentation at all** — the skill and the installed source are its only authorities |
 | 8b | the shipped `dsh-plugin-settings-card` skill | the card **conforms** on every point of its recipe (seats, keys, factory, subscription, volatile unwrapping at the schema's floor version) — and it **corrects a citation I committed two rounds ago**: a settings save is live and does **not** re-apply the plugin |
 
 ---
@@ -89,6 +90,10 @@ synonym for "probably fine").
 33. **The browser half must be Loader lazy-CJS factory output** (card cookbook:82-104), its factory id equal to the package name, and the client module system serves it from enabled Loader entries that declare `dsh.client` — **so no web rebuild is needed**. A bundle-purity gate rejects cross-plugin **value** imports; type-only imports are how a card names another plugin's slot.
 34. **Testing tiers** (extra/testing.md:7-16): unit specs beside the code they exercise; a **per-file coverage gate** where *"an uncovered line is often dead code the gate flags for deletion, not a missing test to bolt on"* and *"line coverage is necessary, never sufficient — it proves lines ran, not that the feature works as shipped"*; real-API e2e that self-skips without keys; owner-local expected output; recorded-session snapshots; web browser snapshots.
 35. **Every registry gets an HMR-safety test** — *"dispose the contributing fiber, assert cleanup"* (testing.md:9).
+**Where `.volatile()` is documented — and where it is not.** A grep over the whole mirror (`site/` and `extra/`) returns **not one page mentioning `volatile`**. The three authorities that do are the shipped `dsh-plugin-settings-card` skill, the **installed source** of the harness's own plugins, and schemastery itself. This is the single most consequential mechanism in this plugin's configuration — the accessor that makes a seam setting live rather than a silent no-op — and the published documentation does not describe it. That is the clearest argument in this file for quoting source and version beside a rule instead of paraphrasing it.
+
+**`ctx.tools.guard`, and why this plugin does not use it.** It is documented at `reference/subsystems/tools.md:528`: *"Register a monotonic guard after the extensible `tools/pre-execute` waterfall… a synchronous check; a returned string denies the execution."* The plugin's own comment at `lib/seams.js:75` says `guard` "is NOT among them and cannot be: it is synchronous, so it can never await an HTTP request" — which the documented signature confirms. The waterfall is the seam that can await; `guard` is the synchronous denial that runs after it. Also documented there: `register(definition)` returns *"the exact disposer that unregisters the tool"*, and `restrict(filter)` masks global tools per agent scope (unused here).
+
 37. **A `.volatile()` field is an ACCESSOR, not a value** — it arrives as `Volatile<T>` and is read with **`.get()` at the point of use**. Read as a plain value you get the accessor, so `=== true`, `typeof x === 'string'` and `Array.isArray(x)` are all false, and **the plugin silently runs on its defaults while the card, the save and the trace all look correct**. The installed `dsh-system1` ships `readConfigValue` for this (`lib/index.js:40-46`); unwrap defensively in both directions, because ordinary fields arrive plain. **`.volatile()` requires schemastery ≥ 3.18.4.**
 38. **A settings SAVE is live, with no restart, and the plugin is deliberately NOT re-applied** — the cookbook expects *unchanged plugin instance identity*. So an `apply`-time capture (a client built once, a listener registered once, a file opened once) does **not** see the change, while a field read through `.get()` where it is used does. React to a change with `ctx.on('loader/volatile-update', …)`.
 39. **Config fields must sit at the ROOT of the schema object.** A non-volatile path is refused by `settings.write` — `Config field "x" is not volatile` — and a nested object draws as one opaque entry.
@@ -163,6 +168,23 @@ Verified against the generated catalogue (`gen-cordis-catalog.ts`, `pnpm run ver
 | `ctx.system1` | service | **not in the documentation** | — | ✅ |
 
 The four core services (`agents`, `tools`, `sessionQuery`, `tokenMeter`) are seams in the harness; the other three are package-provided — `configEditor` and `workspaceChanges` come from packages, `system1` is this profile's own dependency — which is why **not one of them is in `inject`**: the documented rule for an optional capability is `ctx.get()` at the use site.
+
+## The deltas as a work list
+
+Every row above is now either `CONFORMS` or one of these. Ordered by cost, cheapest first.
+
+| # | delta | the fix | where |
+|---|---|---|---|
+| 1 | five tunables unreachable from `cordis.yml` (row 7) | add five `Config` fields and pass them to the factories that already accept them | `lib/host/feed.js:31`, `lib/host/fs-journal.js:31`, `lib/turn-state.js:64`, `lib/tool-blocks.js:50`, wired in `index.js` |
+| 2 | seven fields are mount-time in prose only (row 25) | declare `applies: 'restart'` — the documented way to say *"the owner only honours a change at the next start"* | the `Config` schema, on `hooks`, `provider`, `model`, `timeoutMs`, `wireUrl`, `question`, `tracePath` |
+| 3 | an unwritable `tracePath` records nothing and reports nothing (row 19) | fail the load, naming the path — the documented outcome for a configuration the owner cannot honour, and the documented test is that it **exits non-zero** (row 27) | `apply` in `index.js` |
+| 4 | no Loader-booted composition anywhere (row 26) | boot a test-only `cordis.yml` through the Loader, stub only the judge, and assert against the trace the plugin writes | a new test file, Phase 3's centrepiece |
+| 5 | no HMR-safety test (row 26) | dispose the contributing fiber and assert cleanup: listeners gone, tools unregistered, service retracted | a new test file |
+| 6 | tools are hand-built rather than `defineTool` (row 9) | re-read the reason recorded at `lib/tool.js:8`, then either cite the convention that permits it or switch to `defineTool` and let it validate `args` | `lib/tool.js` |
+| 7 | `subject-cost` can pass alone and fail in suite (row 29) | make the spec await the condition it depends on instead of widening the poll budget | the test |
+| 8 | coverage thresholds sit below the harness's per-file bar | a policy difference, not a defect — recorded so it is a choice rather than an accident | `package.json` |
+
+Item 4 is the one that matters most, and the reason is now measurable: **four shape bugs and one flake survived a green suite because the suite was built from the same beliefs as the code.** A Loader-booted composition is the only instrument in this list that can disagree with those beliefs.
 
 ## Deltas worth naming
 
