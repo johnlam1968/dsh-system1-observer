@@ -1,3 +1,4 @@
+import { createEventFeed } from './lib/host/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //
@@ -180,6 +181,9 @@ async function apply(ctx, config) {
   // when its client is built, so neither can change under a running row; unwrapping them once is
   // correct. The VOLATILE fields are deliberately NOT taken from here -- see `readConfig` below.
   const mount = plainConfig(config)
+  // THE LIVE EVENT FEED: the holder for what the harness commits. It is read by `readEvents` below and is empty
+  // until something fills it, which is the next commit -- an empty feed is exactly the previous behaviour.
+  const feed = createEventFeed()
   const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
   // THE POLICY IS A GETTER because it is live config, read per line; the path is captured because the test suite
   // depends on that ordering. See `lib/evidence.js`.
@@ -443,6 +447,9 @@ async function apply(ctx, config) {
     // The session's events, obtained the way the peer bridge does: the agents service by session id, then the
     // agent's own session. A missing service or session yields no events, which `composeTurnState` refuses on.
     readEvents: (sessionId) => {
+    // THE FEED FIRST, THEN THE SESSION. An empty feed falls through to exactly the behaviour that was here before.
+    const held = feed.events(sessionId)
+    if (held.length > 0) return held
       try {
         const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
         const direct = agents !== undefined && typeof agents.get === 'function' ? agents.get(sessionId) : undefined
@@ -486,6 +493,10 @@ async function apply(ctx, config) {
       return null
     }
   }
+
+  ctx.on('session/event', (session, event) => {
+    feed.record(session?.id, event)
+  })
 
   ctx.on('agent/pre-step', (payload, next) => {
     // THE MOUNT LINE PRECEDES ANY SKIP THIS HANDLER WRITES, as the seam path arranges at its own observe and
