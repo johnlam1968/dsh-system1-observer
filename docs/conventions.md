@@ -21,6 +21,7 @@ synonym for "probably fine").
 |---|---|---|
 | 1 | `meta/topics.md`, `basic/index.md`, `basic/config.md`, `basic/tool.md` | module shape and `Config` **CONFORM**; three deltas (five tunables unreachable from YAML, `tools` probed, tools hand-built); **HMR citation** for the ledger reset |
 | 2 | `framework/service.md`, `reference/capability-seams.md` | the `inject` vs `ctx.get` split **CONFORMS** — the plugin's most-questioned pattern is exactly what the docs prescribe; the generated-service rule lands on our hand-written inventory |
+| 3 | `framework/events.md` | **all four modes conform**, including the waterfall `next()` contract; the doc's Cordis-event vs session-event-type rule is the one whose absence caused the worst bug; the documented event list is the generated `cordis-surface` block |
 
 ---
 
@@ -34,6 +35,7 @@ synonym for "probably fine").
 | `site/develop/basic/tool.md` | tools: `inject=['tools']`, `ctx.tools.register(defineTool({…}))`, `parameters` → `args`, `output.schema`/`render` |
 | `site/develop/framework/service.md` | **required vs optional dependencies**, provider disposal semantics, providing a service, service isolation, and *do not maintain a second static list of services* |
 | `site/reference/capability-seams.md` | the generated package → service graph (547 lines): which services are core seams |
+| `site/develop/framework/events.md` | the four event modes and their contracts, `ctx.on` as an effect, and **Cordis events vs session event types** |
 
 ## Conventions extracted
 
@@ -49,6 +51,10 @@ synonym for "probably fine").
 10. **When a required service disappears** (its provider unloads), dependents are **disposed automatically** and **reloaded automatically** when it returns (service.md:104-111).
 11. **Providing a service** is `class X extends Service { constructor(ctx) { super(ctx, 'metrics') } }`, optionally `static inject`; consumers then declare `inject=['metrics']` and use `ctx.metrics`. Types come from `declare module '@deepseek-ai/cordis'` augmentation (service.md:38-87). **Service isolation** lets one service have per-group instances (service.md:115-143).
 12. **Do not keep a second static list of built-in services.** *"服务名、公开方法和源码位置由仓库自动生成到各服务的子系统页面 … 以这些生成区块和服务的 TypeScript 接口为准，不要维护另一份静态清单"* (service.md:145-147).
+13. **Four event modes, four contracts** (events.md:25-83): **`emit`** — all listeners run synchronously, **return values are ignored**; **`bail`** — listeners in order, the first return that is not `null`/`false`/`undefined` becomes the result; **`serial`** — listeners in order, **awaited**, and the first non-`null`/`false`/`undefined` return **terminates the rest**; **`waterfall`** — each listener may **wrap** the downstream value, **`next()` is mandatory**, and *not* calling it "短路整个流水线，这是故意为之的设计——用于实现拦截/网关逻辑" (short-circuits the pipeline, deliberately, to implement interception/gateway logic).
+14. **Events are named `namespace/action`** (events.md:104-106), and the complete signatures and modes live in the generated **`cordis-surface`** block of `reference/subsystems/core.md`.
+15. **Cordis events and persisted session event types are different things with confusingly similar names** (events.md:108): `turn/*`, `step/*`, `tool/call`, `tool/result` and `compaction/*` are **session event types, not Cordis events** — to observe them you listen to `session/event` and check `event.type`. The Cordis event is `tools/result`.
+16. **Listeners are effects**: `ctx.on` registrations are removed automatically when the plugin disposes (events.md:110-119). Type-safe events come from `declare module '@deepseek-ai/cordis' { interface Events {…} }` — TypeScript only (events.md:85-102).
 
 ## Where this plugin stands
 
@@ -67,11 +73,14 @@ synonym for "probably fine").
 | 11 | **do not keep a static list of services** — the generated subsystem pages are authoritative | `lib/host/index.js` hand-declares `HOST_SERVICES` (6), `HOST_EVENTS` (4+), their modes and constraints, checked by `test/host-inventory.test.js` | **DELTA against the letter, valuable against the intent** — the inventory makes every host dependency explicit and is what caught two real mistakes, but the doc says the generated pages are the list and not to maintain another. Resolution: keep the check, cite the generated pages as its source (queue 7/11) |
 | 12 | a service is **provided** with the `Service` base class | `ctx.provide(OBSERVER_SERVICE, …)`, whose comment cites `cordis/lib/index.js:800` and says *NOT `ctx.set`* | **CONFORMS by a different API** — the tutorial shows the class form; ours is the lower-level Cordis API, checked against Cordis's own source. `reference/cordis-api/service.md` should confirm it is documented (queue 3b) |
 | 13 | core seams are the ones in the generated graph | consumed: `ctx.agents` ✓, `ctx.tools` ✓, `ctx.sessionQuery` ✓, `ctx.tokenMeter` ✓ — **`workspaceChanges` is not in the graph at all**; `system1` is our own dependency | **CONFORMS with a portability note** — `workspaceChanges` comes from a package (`dsh-workspace-changes`), not a core seam, so another deployment may not have it; it is already optional access, and its lines simply do not appear |
-| 14 | events, packaging, settings card, testing | — | **UNVERIFIED** — queue 4-10 |
+| 14 | mode contracts: `emit` returns ignored, `serial`'s first non-undefined return terminates the rest, `waterfall`'s `next()` mandatory | `session/event`, `fs/observed`, `agent/inbox/claimed` are emit and return nothing; the `agent/turn-stopping` trigger returns `undefined` at every gate; `fs/write-intent`/`fs/edit-intent` call `next()` exactly once and `return decision`; the seam listeners call the continuation (`args[args.length-1]()`) and `return decision` — the same reference, per their own comment; `llm/stream` wraps with `tee(next(), …)`, which is the doc's documented **wrap** pattern | **CONFORMS** — events.md:25-83. And a sharper reason for the serial rule than the one the code carried: a non-`undefined` return there **terminates the remaining listeners**, it does not merely delay a close |
+| 15 | Cordis events vs session event types (`tools/result` vs `tool/result`) | the seam table subscribes `tools/result` (`lib/seams.js:85`); `tool/result` appears **only** as a session event type comparison under `session/event` (`lib/tool-blocks.js:68`) | **CONFORMS** — events.md:108. This is the rule whose absence produced the worst bug of this project: two similar names, one of them not a Cordis event at all |
+| 16 | the documented event list is the generated `cordis-surface` block | `lib/host/index.js` hand-declares the events and their modes | **DELTA (row 11's resolution)** — the generated block is where these names should come from; queue 4b |
+| 17 | packaging, settings card, testing | — | **UNVERIFIED** — queue 8-10 |
 
 ## Deltas worth naming
 
-- **JavaScript, not TypeScript** — the documented plugin is a `.ts` module; this is why there is no `Config` type.
+- **JavaScript, not TypeScript** — the documented plugin is a `.ts` module, which costs two documented things: the `Config` interface, and type-safe events via `interface Events` declaration merging.
 - **Five tunables unreachable from `cordis.yml`** — the first cheap, concrete fix the docs produced; the factories already take them as arguments.
 - **Tools are hand-built rather than `defineTool`** — a reason is recorded in `lib/tool.js:8`; it predates this reading and deserves re-judging.
 - **No unload or re-entrancy story** — convention 10 says dispose/reload will happen; nothing tests it.
@@ -92,7 +101,7 @@ synonym for "probably fine").
 1. ~~`develop/basic/tool.md`~~ ✅ (round 2); `reference/cookbook/adding-a-tool.md` remains for nested schemas, canonical values, policy hooks, PTC mode, UI cards
 2. ~~`develop/basic/config.md`~~ ✅
 3. ~~`develop/framework/service.md` + `reference/capability-seams.md`~~ ✅ — **3b:** `reference/cordis-api/service.md` to confirm `ctx.provide` is documented
-4. `develop/framework/events.md` — the documented event rules
+4. ~~`develop/framework/events.md`~~ ✅ — **4b:** the generated `cordis-surface` block in `reference/subsystems/core.md`, which is the documented source for every event name and mode (and therefore the source `lib/host/index.js` should cite)
 5. `develop/framework/index.md` + `develop/cordis-tutorial/02-lifecycle-and-effects.md` — lifecycle, `ctx.effect`, unload, re-entrancy
 6. `reference/agent-lifecycle.md` — the loop this observer hangs off
 7. `reference/subsystems/{session,session-query,token-meter,tools}.md` — grep; the consumed capabilities, plus `ctx.tools.guard` (the graph calls `ctx.tools` *"Tool registry and guarded execution pipeline"*, giving `lib/seams.js:75` a documented home)
