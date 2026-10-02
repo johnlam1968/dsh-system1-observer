@@ -41,6 +41,10 @@ did not survive are in §5.
 
 | # | finding | class | fix |
 |---|---|---|---|
+| F12 | `lib/host/feed.js` exported `claim`, `reactionFor` and a `claimed` map that **no production path called** — the only callers were their own test | silent | deleted, with the module header saying what it holds and what it does not. Verifying this one first mattered: my opening grep reported "105 call sites", which was the pattern matching `claimedRequest` |
+| F13 | `lib/redact.js`'s credential-name lists covered `passwd`/`pwd` but not `pw`/`pword` | low | widened in the **two SHAPE lists** — header/bare names and the environment alternation. The JSON-KEY list is deliberately left at upstream's six, because `test/redact.test.js` counts them *precisely* to keep the port faithful; there `pw` is reachable the way any deployment-specific name is, through `redactKeys`. My first attempt widened all three and that count assertion caught it — a rounded fix caught by a test written for the opposite reason |
+| F14 | `sanitizeJson` wrote an `undefined` member as `null`, so "absent" and "explicitly null" were one fact in the record | correctness | an undefined member is dropped rather than spelled, leaving the redaction marker as the only string in that position |
+| F15 | `createObserverService` validated four of its six inputs and silently replaced a non-function `label`/`replay` with the default, so a consumer's typo became a behaviour change | silent | optional stays optional, but provided-and-wrong throws, matching the four that were already checked |
 | F1 | `lib/turn-state.js` anchored the tool-call window at the **start of the log** (`…seq ?? 0`) when the announced request carried no `seq` | correctness | it refuses, in the same voice as the two refusals above it; `test/turn-state.test.js` |
 | F2 | the envelope whitelist existed **twice** — the service lifted `requested` out of `meta`, the wire never listed it — so `lib/observe.js`'s read was `null` by construction on the wire | silent | one shared list, `lib/model/envelope.js`; transport tests in `test/envelope.test.js` |
 | F3 | `lib/host/feed.js` still said *"NOT YET WIRED TO A LISTENER — the next commit"* long after the entry module called `feed.record` | hygiene | it says what is wired and what is dead surface |
@@ -60,25 +64,20 @@ three were proved to fail against a frozen pre-fix copy (§8), and two failed on
 
 ## 3. OPEN — code
 
+Half of the ten findings that stood here did not survive verification: four were fixed, four refuted, one accepted,
+and fixing one of the four turned up a new one. The corrections are kept in §4 and §5 rather than deleted, because
+a reviewer who reads `?? null` as `|| null` will read it that way again.
+
 | # | finding | class | what would close it |
 |---|---|---|---|
-| O1 | `lib/host/feed.js` exports `claim`, `reactionFor` and an internal `claimed` map that **no production path calls** — the row keeps its own copy | silent | delete the three, or call them from the `agent/inbox/claimed` handler so there is one map |
-| O2 | **the card renders four fields; the schema declares fifteen live-writable** (`client.js:44` says *"THE FOUR FIELDS THE HOST ACCEPTS TODAY — the `.volatile()` ones"*). Eleven writable knobs have no control, and the comment's *"the other seven are YAML-only"* is wrong twice over (27 fields, 12 mount-bound) | silent | **decided: the eleven should appear on the card** — after the remaining tests and a live test of the card itself |
-| O3 | `lib/redact.js`'s credential-name pattern covers `passwd`/`pwd`, not `pw`/`pword` | low | add `pw(?:ord)?`, or say in the header what is deliberately out |
-| O4 | `lib/config-tool.js` reads the knob as `… ?? null`, collapsing `0`, `false`, `''` and `null` into "absent" | silent | spell absent and set apart in the config-event output |
-| O5 | `lib/redact.js`'s `sanitizeJson` writes `null` for `undefined` | correctness | drop the field instead of substituting `null` |
-| O6 | `lib/service.js` validates four of its six constructor inputs and not `label`/`replay` | silent | the same check and wording as the other four |
-| O7 | `lib/sessions.js` rescans the configured session list per firing | performance | a pre-built Set — the semantics differ (prefix vs equality), so it is a decision |
-| O8 | the entry module registers **two** listeners on `agent/turn-stopping`, in two sections, with no comment saying why both exist | readability | one comment, or one registration helper |
-| O9 | `lib/questions.js`'s fallback to `MAX_QUESTION_CAP` is dead — the schema already materialises the default | readability | remove it, or fold it into the call site |
-| O10 | **`egress` is declared on 13 of the 21 mount lines, and not on the first.** The README's table says *"what leaves the process is declared — the `egress` block on every mount line, rendered by both readers"*, and the live trace disproves the word *every*: the first mount line carries `at, event, hooks, model, provider, questionIds, run, tracePath, transport` and nothing else | evidence | find out why the early mounts lack it — if the block is written once the row is configured, say that in the README; if every mount should carry it, fix the emitter. **Found only by reading the live trace, not by any test** |
-
----
+| O2 | **the card renders four fields; the schema declares fifteen live-writable** (`client.js:44` says *"THE FOUR FIELDS THE HOST ACCEPTS TODAY — the `.volatile()` ones"*). Eleven writable knobs have no control, and the comment's *"the other seven are YAML-only"* is wrong twice over (27 fields, 12 mount-bound) | silent | **decided: the eleven should appear on the card** — last, after the remaining tests and a live test of the card itself |
+| O11 | **the environment-name keyword list is CASE-SENSITIVE** — `ENV_ASSIGNMENT`'s alternation carries no `i` flag while the character class around it accepts any case, so `api_key=…` and `pword=…` in a lowercase dump are missed while `API_KEY=…` is caught. Found by writing O3's test: the lowercase form I wrote first did not match, and the test was wrong before the code was | silent | add the flag, or state in the header that the environment form is upper-case-only. The failure direction is a leak, not a false positive |
 
 ## 4. ACCEPTED — deliberate, with the reason
 
 | # | what looks wrong | why it stays |
 |---|---|---|
+| A6 | `lib/sessions.js` scans the configured session list with `startsWith` on every firing | the prefix match is the **documented** semantics — the function's own doc says *"true for the wildcard or a matching prefix"*, and it is what lets a session-scoped agent id match at all. An equality Set would be faster and wrong, and the list is configuration, so it is small |
 | A1 | `callsEnabled` is declared with **no** default and checked `=== false`, while `seamEnabled` uses `.default(true)` per key | both express "absent means ON" by different mechanisms. **Adding `.default(true)` to `callsEnabled` would turn every call into a skip** — the reader must change with the schema |
 | A2 | the decide tool's output schema declares **no `required`** | the `failure` reply carries neither `answers` nor `executed`; `required: ['answers','executed']` would reject the legitimate failure case |
 | A3 | no `types`, no `build`/`prepack` script, no `src/` | a plain-JavaScript bundle: `publish.md`'s own publishable example is `index.js` with no build. The community checker's errors are that org's TypeScript house style |
@@ -91,6 +90,10 @@ three were proved to fail against a frozen pre-fix copy (§8), and two failed on
 
 | # | claim | why it is wrong |
 |---|---|---|
+| R9 | *"`?? null` collapses `0`, `false`, `''` and `null` into absent"* | **`??` is not `||`.** Nullish coalescing collapses `null` and `undefined` only, and `false` is a legitimate knob value here — `test/config-tool.test.js` has asserted `from: false` since it was written. A finding that misreads an operator's semantics reads as a code defect and is not one |
+| R10 | *"`lib/questions.js`'s fallback to the default question cap is dead — the schema already materialises the default"* | the fallback **fires in production**: `lib/decide-tool.js` and `lib/turn-trigger.js` both call `buildQuestions` with a synthetic config (`{ seamEnabled: …, questions: … }`) carrying no `maxQuestionChars`. Removing it would take the tool and the scheduler down a path the schema never touched |
+| R11 | *"the two `agent/turn-stopping` listeners have no comment saying why both exist"* | the comment is at `index.js:683-690`, immediately above the first: *"THIS IS THE SHADOW … beside the trigger that now runs on this SAME event. Both listeners are subscribed … which is the comparison that was once the reason for not switching."* |
+| R12 | *"`egress` is on 13 of 21 mount lines, so the README's 'every mount line' is false"* | the **chronological pattern is `--------EEEEEEEEEEEEE`**: all eight lines without it precede all thirteen with it, because the field was added partway through that trace's life. `index.js:305` writes it unconditionally today, so the README is true of the code and false only of history — and the reader was already built for the gap, reading `newestMount?.egress` |
 | R1 | *"`check:composition` is not run by `npm run ci`"* | it is. The README's gate list **was** incomplete (F5), the likely source |
 | R2 | *"`turnEveryNTurns`'s schema description drifts from its `.volatile()`"* — called the most user-visible drift in the file | **Half right, and I refuted the whole of it — corrected here.** The *drift* claim is wrong: the description states the split exactly (*"the on/off is read at every boundary; the interval itself is read at mount"*), and the field **is** volatile (F7 asserts it). But the claim it was wrapped around — that the counter is in memory and **restarts at every mount** — is **right**, and the live trace now measures it: `harnessTurn=21 boundary=19` with **21 mounts**, and only 3 firings at boundaries 5, 10 and 15. That is E2, not a documentation drift |
 | R3 | *"no README / no ROADMAP"* | both exist; the blind sandbox removed them by design. *"No CHANGELOG"* **is** real (P4) |

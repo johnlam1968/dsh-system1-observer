@@ -33,24 +33,16 @@ test('junk is refused rather than stored or thrown on', () => {
   assert.deepEqual(feed.events(undefined), [])
 })
 
-test('a reaction is remembered per session, with its turn, and is null until one is announced', () => {
-  const feed = createEventFeed()
-  assert.equal(feed.reactionFor('s'), null, 'no announcement yet is null, not a guess')
-  feed.claim('s', 7, { role: 'user', content: [{ type: 'text', text: 'do it again' }] })
-  assert.equal(feed.reactionFor('s').turn, 7)
-  assert.equal(feed.reactionFor('s').message.content[0].text, 'do it again')
-  feed.claim('s', 8, { role: 'user', content: [] })
-  assert.equal(feed.reactionFor('s').turn, 8, 'the newest announcement wins -- the reaction is the latest one')
-  assert.equal(feed.reactionFor('other'), null, 'and sessions do not share one')
-  assert.equal(feed.claim('s', 9, null), false, 'a junk message is refused')
-})
+// DELETED, NOT TESTED: `claim`/`reactionFor` and the `claimed` map they held. An independent review called them dead
+// surface and it was right -- the only callers in the repository were this file's own test. The row keeps its own copy
+// of the announced request, and its readers go through the session store; a second, unwired holder of the same fact
+// is a thing a future reader has to rule out.
 
 test('clear forgets one session and leaves the others alone', () => {
   const feed = createEventFeed()
-  feed.record('a', ev(1)); feed.record('b', ev(1)); feed.claim('a', 1, { role: 'user', content: [] })
+  feed.record('a', ev(1)); feed.record('b', ev(1))
   assert.equal(feed.clear('a'), true)
   assert.deepEqual(feed.events('a'), [])
-  assert.equal(feed.reactionFor('a'), null)
   assert.equal(feed.size('b'), 1, 'b is untouched')
   assert.equal(feed.clear(null), false)
 })

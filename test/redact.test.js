@@ -343,3 +343,34 @@ test('a scheme word is never redacted on its own, leaving the credential behind 
     assert.equal(sanitizeToolText(text, redactPolicy({})), text)
   }
 })
+
+// THE SHORTEST CREDENTIAL NAME THERE IS. `pw=` and `pword=` are how people abbreviate a password, and none of the
+// three name lists this module keeps for them had either -- so a record could carry `pw: hunter2` in the clear while
+// `passwd: hunter2` was scrubbed. That is the same "one form with a rule and another without" inconsistency that
+// produced the last leak here, so all three lists are widened together.
+test('`pw` and `pword` are credential names in every form this module handles', async () => {
+  const { sanitizeJson } = await import('../lib/redact.js')
+  const text = sanitizeToolText('pw: hunter2 and PWORD=opensesame', redactPolicy({}))
+  assert.equal(text.includes('hunter2'), false, 'the header form: ' + text)
+  assert.equal(text.includes('opensesame'), false, 'the environment form: ' + text)
+  // THE JSON-KEY LIST IS NOT WIDENED, deliberately: it is the faithful port of upstream's six, and the test above
+  // counts them for exactly that reason. A deployment that wants `pw` as a key adds it the way any extra name is.
+  const walked = sanitizeJson({ pw: 'hunter2', ordinary: 'kept' }, redactPolicy({ redactKeys: ['pw'] }))
+  assert.equal(walked.pw, '[REDACTED]', 'a configured extra key is honoured')
+  assert.equal(walked.ordinary, 'kept', 'and an ordinary field is untouched')
+  const ported = sanitizeJson({ pw: 'hunter2' }, redactPolicy({}))
+  assert.equal(ported.pw, 'hunter2', 'without the extra name the ported six decide -- the port being faithful, which is not the same as the shapes leaking')
+})
+
+// AN ABSENT MEMBER IS NOT A NULL ONE. `sanitizeJson` wrote `undefined` as `null`, so a field that was never there and
+// a field that was explicitly null read identically -- and the redaction marker is a string, so the three are
+// distinguishable only if absence is dropped rather than spelled.
+test('an undefined member is dropped from the walk, not written as null', async () => {
+  const { sanitizeJson } = await import('../lib/redact.js')
+  const walked = sanitizeJson({ present: 1, absent: undefined, explicitNull: null, token: 'abc123' }, redactPolicy({}))
+  assert.equal('absent' in walked, false, 'an absent field must not become a null one: ' + JSON.stringify(walked))
+  assert.equal(walked.explicitNull, null, 'and an explicit null stays a null')
+  assert.equal(walked.present, 1)
+  assert.equal(walked.token, '[REDACTED]', 'a redacted field is a string, so it is distinguishable from both')
+  assert.equal(JSON.stringify(walked).includes('absent'), false, 'and it does not reach the file at all')
+})

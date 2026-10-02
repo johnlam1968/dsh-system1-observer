@@ -30,6 +30,17 @@ test('a non-function member is refused rather than exposed as a broken method', 
   assert.throws(() => createObserverService({}), /`read` must be a function/)
 })
 
+test('`label` and `replay` are optional, and a wrong one is refused rather than silently replaced', () => {
+  // They default to the repository's own derivation, and that default is the point -- "a label that differs per
+  // caller is not a label". What was missing is the other half: a consumer's non-function override used to be
+  // DISCARDED in favour of the default, so a typo became a behaviour change with nothing to notice it.
+  assert.throws(() => createObserverService({ ...readers(), label: 'nudge' }), /`label` must be a function when given/)
+  assert.throws(() => createObserverService({ ...readers(), replay: 7 }), /`replay` must be a function when given/)
+  const defaults = createObserverService(readers())
+  assert.equal(typeof defaults.label, 'function', 'omitting them keeps the documented default')
+  assert.equal(typeof defaults.replay, 'function')
+})
+
 test('a full sweep of every method leaves the trace file byte-identical', () => {
   const dir = mkdtempSync(join(tmpdir(), 'observer-service-'))
   const path = join(dir, 'trace.jsonl')
