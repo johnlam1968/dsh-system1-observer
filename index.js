@@ -177,14 +177,14 @@ const Config = Schema.object({
   // was already a factory argument with a module default -- so the defaults below ARE the module constants, and
   // the conformance test asserts they stay equal. Plain rather than `.volatile()`: every one is read once at
   // mount, so declaring it writable from the settings card would offer an edit the running plugin ignores.
-  // THE THREE CAPS ON HELD STATE, and the one place a future volatile flag would NOT be enough on its own. Each of
-  // these bounds something already in memory -- the event feed and the filesystem journal -- so a live change would
-  // either silently drop what is held or need a re-creation path with a migration story. The shift is possible and
-  // deliberately not taken: it is a change to what the holder IS, and the flag alone would be a promise the code
-  // does not keep. The bounds are re-read when the holder is built, and a re-mount is how a new one applies.
-  feedMaxPerSession: Schema.number().min(1).default(DEFAULT_MAX_PER_SESSION).description('Events kept per session in the in-memory feed, newest kept. Read once, at mount, so this is YAML-only.'),
-  fsJournalMaxPaths: Schema.number().min(1).default(DEFAULT_MAX_PATHS).description('Paths the filesystem journal remembers, least recently touched dropped first. Read once, at mount, so this is YAML-only.'),
-  fsJournalMaxPerPath: Schema.number().min(1).default(DEFAULT_MAX_PER_PATH).description('Versions remembered per path in the filesystem journal. Read once, at mount, so this is YAML-only.'),
+  // THE THREE CAPS ON HELD STATE, AND THEY *CAN* BE LIVE -- which is what checking rather than assuming established.
+  // The note that stood here said a flag would not be enough and a re-creation path would be needed. It was wrong:
+  // each cap is consulted on every record (the feed's per event, the journal's per touch), so making them volatile
+  // needed the cap to be a FUNCTION, not a rebuild. One asymmetry is worth knowing -- lowering a cap trims on the
+  // next record, and raising it cannot bring back what the old cap already dropped. Nothing claims otherwise.
+  feedMaxPerSession: Schema.number().min(1).default(DEFAULT_MAX_PER_SESSION).volatile().description('Events kept per session in the in-memory feed, newest kept. Read at each event: a LOWERED cap trims on the next one, and a raised cap cannot bring back what the old one already dropped.'),
+  fsJournalMaxPaths: Schema.number().min(1).default(DEFAULT_MAX_PATHS).description('Paths the filesystem journal remembers, least recently touched dropped first. Paths the filesystem journal remembers, least recently touched dropped first. Read at each observation: a LOWERED cap trims on the next one.').volatile(),
+  fsJournalMaxPerPath: Schema.number().min(1).default(DEFAULT_MAX_PER_PATH).description('Versions remembered per path in the filesystem journal. Versions remembered per path in the filesystem journal. Read at each observation.').volatile(),
   composeMaxChars: Schema.number().min(1).default(8000).description('Longest composed state handed to the model at one seam, in characters; longer state is cut. Read at each turn, so a settings save reaches a running row.').volatile(),
   toolBlockMaxChars: Schema.number().min(1).default(4000).description('Longest tool-call window rendered into that state, in characters. Read at each turn, so a settings save reaches a running row.').volatile(),
   // THE RECORD'S OWN SWITCHES, all three volatile because all three must be live: a trace that had to be
@@ -219,8 +219,11 @@ async function apply(ctx, config) {
   // THE ANNOUNCED TURN BOUNDARY, held per session. Declared HERE because the observer below is
   // constructed before the listener that fills it, and `readClaimed` closes over this binding.
   const claimed = new Map()
-  const feed = createEventFeed({ maxPerSession: readConfigValue(config.feedMaxPerSession) })
-  const fsJournal = createFsJournal({ maxPaths: readConfigValue(config.fsJournalMaxPaths), maxPerPath: readConfigValue(config.fsJournalMaxPerPath) })
+  const feed = createEventFeed({ maxPerSession: () => readConfigValue(liveConfig().feedMaxPerSession) })
+  const fsJournal = createFsJournal({
+    maxPaths: () => readConfigValue(liveConfig().fsJournalMaxPaths),
+    maxPerPath: () => readConfigValue(liveConfig().fsJournalMaxPerPath),
+  })
   // THE SESSION'S OWN EVENTS, as one function, so the fallback and the comparison cannot drift apart. It is the
   // only thing here that needs a LIVE session -- which is why the feed exists, and why this is the function to
   // delete when the adapter reads sessionQuery instead.

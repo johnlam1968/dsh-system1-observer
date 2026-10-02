@@ -61,3 +61,21 @@ test('the fs/observed listener is SYNCHRONOUS and a throw cannot escape it', asy
   assert.equal(listener(hostile, { kind: 'present', version: 'v1' }, {}), undefined, 'and it still returns nothing')
   assert.doesNotThrow(() => listener(undefined, undefined, undefined), 'nor on no arguments at all')
 })
+
+// THE CAP IS READ ON EVERY RECORD, which is what makes `fsJournalMaxPaths` volatile rather than a promise. The
+// per-path cap goes through the same resolver in the module, so this asserts the shape once rather than twice: a
+// lowered cap applies on the next observation, and cannot bring back what the old cap already dropped.
+test('the path cap is read on every record, so a live change reaches a running journal', () => {
+  let cap = 2
+  const journal = createFsJournal({ maxPaths: () => cap })
+  // THE TARGET IS THE OBJECT THE JOURNAL READS, not a path string: `record` never throws by design, so a wrong
+  // shape records nothing and a bare string made this test measure zero. That is what the first version asserted
+  // against, and the fix belongs here rather than in the assertion.
+  journal.record(target('/a.txt'), { kind: 'present', version: 'v1' }, {})
+  journal.record(target('/b.txt'), { kind: 'present', version: 'v1' }, {})
+  journal.record(target('/c.txt'), { kind: 'present', version: 'v1' }, {})
+  assert.equal(journal.paths().length, 2, 'the cap held while it was 2')
+  cap = 1
+  journal.record(target('/d.txt'), { kind: 'present', version: 'v1' }, {})
+  assert.equal(journal.paths().length, 1, 'a lowered cap applies on the next record, not on a rebuild')
+})

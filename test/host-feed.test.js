@@ -22,6 +22,23 @@ test('the feed is BOUNDED, dropping the oldest rather than growing without limit
   assert.equal(feed.size('s'), 3)
 })
 
+test('the cap is read on every record, so a live change reaches a running feed', () => {
+  // `feedMaxPerSession` is volatile, and this is what makes that true rather than a promise: the row passes a
+  // function, and the cap is resolved per record. A lowered cap trims on the NEXT event; a raised one admits more
+  // than the old cap did, and cannot bring back what it already dropped -- which is why the test asserts the
+  // direction it can and not the one it cannot.
+  let cap = 3
+  const feed = createEventFeed({ maxPerSession: () => cap })
+  for (let i = 1; i <= 4; i += 1) feed.record('s', ev(i))
+  assert.deepEqual(feed.events('s').map((e) => e.seq), [2, 3, 4], 'the mount-time cap held')
+  cap = 1
+  feed.record('s', ev(5))
+  assert.deepEqual(feed.events('s').map((e) => e.seq), [5], 'a lowered cap trims on the next record, not on a rebuild')
+  cap = 5
+  feed.record('s', ev(6))
+  assert.deepEqual(feed.events('s').map((e) => e.seq), [5, 6], 'a raised cap admits more from here on')
+})
+
 test('junk is refused rather than stored or thrown on', () => {
   const feed = createEventFeed()
   assert.equal(feed.record(null, ev(1)), false)

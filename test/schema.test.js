@@ -66,9 +66,10 @@ test('the four fields moved on request are volatile, and the resources opened on
   for (const field of ['hooks', 'provider', 'model', 'timeoutMs']) {
     assert.equal(dict[field]?.meta?.volatile, true, `${field} was made volatile so a settings save can reach a running row`)
   }
-  // THESE OWN SOMETHING OPENED AT MOUNT -- a file handle, or the events already held in memory -- so a live change
-  // would either move where evidence lands or silently drop what is held. They stay YAML-only, and say so.
-  for (const field of ['tracePath', 'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath']) {
+  // ONE FIELD STILL OWNS SOMETHING OPENED ONCE: the trace writer holds the file and a rotation ledger, so a live
+  // change would move where evidence lands mid-run. The caps that also bound held state turned out to be resolvable
+  // per record, so they are volatile now and this list is down to `tracePath`.
+  for (const field of ['tracePath']) {
     assert.notEqual(dict[field]?.meta?.volatile, true, `${field} owns a resource opened once and stays mount-bound`)
   }
 })
@@ -120,11 +121,15 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
     'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars',
+    // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
+    // natural rather than a rebuild.
+    'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
   ]
   const MOUNT_BOUND = [
-    // FOUR, AND EACH OWNS SOMETHING OPENED ONCE: a file handle, or state already held in memory. See the note in
-    // `index.js` above `feedMaxPerSession` for what making them volatile would actually require.
-    'tracePath', 'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
+    // ONE LEFT, AND IT OWNS AN OPEN FILE HANDLE: the writer holds the trace open and keeps a rotation ledger, so a
+    // live change would move where evidence lands mid-run. Everything else that bounds held state turned out to be
+    // resolvable per record, and is volatile.
+    'tracePath',
   ]
   const walked = Object.keys(dict)
   assert.ok(walked.length > 0, 'the schema declares no fields at all')
