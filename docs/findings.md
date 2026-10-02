@@ -41,6 +41,7 @@ did not survive are in §5.
 
 | # | finding | class | fix |
 |---|---|---|---|
+| F16 | the environment-name rule was **case-sensitive** — `ENV_ASSIGNMENT`'s alternation had no `i` flag while the character class around it accepted any case — so `my_api_key=…` and `pword=…` in a lower-case dump matched **no rule at all**: the header rule needs a word boundary before the name, and `_` is a word character | silent | the flag is added **and `&` leaves the value class**: with the flag alone the rule ate the separator in `&access_token=abc123&page=2`, which the existing *"keep the NAME and lose the value"* test caught. Found by writing F13's test the lower-case way first — and my own first assertion used `api_key=…`, which the HEADER rule already caught, so it passed with the bug in place: a test that proves nothing while looking right |
 | F12 | `lib/host/feed.js` exported `claim`, `reactionFor` and a `claimed` map that **no production path called** — the only callers were their own test | silent | deleted, with the module header saying what it holds and what it does not. Verifying this one first mattered: my opening grep reported "105 call sites", which was the pattern matching `claimedRequest` |
 | F13 | `lib/redact.js`'s credential-name lists covered `passwd`/`pwd` but not `pw`/`pword` | low | widened in the **two SHAPE lists** — header/bare names and the environment alternation. The JSON-KEY list is deliberately left at upstream's six, because `test/redact.test.js` counts them *precisely* to keep the port faithful; there `pw` is reachable the way any deployment-specific name is, through `redactKeys`. My first attempt widened all three and that count assertion caught it — a rounded fix caught by a test written for the opposite reason |
 | F14 | `sanitizeJson` wrote an `undefined` member as `null`, so "absent" and "explicitly null" were one fact in the record | correctness | an undefined member is dropped rather than spelled, leaving the redaction marker as the only string in that position |
@@ -64,14 +65,9 @@ three were proved to fail against a frozen pre-fix copy (§8), and two failed on
 
 ## 3. OPEN — code
 
-Half of the ten findings that stood here did not survive verification: four were fixed, four refuted, one accepted,
-and fixing one of the four turned up a new one. The corrections are kept in §4 and §5 rather than deleted, because
-a reviewer who reads `?? null` as `|| null` will read it that way again.
-
 | # | finding | class | what would close it |
 |---|---|---|---|
-| O2 | **the card renders four fields; the schema declares fifteen live-writable** (`client.js:44` says *"THE FOUR FIELDS THE HOST ACCEPTS TODAY — the `.volatile()` ones"*). Eleven writable knobs have no control, and the comment's *"the other seven are YAML-only"* is wrong twice over (27 fields, 12 mount-bound) | silent | **decided: the eleven should appear on the card** — last, after the remaining tests and a live test of the card itself |
-| O11 | **the environment-name keyword list is CASE-SENSITIVE** — `ENV_ASSIGNMENT`'s alternation carries no `i` flag while the character class around it accepts any case, so `api_key=…` and `pword=…` in a lowercase dump are missed while `API_KEY=…` is caught. Found by writing O3's test: the lowercase form I wrote first did not match, and the test was wrong before the code was | silent | add the flag, or state in the header that the environment form is upper-case-only. The failure direction is a leak, not a false positive |
+| O2 | **the card renders seven of the fifteen live-writable fields, and its own comment says four.** `client.js:44` reads *"THE FOUR FIELDS THE HOST ACCEPTS TODAY — the `.volatile()` ones"*; the card actually renders `callsEnabled`, `seamEnabled` (per seam), `sessions`, `questions` (per seam), `observeSubagents`, `includeNonOperatorFacing` and `maxFieldChars`. The eight with no control are exactly the eight **F7**'s walk found unlisted: `turnEveryNTurns`, `redactEnabled`, `redactKeys`, `pathMode`, `redactSessionTelemetry`, `maxQuestionChars`, `pricePerMTokInput`, `maxTraceBytes` | silent | **decided: they should appear on the card** — design under review before implementation. My earlier "eleven" was the stale comment's number, not the code's: counting the rendered controls is what corrected it |
 
 ## 4. ACCEPTED — deliberate, with the reason
 
