@@ -116,14 +116,15 @@ test('every declared field is either volatile or declared mount-bound, and none 
     'callsEnabled', 'seamEnabled', 'sessions', 'questions', 'includeNonOperatorFacing', 'observeSubagents',
     'maxFieldChars', 'turnEveryNTurns', 'redactEnabled', 'redactKeys', 'pathMode', 'redactSessionTelemetry',
     'maxQuestionChars', 'pricePerMTokInput', 'maxTraceBytes',
-    // FOUR MORE, made volatile on request: the seam list and the judge's route, so a settings save can reach a
-    // RUNNING row instead of waiting for a re-mount. Each one's read site had to move with it, or the flag would
-    // be a promise the code does not keep.
-    'hooks', 'provider', 'model', 'timeoutMs',
+    // EIGHT MORE, made volatile on request: the seam list, the judge's route, the URL and legacy question, and the
+    // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
+    // code does not keep.
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars',
   ]
   const MOUNT_BOUND = [
-    'wireUrl', 'question', 'tracePath',
-    'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath', 'composeMaxChars', 'toolBlockMaxChars',
+    // FOUR, AND EACH OWNS SOMETHING OPENED ONCE: a file handle, or state already held in memory. See the note in
+    // `index.js` above `feedMaxPerSession` for what making them volatile would actually require.
+    'tracePath', 'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
   ]
   const walked = Object.keys(dict)
   assert.ok(walked.length > 0, 'the schema declares no fields at all')

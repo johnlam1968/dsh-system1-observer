@@ -89,8 +89,11 @@ const Config = Schema.object({
   provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row.').volatile(),
   model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row.').volatile(),
   timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
-  wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read once, at mount, so this is YAML-only.'),
-  question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read once, at mount, so this is YAML-only.'),
+  wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
+  question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
+  // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a
+  // live change would move where evidence lands mid-run. It could be made volatile with a reopen-and-rotate story;
+  // that is a design change, not a flag.
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
   // THE SCHEDULED TURN MEASUREMENT. Undeclared at first, which made the wiring inert: a field the schema does not
   // know is not a field a profile can set, so the trigger read `undefined`, computed an interval of 0 and never
@@ -174,11 +177,16 @@ const Config = Schema.object({
   // was already a factory argument with a module default -- so the defaults below ARE the module constants, and
   // the conformance test asserts they stay equal. Plain rather than `.volatile()`: every one is read once at
   // mount, so declaring it writable from the settings card would offer an edit the running plugin ignores.
+  // THE THREE CAPS ON HELD STATE, and the one place a future volatile flag would NOT be enough on its own. Each of
+  // these bounds something already in memory -- the event feed and the filesystem journal -- so a live change would
+  // either silently drop what is held or need a re-creation path with a migration story. The shift is possible and
+  // deliberately not taken: it is a change to what the holder IS, and the flag alone would be a promise the code
+  // does not keep. The bounds are re-read when the holder is built, and a re-mount is how a new one applies.
   feedMaxPerSession: Schema.number().min(1).default(DEFAULT_MAX_PER_SESSION).description('Events kept per session in the in-memory feed, newest kept. Read once, at mount, so this is YAML-only.'),
   fsJournalMaxPaths: Schema.number().min(1).default(DEFAULT_MAX_PATHS).description('Paths the filesystem journal remembers, least recently touched dropped first. Read once, at mount, so this is YAML-only.'),
   fsJournalMaxPerPath: Schema.number().min(1).default(DEFAULT_MAX_PER_PATH).description('Versions remembered per path in the filesystem journal. Read once, at mount, so this is YAML-only.'),
-  composeMaxChars: Schema.number().min(1).default(8000).description('Longest composed state handed to the model at one seam, in characters; longer state is cut. Read once, at mount, so this is YAML-only.'),
-  toolBlockMaxChars: Schema.number().min(1).default(4000).description('Longest tool-call window rendered into that state, in characters. Read once, at mount, so this is YAML-only.'),
+  composeMaxChars: Schema.number().min(1).default(8000).description('Longest composed state handed to the model at one seam, in characters; longer state is cut. Read at each turn, so a settings save reaches a running row.').volatile(),
+  toolBlockMaxChars: Schema.number().min(1).default(4000).description('Longest tool-call window rendered into that state, in characters. Read at each turn, so a settings save reaches a running row.').volatile(),
   // THE RECORD'S OWN SWITCHES, all three volatile because all three must be live: a trace that had to be
   // restarted to stop leaking is a trace that leaks until somebody notices.
   redactEnabled: Schema.boolean().default(true).volatile().description('Redact the trace copy. ON by default, and it NEVER touches what the model is asked: `state` stays raw, because a model asked to classify `[REDACTED]` measures the scrubber. Off lets credential shapes through on purpose — truncation still applies, because a kill switch that also removed the size cap would be a foot-gun.'),
@@ -518,10 +526,11 @@ async function apply(ctx, config) {
   }
 
   const turnObserver = createTurnObserver({
-    // THE TWO SIZES OF THE COMPOSED STATE, from config rather than from the modules' own defaults. Plain fields,
-    // because a size read once at mount must not be offered as a live edit -- see the schema's note.
-    maxChars: readConfigValue(config.composeMaxChars),
-    toolMaxChars: readConfigValue(config.toolBlockMaxChars),
+    // THE TWO SIZES ARE RESOLVED AT EACH TURN, and passed as functions for that reason: they are volatile now, so a
+    // value captured here would keep whatever the row mounted with and the save would change nothing. The observer
+    // still accepts a plain number, which is what its own tests pass.
+    maxChars: () => readConfigValue(liveConfig().composeMaxChars),
+    toolMaxChars: () => readConfigValue(liveConfig().toolBlockMaxChars),
     listener: createTurnListener({
       everyNTurns,
       isEnabled: () => Number(readConfigValue(liveConfig().turnEveryNTurns) ?? 0) > 0,
