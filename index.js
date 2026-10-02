@@ -81,10 +81,14 @@ function defaultDshHome() {
 
 const Config = Schema.object({
   hooks: Schema.array(Schema.string())
-    .description(`Points of the loop to call, from: ${PROBE_SEAMS.join(', ')}. Read once, at mount, so this is YAML-only.`),
-  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read once, at mount, so this is YAML-only.'),
-  model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read once, at mount, so this is YAML-only.'),
-  timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read once, at mount, so this is YAML-only.'),
+    // VOLATILE, AND READ AT EVERY FIRING rather than at mount: a seam added or removed here takes effect on the
+    // next event, with no restart and no lost in-memory state. Removing a seam does NOT unregister its listener --
+    // the listener stays and hands the loop exactly what the loop produced -- so switching one back on resumes.
+    .description(`Points of the loop to call, from: ${PROBE_SEAMS.join(', ')}. Read at every firing: a seam added or removed here takes effect on the next event, with no restart.`)
+    .volatile(),
+  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row.').volatile(),
+  model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row.').volatile(),
+  timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read once, at mount, so this is YAML-only.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read once, at mount, so this is YAML-only.'),
   tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
@@ -243,12 +247,19 @@ async function apply(ctx, config) {
     policy: liveConfig,
     maxBytes: () => readConfigValue(liveConfig().maxTraceBytes),
   })
+  // THE TRANSPORT IS BUILT FROM THE LIVE CONFIG, NOT FROM THE MOUNT SNAPSHOT. `provider`, `model` and `timeoutMs`
+  // are volatile, so a settings save has to be able to reach a RUNNING row: a client captured here would keep the
+  // values the row mounted with, the save would be reported as "Saved", and the next call would use the old ones.
+  // A client is a closure, so building one per call costs an allocation and holds no state.
   const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
-  const wire = createModel({ baseUrl: mount.wireUrl || 'http://127.0.0.1:8766', timeoutMs: mount.timeoutMs ?? 8000 })
+  const wire = () => createModel({
+    baseUrl: readConfigValue(liveConfig().wireUrl) || 'http://127.0.0.1:8766',
+    timeoutMs: readConfigValue(liveConfig().timeoutMs) ?? 8000,
+  })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
   // site working across the two transports; assigning the client itself to `decide` made every call throw
   // "decide is not a function", which no unit test saw because `apply` was never executed.
-  let decide = (request, options) => wire.decide({ ...request, ...(options?.signal === undefined ? {} : { signal: options.signal }) })
+  let decide = (request, options) => wire().decide({ ...request, ...(options?.signal === undefined ? {} : { signal: options.signal }) })
 
   // THE MOUNT LINE IS WRITTEN WHEN THE TRANSPORT IS KNOWN -- NOT WHEN `apply` RETURNS. `ctx.inject`'s
   // callback runs through a cordis fiber, so at the end of `apply` the transport is still `wire`: measured
@@ -452,32 +463,39 @@ async function apply(ctx, config) {
   ctx.inject(['system1'], (child) => {
     const service = child.get('system1')
     if (service === undefined) return
-    const viaService = createServiceModel({
+    // BUILT PER CALL, for the same reason as the wire client: `provider` and `model` are volatile, and a client
+    // captured here would keep the values this row mounted with.
+    const viaService = () => createServiceModel({
       service,
-      provider: mount.provider ?? undefined,
-      model: mount.model ?? undefined,
+      provider: readConfigValue(liveConfig().provider) ?? undefined,
+      model: readConfigValue(liveConfig().model) ?? undefined,
     })
     // THE SERVICE PATH CANNOT CARRY A SIGNAL. `dsh-system1`'s `decide(request)` is another plugin's API and takes no
     // signal, so a call made through the service cannot be aborted in flight -- the tool's entry check is what a
     // cancelled call gets, and saying so is better than pretending the transport is uniform.
-    decide = (request) => viaService.decide(request)
+    decide = (request) => viaService().decide(request)
     transport.kind = 'service'
     writeMount()
   })
 
-  const provider = mount.provider ?? null
-  const model = mount.model ?? null
   // THE VOLATILE FIELDS ARE READ FRESH ON EVERY CALL. `plainConfig` unwraps each `Volatile` with
   // `.get()` at this moment, which is what lets a saved setting reach a RUNNING row: the harness does
   // not re-apply the plugin -- instance identity is unchanged by design -- so a value captured in
   // `apply` would never move. Reading that captured object instead made every settings save a no-op
   // that the card still reported as "Saved."
+  // THE VOLATILE FIELDS COME FROM THE SPREAD, `provider` AND `model` INCLUDED. They used to be overridden with the
+  // mount snapshot here, because they were not volatile and the spread would have supplied `undefined`; with them
+  // volatile the override is what would freeze them, so it is gone.
   const readConfig = () => ({
     ...plainConfig(config),
     transport: transport.kind,
-    provider,
-    model,
   })
+  // THE HOOK SET, READ AT EACH FIRING. Tolerant where `readHooks` is strict: a typo is a mount error (that call
+  // throws at load), but a value edited while running must not be able to break the loop, and a hook nobody
+  // configured is a hook that does not fire -- so a malformed live value falls back to the defaults.
+  const liveHooks = () => {
+    try { return readHooks(liveConfig()) } catch { return readHooks({}) }
+  }
   const observer = createObserver({ decide: (request, options) => decide(request, options), trace: evidence.trace, readConfig })
 
   // THE TURN TRIGGER. It fires on `agent/pre-step` -- the event the `admit` seam maps to -- because an admit ENDS
@@ -896,13 +914,16 @@ async function apply(ctx, config) {
     return undefined
   })
 
-  registerListeners(ctx, hooks, {
+  // EVERY SEAM IS SUBSCRIBED, AND EACH ONE IS GATED AT ITS OWN FIRING (`hookEnabled`): a listener that is not
+  // registered cannot be switched on without a re-mount, which is what the volatile `hooks` field is for.
+  registerListeners(ctx, PROBE_SEAMS, {
     // THE MOUNT LINE PRECEDES THE FIRST OBSERVATION when no service ever appeared. Calling the writer here
     // rather than at the end of `apply` is what keeps "no service" from being recorded before it is known --
     // including when the first event of a run is a subagent's `skip`.
     observe: (hook, text, meta) => { writeMount(); return observer.observe(hook, text, meta) },
     skip: (hook, meta, reason) => { writeMount(); return observer.skip(hook, meta, reason) },
     readConfig,
+    hookEnabled: (seam) => liveHooks().includes(seam),
     // THE AGENT, NOT ITS ID: the `draft` seam reads both `agent.id` and the session origin from this one
     // object, and `isSubagent` needs the latter.
     captureAgent: () => ctx.agents.currentInitiator(),

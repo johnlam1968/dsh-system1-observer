@@ -58,13 +58,18 @@ test('every probe seam is declared under `seamEnabled` too, and defaults to ON',
   }
 })
 
-test('the editable fields are exactly the ones this card can write', () => {
-  for (const field of ['callsEnabled', 'seamEnabled', 'sessions', 'questions', 'includeNonOperatorFacing', 'observeSubagents', 'maxFieldChars']) {
-    assert.equal(dict[field]?.meta?.volatile, true, `${field} must be volatile`)
+// THE CARD IS A SUBSET OF THE EDITABLE SET, NOT THE WHOLE OF IT. This test used to enumerate both sets; the walk
+// below does that exhaustively now. What it keeps is the direction that matters for a card -- a control rendered for
+// a field the host refuses to write fails at the SAVE, so the card may only ever grow into the volatile set, and it
+// currently renders seven of the nineteen (O2 in docs/findings.md).
+test('the four fields moved on request are volatile, and the resources opened once are not', () => {
+  for (const field of ['hooks', 'provider', 'model', 'timeoutMs']) {
+    assert.equal(dict[field]?.meta?.volatile, true, `${field} was made volatile so a settings save can reach a running row`)
   }
-  // A card that rendered one of these would offer a control whose save the host refuses.
-  for (const field of ['hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'tracePath']) {
-    assert.notEqual(dict[field]?.meta?.volatile, true, `${field} is mount-bound and must stay YAML-only`)
+  // THESE OWN SOMETHING OPENED AT MOUNT -- a file handle, or the events already held in memory -- so a live change
+  // would either move where evidence lands or silently drop what is held. They stay YAML-only, and say so.
+  for (const field of ['tracePath', 'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath']) {
+    assert.notEqual(dict[field]?.meta?.volatile, true, `${field} owns a resource opened once and stays mount-bound`)
   }
 })
 
@@ -111,9 +116,13 @@ test('every declared field is either volatile or declared mount-bound, and none 
     'callsEnabled', 'seamEnabled', 'sessions', 'questions', 'includeNonOperatorFacing', 'observeSubagents',
     'maxFieldChars', 'turnEveryNTurns', 'redactEnabled', 'redactKeys', 'pathMode', 'redactSessionTelemetry',
     'maxQuestionChars', 'pricePerMTokInput', 'maxTraceBytes',
+    // FOUR MORE, made volatile on request: the seam list and the judge's route, so a settings save can reach a
+    // RUNNING row instead of waiting for a re-mount. Each one's read site had to move with it, or the flag would
+    // be a promise the code does not keep.
+    'hooks', 'provider', 'model', 'timeoutMs',
   ]
   const MOUNT_BOUND = [
-    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'tracePath',
+    'wireUrl', 'question', 'tracePath',
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath', 'composeMaxChars', 'toolBlockMaxChars',
   ]
   const walked = Object.keys(dict)
