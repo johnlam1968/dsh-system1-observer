@@ -64,18 +64,46 @@ it describes), `MAX_DEPTH` (a recursion bound), `HOOK_CHARS` (padding), `PRICE_T
 (provenance, which must travel with the price), the structural sets (`PROBE_SEAMS`, `TEXTLESS_SEAMS`, `SEAM_HOOKS`,
 `EGRESS_SEAMS`, `KEY_PARTS` — these *are* the design), and the browser half's unavoidable duplicates.
 
-## 5. Grouping, for the UI discussion
+## 5. Grouping: what the first attempt got wrong
 
-The grouping the settings *already* want is the business logic, and it matches the mental model:
+The first grouping was checked mechanically before it was judged: **27 fields, 27 assigned, none unassigned, none
+duplicated** — so it *covers* the settings. It is still not logically clean, and the check itself produced the
+evidence for two of the three faults.
 
-| group | settings | what a person is deciding |
+**1. `redactSessionTelemetry` was in the wrong group.** Its own description says it scrubs *"the harness's own
+outbound session-telemetry records"* and is *"Unrelated to this plugin's own JSONL trace"* — it is the only setting
+that changes what **another component sends**. It belongs with egress, not with the record.
+
+**2. The three caps were in the wrong group.** They bound what the **composer can see** (the event feed) and what
+the **filesystem journal holds** — inputs to `X` — not what the record keeps.
+
+**3. The turn measurement was smeared across a shared field.** `questions.dict` has **ten** keys: the nine seams
+plus `turn`. So `questions` is one field with two intents, and `turnEveryNTurns` sat in "how it is called" while its
+question set lived inside another field in the same group. The check also showed the asymmetry: `seamEnabled.dict`
+has nine keys and no `turn`, because the turn measurement is switched off by `0`, not by `false`.
+
+**The axis the first attempt did not name** is the one the plugin's contract is built on — *it decides nothing and
+records everything*. That is **what leaves the process** versus **what is kept**, and it is why an operator turning
+the record off must not believe they turned the sending off. `redactEnabled`'s own description makes that point;
+the grouping did not.
+
+### The corrected grouping
+
+| group | fields | what a person is deciding |
 |---|---|---|
-| **1. Where the model is called** | `callsEnabled`, `hooks`, `seamEnabled`, `sessions`, `observeSubagents`, `includeNonOperatorFacing` | which seams, in which sessions, for which agents |
-| **2. How it is called** | `provider`, `model`, `timeoutMs`, `wireUrl`, `question`, `questions`, `maxQuestionChars`, `composeMaxChars`, `toolBlockMaxChars`, `maxFieldChars`, `turnEveryNTurns` | the route, the target, and how much of `X` the judge sees |
-| **3. What the record keeps** | `tracePath`, `maxTraceBytes`, `redactEnabled`, `redactKeys`, `pathMode`, `redactSessionTelemetry`, `feedMaxPerSession`, `fsJournalMaxPaths`, `fsJournalMaxPerPath` | evidence, privacy, and bounds |
-| **4. What the numbers mean** | `pricePerMTokInput`, + plan 1–5 | the analysis the trace supports |
-| **5. The act layer** | plan 10 | what to do with an answer — not built |
+| **A. What this row observes** | `callsEnabled`, `hooks`, `seamEnabled`, `sessions`, `observeSubagents`, `includeNonOperatorFacing` | which seams, in which sessions, for which agents |
+| **B. What is sent** | `provider`, `model`, `timeoutMs`, `wireUrl`, `question`, `questions` (the nine seam sets), `maxQuestionChars`, `redactSessionTelemetry` | the route, the ask, and every switch that changes what leaves the process |
+| **C. What the judge sees** | `maxFieldChars`, `composeMaxChars`, `toolBlockMaxChars`, `feedMaxPerSession`, `fsJournalMaxPaths`, `fsJournalMaxPerPath` | how much of `X` reaches the model, and how much material `X` can be built from |
+| **D. The scheduled turn measurement** | `turnEveryNTurns`, `questions.turn` | a *second mechanism*: boundary-triggered evaluation, not a seam probe — and the seed of the act layer |
+| **E. What the record keeps** | `tracePath`, `maxTraceBytes`, `redactEnabled`, `redactKeys`, `pathMode` | evidence, privacy, bounds |
+| **F. What the numbers mean** | `pricePerMTokInput` (+ plan items 1–5) | the analysis the trace supports |
+| **G. The act layer** | plan item 10 | what to do with an answer — not built |
 
-Groups 1–2 answer "what does this plugin observe and ask"; group 3 answers "what does it keep"; group 4 answers
-"what do those numbers mean". That is the axis I would build the card on, and the first thing to settle in the next
-conversation, before any control is drawn.
+6 + 8 + 6 + 1 + 5 + 1 = 27, with `questions` counted once in B and once in D **because it is one field with two
+intents**.
+
+**THE GROUPING IS A UI PROPERTY, NOT A SCHEMA ONE.** `questions` stays one object in the schema: splitting it into
+`seamQuestions`/`turnQuestions` would be a breaking configuration change for every profile that has one, and the
+card can present the same field under two headings without the schema moving at all. The same holds for
+`seamEnabled`, whose nine switches belong inside A. What the card cannot do is invent a distinction the schema
+contradicts — which is why the three misplacements above matter before any control is drawn.
