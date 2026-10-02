@@ -345,14 +345,22 @@ test('a scheme word is never redacted on its own, leaving the credential behind 
 })
 
 // THE SHORTEST CREDENTIAL NAME THERE IS. `pw=` and `pword=` are how people abbreviate a password, and none of the
-// three name lists this module keeps for them had either -- so a record could carry `pw: hunter2` in the clear while
+// name lists this module keeps for them had either -- so a record could carry `pw: hunter2` in the clear while
 // `passwd: hunter2` was scrubbed. That is the same "one form with a rule and another without" inconsistency that
-// produced the last leak here, so all three lists are widened together.
+// produced the last leak here.
 test('`pw` and `pword` are credential names in every form this module handles', async () => {
   const { sanitizeJson } = await import('../lib/redact.js')
   const text = sanitizeToolText('pw: hunter2 and PWORD=opensesame', redactPolicy({}))
   assert.equal(text.includes('hunter2'), false, 'the header form: ' + text)
   assert.equal(text.includes('opensesame'), false, 'the environment form: ' + text)
+  // AND THE LOWER-CASE FORM, which is why the environment half of this test is written twice -- and why it uses
+  // `my_api_key` rather than `api_key`. The first version of this assertion used `api_key=…`, which the HEADER rule
+  // already caught (it accepts `=` as a separator), so it passed with the bug still in place: a test that proves
+  // nothing while looking right. `my_api_key` has a word character before the name, so the header rule's `\b` cannot
+  // match it and only the environment rule can -- which is exactly the rule whose alternation was case-sensitive.
+  const lower = sanitizeToolText('my_api_key=abc123xyz and pword=opensesame', redactPolicy({}))
+  assert.equal(lower.includes('abc123xyz'), false, 'a lower-case my_api_key: ' + lower)
+  assert.equal(lower.includes('opensesame'), false, 'a lower-case pword: ' + lower)
   // THE JSON-KEY LIST IS NOT WIDENED, deliberately: it is the faithful port of upstream's six, and the test above
   // counts them for exactly that reason. A deployment that wants `pw` as a key adds it the way any extra name is.
   const walked = sanitizeJson({ pw: 'hunter2', ordinary: 'kept' }, redactPolicy({ redactKeys: ['pw'] }))
