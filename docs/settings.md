@@ -107,3 +107,54 @@ intents**.
 card can present the same field under two headings without the schema moving at all. The same holds for
 `seamEnabled`, whose nine switches belong inside A. What the card cannot do is invent a distinction the schema
 contradicts — which is why the three misplacements above matter before any control is drawn.
+
+## 6. The card layout: seven artifacts, each opening onto its knobs
+
+The logical groups are **UI-addressable** without any schema change. The card settles that on its own evidence:
+its per-seam editors are already `h('details', { id: 'system1-observer-seam-…' }, h('summary', …))` — *"plain
+`details` so nine seams do not fill the page at once"* — and its ids already follow `system1-observer-<thing>`,
+which is exactly what `test/client-card.test.js` walks by. So the seven groups become seven panels, reusing the
+styles (`styles.seam`, `styles.summary`) and the convention that already exist.
+
+### The seven, with their headers
+
+The header is not a label — it is **the state**, in the vocabulary the card already uses for its effective note
+and its chips. A person scanning seven closed rows should be able to see what the plugin is doing without opening
+anything.
+
+| # | panel (`id`) | header shows | knobs inside | control kind |
+|---|---|---|---|---|
+| 1 | **Observe** `panel-observe` | `calls ON · 7 seams · 1 session · subagents off` | `callsEnabled`, `hooks`, `seamEnabled` (nine switches), `sessions` (list), `observeSubagents`, `includeNonOperatorFacing` | checkbox · multi-select · switches · list · checkbox · checkbox |
+| 2 | **Send** `panel-send` | `service · typesafe/jev-latest · timeout 8000 ms` | `provider`, `model`, `timeoutMs`, `wireUrl`, `question`, `questions.<nine seams>`, `maxQuestionChars`, `redactSessionTelemetry` | text · text · numeric+reset · text · text · question editor · numeric+reset · checkbox |
+| 3 | **See** `panel-see` | `state ≤8000c · tool ≤4000c · field ≤20000c · feed 500/session` | `maxFieldChars`, `composeMaxChars`, `toolBlockMaxChars`, `feedMaxPerSession`, `fsJournalMaxPaths`, `fsJournalMaxPerPath` | six numeric+reset |
+| 4 | **Turn** `panel-turn` | `every 5 boundaries · 1 set · last fired at 15` | `turnEveryNTurns`, `questions.turn` | numeric+reset · question editor |
+| 5 | **Keep** `panel-keep` | `12.2 MB · redact ON · pathMode full · 0600` | `tracePath` (read-only, with its YAML-only reason), `maxTraceBytes`, `redactEnabled`, `redactKeys`, `pathMode` | text-disabled · numeric+reset · checkbox · list · select |
+| 6 | **Numbers** `panel-numbers` | `$0.042/MTok input · transcribed 2026-09-28` | `pricePerMTokInput` (+ plan items 1–5 as they land) | numeric+reset |
+| 7 | **Act** `panel-act` | `not built` | — (ROADMAP §9/P3) | disabled panel, present so the shape is visible |
+
+`questions` and `seamEnabled` each appear **once** in the schema and are rendered where they belong: the nine seam
+sets under Send, `questions.turn` under Turn — one draft object, two render sites, and a `set` op carrying the path
+the host accepts either way.
+
+### Three decisions I would make, and why
+
+1. **Accordion, not a tab strip.** Multiple panels may be open. A tab strip would hide the one signal an operator
+   needs mid-edit — *which panel has unsaved changes* — and would need its own keyboard handling; `details` is
+   already in this card and already tested.
+2. **A panel with unsaved changes opens itself.** The card holds drafts in `useState` and the Save lives in the
+   host's chrome, at the bottom. If a change could sit in a closed panel, the UNSAVED-changes warning would be the
+   only sign, and a person who closed the panel would reasonably believe the edit was gone. Opening the panels that
+   are dirty is the cheap version of a sticky save bar, and it is testable.
+3. **The open/closed state is UI state, never a setting.** It is `useState` in the card. Persisting "which panel
+   was open" would be a knob with no meaning to the trace, and the card's own rule is that only what changes a
+   measurement is a setting.
+
+### What this makes "A"
+
+The eight knobs nobody can reach today land **inside their panels** — `turnEveryNTurns` plus the two sizes in Turn
+and See, `redactEnabled`/`redactKeys`/`pathMode`/`redactSessionTelemetry`/`maxQuestionChars`/`pricePerMTokInput`/
+`maxTraceBytes` across Keep, Send and Numbers — so the panels and the missing knobs are **one change**, not two: a
+panel that opens onto nothing is not worth shipping.
+
+Tests follow the panel: open by `id`, assert the knobs a panel must contain, flip one, and assert the `set` op's
+**path** — plus one test for decision 2, that a dirty panel opens itself.
