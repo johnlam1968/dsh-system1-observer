@@ -85,3 +85,40 @@ test('a PEER-delivered opening message is labelled, an operator one is not, and 
   assert.equal(unknown.requestIsPeer, null, 'a cohort nobody measured is reported as unknown, not as operator: ' + JSON.stringify(unknown))
   assert.equal(unknown.cohortSource, 'unknown')
 })
+
+// A RE-APPLY IS NOT A NEW EXPERIMENT. The cadence once ran on an in-memory ledger that reset at every apply, and a
+// settings save RE-APPLIES THE ROW -- so saving an unrelated field silently restarted the schedule (failure 3 in the
+// header). The fix moved the basis to the harness turn, and the test above proves the basis with ONE mount; nothing
+// covered the re-apply, which is the case the fix exists for. Two mounts, one trace, and the fourth boundary has to
+// continue the session rather than start again at 1.
+test('a RE-APPLY cannot restart the cadence: the boundary continues the session', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'turn-reapply-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  const mountRow = async () => {
+    const agent = { id: 'session-a', session: { snapshotEvents: () => [] } }
+    const handlers = new Map()
+    const ctx = {
+      on(event, handler) { const list = handlers.get(event) ?? []; list.push(handler); handlers.set(event, list); return () => {} },
+      inject() {}, provide: () => () => {},
+      get: (name) => (name === 'agents' ? { get: () => agent, list: () => [agent] } : undefined),
+      agents: { currentInitiator: () => agent },
+    }
+    await apply(ctx, {
+      hooks: accessor([]), tracePath: accessor(tracePath), sessions: accessor(['*']),
+      turnEveryNTurns: accessor(3), questions: { turn: [] }, observeSubagents: accessor(true),
+    })
+    return handlers.get('agent/turn-stopping')[1]
+  }
+  const boundaries = () => (existsSync(tracePath)
+    ? readFileSync(tracePath, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((l) => l.event === 'turn-boundary')
+    : [])
+  const first = await mountRow()
+  for (let i = 0; i < 3; i += 1) first({ agent: { id: 'session-a' }, turn: 20 + i })
+  const second = await mountRow()
+  second({ agent: { id: 'session-a' }, turn: 23 })
+  for (let i = 0; i < 120 && boundaries().length < 4; i += 1) await new Promise((resolve) => setTimeout(resolve, 25))
+  const seen = boundaries()
+  assert.deepEqual(seen.map((l) => l.boundary), [20, 21, 22, 23],
+    'the fourth boundary continues the SESSION rather than restarting at 1: ' + JSON.stringify(seen.map((l) => [l.boundary, l.harnessTurn])))
+  assert.ok(seen.every((l) => l.boundary === l.harnessTurn), 'and every line agrees with the harness turn recorded beside it')
+})

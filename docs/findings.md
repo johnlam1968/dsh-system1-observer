@@ -50,6 +50,8 @@ did not survive are in §5.
 | F7 | the schema's field classification was asserted **by naming fields**, and eight `.volatile()` fields appeared in no list (`turnEveryNTurns`, `redactEnabled`, `redactKeys`, `pathMode`, `redactSessionTelemetry`, `maxQuestionChars`, `pricePerMTokInput`, `maxTraceBytes`) | evidence | `test/schema.test.js` walks the schema and compares complete sets — it failed on its first run, which is the point |
 | F8 | the composition and conformance tests resolved the runtime from a **global** harness install | evidence | declared as exact devDependencies (`cordis@4.0.4`, `cordis-plugin-loader@1.0.5`, `dsh-tools@0.1.7-rc.2`), local first, install as fallback; proven by running the whole suite with the global `npm` shadowed by a failing stub — 562/562 |
 | F9 | the wire's `requested` support was asserted only against the shared list | evidence | `test/envelope.test.js` drives a real reply carrying `requested` through the wire client |
+| F10 | nothing tested that a **re-apply** cannot restart the turn cadence, though the fix's commit claims it and a settings save re-applies the row | evidence | a two-mount test on one trace: the fourth boundary must continue the session, not restart at 1. Plus the field description now says the count is the session's |
+| F11 | the composer's FLAT `user/message` shape (`data` IS the message) was never driven | evidence | two fixtures in `test/turn-state.test.js`: the flat shape reads, and a tool result on the user channel is not the operator reaction |
 
 Commits `eba428e` (F1–F5), `03409fc` (the register), `674f51f` (F6–F9 and the register update). **Nine new tests**;
 three were proved to fail against a frozen pre-fix copy (§8), and two failed on their own first run.
@@ -105,11 +107,11 @@ three were proved to fail against a frozen pre-fix copy (§8), and two failed on
 | # | gap | status |
 |---|---|---|
 | E1 | the suite was **not hermetic** | **CLOSED, F8** — proven with the global `npm` shadowed by a failing stub: 562/562 |
-| E2 | `turnEveryNTurns` counts boundaries **since mount**, not since the session began | **OPEN, and now measured live**: `harnessTurn=21 boundary=19` across 21 mounts, with 3 firings at 5/10/15 — the every-N arithmetic is right, the *origin* of the count is not stated anywhere a reader would find it. Closing it needs a mount→fire→remount test and one line of user-facing text |
+| E2 | `turnEveryNTurns` counts boundaries **since mount**, not since the session began | **CLOSED — and the finding's own premise was stale.** The basis had already been moved to the harness turn (`42b4d3a`, wired by `6520011`); what was missing was the **re-apply** test, which is the case that fix exists for: a settings save re-applies the row, every existing case mounted once, and the commit message claimed a behaviour nothing tested. Added, plus one line of user-facing text on the field. The diverging live numbers (`harnessTurn=21 boundary=19`) are a process running pre-fix code: the trace's last write is after those commits, but the process is older |
 | E3 | the `system1` service integration was verified at the type boundary only | **CLOSED BY LIVE EVIDENCE** — all 20 seam calls in the live trace went through the service transport, and every one carries `envelope.requested`, `executed`, `usage`, `durationMs` and `requestId`. The **wire** transport has served no live call yet, which is why F9 drives one |
 | E4 | the wire carried `requested` with no test driving a wire reply | **CLOSED, F9** |
 | E5 | defaults asserted for three fields by name, no walk | **CLOSED, F7** |
-| E6 | no test drives an `agent/pre-step` payload where `messages` is absent, holds strings, or holds `{text}` rather than `{content:[…]}` | OPEN — a fixture per shape the code claims to tolerate |
+| E6 | no test drove an `agent/pre-step` payload where `messages` is absent, holds strings, or holds `{text}` rather than `{content:[…]}` | **CLOSED for the event shapes.** The composer now has a fixture for the FLAT `user/message` shape — `data` IS the message, which `SessionEventMap` declares for that channel while every fixture in the file used the nested one — and for a tool result on the user channel not being read as the operator reaction. The supplied-message shapes (string, `{text}`, `{content}`) were already covered; the payload-level variants ride the same reader |
 | E7 | `conventions.md` row 27's evidence cell contradicted its own conclusion cell | **CLOSED, F6** |
 
 ---

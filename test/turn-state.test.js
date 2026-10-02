@@ -112,3 +112,36 @@ test('an operator request with no seq REFUSES rather than anchoring the window a
   assert.match(out.reason, /carries no seq/)
   assert.equal(out.state, undefined, 'a refusal carries no state to judge')
 })
+
+// THE FLAT SHAPE: `data` IS THE MESSAGE. `SessionEventMap` declares `'user/message': UserMessage` -- while
+// `assistant/message` declares `data.message` -- and the composer reads `data.message?.content ?? data.content` to
+// cover both. Every fixture in this file used the NESTED shape, so the flat one, which is the shape the declaration
+// names for the operator's own channel, was never driven. An audit found the same asymmetry in the wire envelope:
+// two readings of one thing, one of them only ever exercised by accident.
+test('an operator message in the FLAT shape is read like the nested one', () => {
+  const flat = (seq, text) => ({ seq, type: 'user/message', data: { id: `m${seq}`, role: 'user', content: [text] } })
+  const out = composeTurnState({
+    events: [
+      flat(1, text('the flat request')),
+      env(2, 'assistant/message', [text('a reply')]),
+      flat(3, text('the flat reaction')),
+    ],
+  })
+  assert.equal(out.refused, false, 'a shape the event declaration names cannot be a refusal')
+  assert.equal(out.sections['OPERATOR REQUEST'], 'the flat request')
+  assert.equal(out.sections['AGENT RESPONSE'], 'a reply')
+  assert.equal(out.sections['OPERATOR NEXT MESSAGE'], 'the flat reaction')
+})
+
+test('a tool result on the user channel is NOT read as the operator reaction', () => {
+  // The harness delivers a tool's result as a `user/message`, so "the newest user message" is the tool result half
+  // the time. An operator message is one that carries TEXT; a delivery carrying a result is not a turn boundary.
+  const flatResult = (seq) => ({ seq, type: 'user/message', data: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'no results' }] } })
+  const out = composeTurnState({
+    events: [env(1, 'user/message', [text('a request')]), env(2, 'assistant/message', [text('a reply')]), flatResult(3)],
+  })
+  // With no text-bearing user message after the reply there is no reaction, and it says so rather than reading the
+  // tool result as one -- the live failure that moved this search onto text in the first place.
+  assert.equal(out.refused, true)
+  assert.match(out.reason, /no agent response in the window/)
+})

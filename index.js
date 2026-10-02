@@ -99,7 +99,7 @@ const Config = Schema.object({
     .min(0)
     .step(1)
     .default(0)
-    .description('Fire the scheduled turn measurement every Nth turn boundary. 0, the default, switches it off. The on/off is read at every boundary; the interval itself is read at mount.')
+    .description('Fire the scheduled turn measurement every Nth turn boundary. 0, the default, switches it off. The on/off is read at every boundary; the interval itself is read at mount. The count is the session turn number, not this process, so a settings save -- which re-applies the row -- cannot restart it.')
     .volatile(),
   // THE PER-SEAM QUESTIONS, and the one field whose SHAPE matters to the host rather than to us.
   //
