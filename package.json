@@ -75,6 +75,9 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@typesafe-ai/sdk": "^0.6.0"
   }
 }

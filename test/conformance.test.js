@@ -172,6 +172,12 @@ test('events: every catalogue name this plugin relies on appears in the sources'
 
 async function harnessPackage(name) {
   const candidates = []
+  // LOCAL FIRST, AND BY ENTRY RATHER THAN BY MANIFEST: the suite must not require a global harness install to run.
+  // `resolve(name)` asks for the package's own entry, which works whatever its `exports` map allows -- asking for
+  // `<name>/package.json` depends on that map permitting the subpath, and one harness package does not.
+  try {
+    return import(pathToFileURL(createRequire(import.meta.url).resolve(name)).href)
+  } catch { /* not declared as a dependency: fall through to the install */ }
   try {
     const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
     candidates.push(join(root, `@deepseek-ai/dsh/node_modules/${name}/package.json`))
@@ -181,7 +187,7 @@ async function harnessPackage(name) {
     if (!existsSync(manifest)) continue
     return import(pathToFileURL(createRequire(manifest).resolve(name)).href)
   }
-  throw new Error(`no reachable ${name}: install a harness that provides it`)
+  throw new Error(`no reachable ${name}: declare it as a devDependency, or install a harness that provides it`)
 }
 
 test('every tool declaration passes the registry\'s own object-schema gate', async () => {

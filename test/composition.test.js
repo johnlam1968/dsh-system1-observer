@@ -45,20 +45,27 @@ import { OBSERVER_SERVICE } from '../lib/service.js'
  */
 async function realCordis() {
   const candidates = []
+  // LOCAL FIRST, because this repository now DECLARES the runtime as a devDependency and the suite has to be
+  // runnable on a machine with no global harness install. The installed copy and the declared copy are the same
+  // version (4.0.4, pinned exactly -- a caret does not resolve an rc on this host), so declaring it does not
+  // weaken the point of this file: the runtime is still the real one, and it is the same one the profile loads.
+  try {
+    candidates.push(createRequire(import.meta.url).resolve('@deepseek-ai/cordis/package.json'))
+  } catch { /* not declared as a dependency: fall through to the install */ }
   if (process.env.DSH_CORDIS) candidates.push(process.env.DSH_CORDIS)
   try {
     const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
     candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/cordis/package.json'))
     candidates.push(join(root, '@deepseek-ai/cordis/package.json'))
-  } catch { /* no npm on PATH: the env var or nothing */ }
+  } catch { /* no npm on PATH: the declared copy or the env var, or nothing */ }
   for (const manifest of candidates) {
     if (!manifest.includes('package.json') || !existsSync(manifest)) continue
     const entry = createRequire(manifest).resolve('@deepseek-ai/cordis')
     return import(pathToFileURL(entry).href)
   }
   throw new Error(
-    'no reachable @deepseek-ai/cordis: set DSH_CORDIS to its package.json, or install a harness that provides it.\n' +
-    `looked in: ${candidates.join(', ') || '(nothing: no DSH_CORDIS and no npm root -g)'}`)
+    'no reachable @deepseek-ai/cordis: declare it as a devDependency, set DSH_CORDIS to its package.json, or install a harness that provides it.\n' +
+    `looked in: ${candidates.join(', ') || '(nothing: no declared copy, no DSH_CORDIS and no npm root -g)'}`)
 }
 
 const { Context } = await realCordis()
@@ -152,6 +159,12 @@ test('a configuration the row cannot honour fails the LOAD, and await() carries 
  */
 async function realToolRegistry() {
   const candidates = []
+  // LOCAL FIRST, by the same rule as `realCordis`: the registry is declared as a devDependency at the exact tested
+  // version, so the suite runs without a global harness install -- and this is the second resolver in this file that
+  // the hermeticity control found, which is why the control exists rather than a single grep.
+  try {
+    return import(pathToFileURL(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-tools')).href)
+  } catch { /* not declared as a dependency: fall through to the install */ }
   try {
     const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
     candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/package.json'))
@@ -162,7 +175,7 @@ async function realToolRegistry() {
     const entry = createRequire(manifest).resolve('@deepseek-ai/dsh-tools')
     return import(pathToFileURL(entry).href)
   }
-  throw new Error('no reachable @deepseek-ai/dsh-tools: install a harness that provides it')
+  throw new Error('no reachable @deepseek-ai/dsh-tools: declare it as a devDependency, or install a harness that provides it')
 }
 
 const { ToolRuntime } = await realToolRegistry()

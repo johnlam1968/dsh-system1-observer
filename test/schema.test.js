@@ -92,3 +92,56 @@ test('the turn hook is declared under `questions`, so its stored set can survive
   assert.notEqual(dict.questions.dict?.[TURN_HOOK], undefined, 'the schema declares no key for the turn hook, so its stored set is dropped on the next save')
   assert.equal(dict.questions.meta?.volatile, true, '`questions` must be volatile or no live write can reach any hook, the turn included')
 })
+
+// EVERY FIELD IS CLASSIFIED, BY WALKING THE SCHEMA RATHER THAN BY NAMING FIELDS.
+//
+// The tests above name their fields, which is how a NEW field slips in unclassified: the lists stay green while
+// the schema grows a knob that is neither editable nor declared mount-bound. An independent review found the same
+// shape of gap from the other side -- defaults asserted for three fields and no walk over the rest -- and the fix
+// is a walk, not three more names. Adding a field now means deciding, in this file, whether the card may write it.
+test('every declared field is either volatile or declared mount-bound, and none is neither', () => {
+  // THE LISTS ARE THE DECISION, AND THE WALK IS THE RATCHET. This test was written with the seven editable fields
+  // the older test above names, and it failed on its first run: the schema declares FIFTEEN volatile fields --
+  // `turnEveryNTurns`, `redactEnabled`, `redactKeys`, `pathMode`, `redactSessionTelemetry`, `maxQuestionChars`,
+  // `pricePerMTokInput` and `maxTraceBytes` are all writable through a live save and were in no list at all. That
+  // is the gap this test exists to close: a field added, or a `.volatile()` moved, now fails here until somebody
+  // writes down which of the two it is. `turnEveryNTurns` is the subtle one -- its ON/OFF is read at every turn
+  // boundary while the interval is read at mount, which is exactly why the schema marks it volatile.
+  const EDITABLE = [
+    'callsEnabled', 'seamEnabled', 'sessions', 'questions', 'includeNonOperatorFacing', 'observeSubagents',
+    'maxFieldChars', 'turnEveryNTurns', 'redactEnabled', 'redactKeys', 'pathMode', 'redactSessionTelemetry',
+    'maxQuestionChars', 'pricePerMTokInput', 'maxTraceBytes',
+  ]
+  const MOUNT_BOUND = [
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'tracePath',
+    'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath', 'composeMaxChars', 'toolBlockMaxChars',
+  ]
+  const walked = Object.keys(dict)
+  assert.ok(walked.length > 0, 'the schema declares no fields at all')
+  const editable = walked.filter((field) => dict[field].meta?.volatile === true).sort()
+  const mountBound = walked.filter((field) => dict[field].meta?.volatile !== true).sort()
+  assert.deepEqual(editable, [...EDITABLE].sort(),
+    'the set of live-writable fields is not the declared set: a field was added, removed, or had its `.volatile()` moved')
+  assert.deepEqual(mountBound, [...MOUNT_BOUND].sort(),
+    'the set of mount-bound fields is not the declared set: a knob the card may write would otherwise be offered as YAML-only, or the reverse')
+})
+
+// EVERY DECLARED DEFAULT MATERIALISES. A `.default()` that never reaches the resolved config is a knob whose
+// documented behaviour differs from its behaviour, and only three fields were checked before -- by name.
+test('every declared default reaches a resolved config', async () => {
+  const { readConfigValue } = await import('../lib/config-value.js')
+  const resolved = Config({})
+  let checked = 0
+  for (const field of Object.keys(dict)) {
+    // OBJECT FIELDS ARE SKIPPED, and this is the walk earning its place on its first run: `questions` records `{}`
+    // as its own default while the RESOLVED value carries each child's default, so a flat comparison called a
+    // correct schema broken. The children are asserted per key by the two tests above, which walk `questions` and
+    // `seamEnabled` seam by seam.
+    if (dict[field].type === 'object') continue
+    const declared = dict[field].meta?.default
+    if (declared === undefined) continue
+    checked += 1
+    assert.deepEqual(readConfigValue(resolved[field]), declared, `${field}'s declared default did not materialise`)
+  }
+  assert.ok(checked >= 3, `only ${checked} fields declare a default: the walk is not reaching the schema`)
+})

@@ -58,3 +58,31 @@ test('BOTH transports project through the shared list, and neither keeps a priva
     assert.equal(/const ENVELOPE = \[/.test(source), false, `${name} must not keep its own copy of the list`)
   }
 })
+
+test('a WIRE reply that carries `requested` puts it in the envelope -- the list can be right while nothing reaches it', async () => {
+  // The finding was a read that was dead on ONE transport: the wire's private whitelist omitted `requested`, so
+  // `lib/observe.js` recorded `requested: null` beside a populated envelope. The tests above assert the list and
+  // the source; this drives a real reply through the wire client, which is what the list is for.
+  const { createModel } = await import('../lib/model/client.js')
+  const model = createModel({
+    baseUrl: 'http://127.0.0.1:1',
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        answers: {},
+        requested: { provider: 'typesafe', model: 'jev-latest' },
+        executed: { provider: 'typesafe', model: 'typesafe/jev-1.13-20260917' },
+        usage: { inputTokens: 3 },
+        routing: { via: 'laya' },
+        leaked: 'a server that grows a field must not write it into the trace',
+      }),
+    }),
+  })
+  const result = await model.decide({ state: 'x', questions: {} })
+  assert.equal(result.kind, 'answers', `expected answers, got ${JSON.stringify(result).slice(0, 120)}`)
+  assert.deepEqual(result.envelope.requested, { provider: 'typesafe', model: 'jev-latest' },
+    'the alias that was asked for must reach the envelope on the wire, not only through the service')
+  assert.deepEqual(result.envelope.executed, { provider: 'typesafe', model: 'typesafe/jev-1.13-20260917' })
+  assert.equal(result.envelope.leaked, undefined, 'and the whitelist still gates what crosses')
+})
