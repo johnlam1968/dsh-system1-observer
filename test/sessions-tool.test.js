@@ -124,3 +124,16 @@ test('`format: subject` composes from the WHOLE log, and says so when no compose
   assert.match(String(bare.problems.join(' ')), /no composer is wired/)
   assert.equal('state' in bare, false, 'and no state key at all, rather than an empty one')
 })
+
+test('a THUNK query is resolved at call time -- the idiom the registration uses, and the bug the first live call found', async () => {
+  // `UNAVAILABLE: no session-query service is mounted` came from the factory reading `query.listSessions` off the thunk.
+  // The registration passes a thunk BECAUSE `sessionQuery` is captured by a `ctx.inject` callback that may run later.
+  const inner = fakeQuery({ records: [record('session-a')] })
+  const tool = createSessionsTool({ query: () => inner })
+  const out = await tool.execute({ action: 'list' })
+  assert.equal(out.count, 1, 'the thunk form works')
+  assert.deepEqual(out.sessions.map((s) => s.id), ['session-a'])
+  // and a thunk that is not ready yet is still the named problem, not a throw
+  const late = createSessionsTool({ query: () => undefined })
+  assert.match(String((await late.execute({ action: 'list' })).problem), /no session-query service is mounted/)
+})
