@@ -624,3 +624,52 @@ the benchmarks already predicted.** The measurement earns its keep when it is ab
   (two sets differing by one question) are not detected, and with several authorings of one seam they are likely.
 - **A per-scope hash on the line.** `readSelectedSet` already returns a hash per scope; recording those would let a
   reader attribute a change to one seam instead of to the whole composition, which is what editing one does today.
+
+## 13. The plugin's primary user is an agent
+
+`Operator:` *"Now I see the priority is for agent to drive this plugin (so UI is mainly for human to see or tweak):*
+
+- *Work with a session (hopefully even a new agent initiated session visible in the sidebar in this profile as human
+  initiated session does) talk to another agent (run on a specific model). A working example is the one this plugin is
+  observing.*
+- *use the exposed config tool (I forget the name) to compose/retrieve questions sets on different points (seams,
+  turns, and session).*
+- *use a tool (maybe based on or improved on the trace tool) to see the measurement results.*
+- *recursively iterate configurations and talking to the target agent.*
+- *write report on the measurement, about the LLM, and/or about the system1 usage, etc."*
+
+Recorded 2026-10-03. The card stops being the product: it is where a person looks and tweaks. The product is an agent
+closing the loop.
+
+### 13.1 Each capability, checked against the live runtime rather than assumed
+
+| # | capability | what exists | what is missing |
+|---|---|---|---|
+| 1 | talk to another agent on a chosen model | `ctx.subagents` (`startContinuable`, `sendMessage`, `listChildren`, `prompt`) and `ctx.agents` (`create`, `resume`, `list`, `get`) and `ctx.agentTeams.spawnTeammate`, plus `ctx.agentDefaultModel.currentSelection/saveSelection` -- and the AGENT-FACING tools already built on them (`subagent`, `send_message`, `peer_send`, `workflow`) | nothing in the plugin. **Verified that a spawned session is already observed:** two distinct `agentId`s on `call` lines (13 calls and 7 calls) and three `sessionId`s |
+| 2 | compose/retrieve sets per seam, turn, session | `system1_observe_config` with `action: list` returns the sets (names, hashes, seams, problems, `appliesTo`), and `set` selects one; `system1Observer.questionSets()` exposes them to other plugins | **COMPOSING is not exposed.** No tool writes a set: an agent composes by writing files with its own filesystem tools. A `system1_questions` tool (list, read, validate, write one scope file) is unbuilt |
+| 3 | see the measurement results | `system1_trace` (raw, with `run`/`hook`/`tail`/`full`) over the JSONL trace | **AGGREGATION.** No view of n, of the distribution per question, or of which questions never separate. A `system1_results` tool is unbuilt |
+| 4 | iterate configuration and conversation | the pieces in 2 and 3, plus the harness's own agent tools | the loop itself: **no set here has ever been rewritten because of a measurement** |
+| 5 | write a report | the agent's own file tools | the honest numbers a report needs -- that is 3 |
+
+### 13.2 What the trace already says about being agent-driven
+
+Measured over the live trace, 39,707 lines: **39,400 are `skip`**, 34 are `call` (draft 20, tool 8, turn 6), 23 are
+`mount`. A results view that showed only answers would hide that the plugin's bandwidth is almost entirely "asked
+nothing, and said why" -- and *why* is the first honest line of any report (`no question configured for this seam` and
+`no text at this seam` are different findings about a run).
+
+Also measured: the newest `mount` line predates the set change. It carries `probeHash` and `questionIds: ["probe"]`
+and **no `questionSetHash`**, so the row has not re-mounted since `questionSet` was set in the profile -- the corpus is
+still not in use.
+
+### 13.3 Build order, from what is missing rather than from what is interesting
+
+1. **`system1_results`** -- aggregate the trace: per question id, n, the distribution, and a flag for a question that
+   never separates; group by hook, by run, by `questionSetHash`/`stateHash`, and by `agentId`. Report the skips and
+   their reasons beside the answers, because a 99%-skip trace is a finding. This is what makes 5 possible and 4 worth
+   doing.
+2. **`system1_questions`** -- list, read, validate and WRITE one scope file of a composition (the loader already
+   validates; the tool would put a set in front of the same check before it is written).
+3. **The harness axis (12.2)** -- a declared label and `harnessHash` on the line, without which 4's iterations cannot
+   be attributed to the technique that was changed.
+4. Then the loop: evaluate, read, rewrite the set, re-evaluate.
