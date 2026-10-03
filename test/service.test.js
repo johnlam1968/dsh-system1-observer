@@ -45,14 +45,14 @@ test('THE VOCABULARY AND THE THRESHOLD ARE THE ROW\u2019S, AND THEY ARE READ LIV
   assert.deepEqual(service.label(corrects).signals.marker, 'scrap that', 'the reason names the marker that fired')
 })
 
-test('the service is frozen, named, and exposes exactly the six reads', () => {
+test('the service is frozen, named, and exposes exactly the seven reads', () => {
   const service = createObserverService(readers())
   assert.equal(OBSERVER_SERVICE, 'system1Observer')
   assert.equal(Object.isFrozen(service), true)
   // SIX READS AND TWO OPTIONAL ONES, and the list is pinned because the returned object is built field by field:
   // passing `subject` as an OPTION while forgetting to expose it did nothing at all, silently, and this is the test
   // that would have said so.
-  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'replay', 'runs', 'sessions', 'storedSessions', 'subject'])
+  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'questionSets', 'read', 'replay', 'runs', 'sessions', 'storedSessions', 'subject'])
 })
 
 test('a non-function member is refused rather than exposed as a broken method', () => {

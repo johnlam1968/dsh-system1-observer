@@ -218,3 +218,4 @@ test('a knob that arrives as an accessor is unwrapped, and a function is never r
   const got = await tool.execute({ action: 'get', knob: 'provider' })
   assert.equal(got.value, 'typesafe')
 })
+

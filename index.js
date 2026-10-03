@@ -18,7 +18,7 @@ import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { FIREABLE_HOOKS, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
-import { readSelectedSet, setSettings } from './lib/question-sets.js'
+import { listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -549,6 +549,9 @@ async function apply(ctx, config) {
       // and checks `set` against it. Passed rather than imported so the tool stays testable without the plugin,
       // and read per call so a field added here appears there without a second list to maintain.
       schema: () => Config.dict,
+      // THE SETS A MODEL CAN CHOOSE FROM, listed live: a model should not have to guess a filename, and a broken
+      // file must be visible as a named problem rather than as an absent option.
+      sets: () => listSets(setSettings(liveConfig()).dir),
       record: (line) => {
         const { event, ...fields } = line
         evidence.trace(event, fields)
@@ -594,6 +597,8 @@ async function apply(ctx, config) {
     subject: () => subjectSettings(liveConfig()),
     /** The stored sessions a row may choose from, from the harness's own service. Named problems, never throws. */
     storedSessions: () => listStoredSessions(sessionQuery),
+    /** The sets this row can see, for a plugin that wants to list or offer them. */
+    questionSets: () => listSets(setSettings(liveConfig()).dir),
     config: () => ({
       // ALL LIVE, INCLUDING THE THREE THAT WERE NOT. `hooks` came from `readHooks(mount)` and `provider`/`model`
       // straight off the snapshot, while every sibling field in this same object read the running config -- so the
