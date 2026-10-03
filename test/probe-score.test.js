@@ -39,6 +39,23 @@ test('O15: a trace written under ANOTHER probe is scored by the hash ITS OWN RUN
     'a line whose question matches neither identity is not a probe call')
 })
 
+test('a call from a NON-PROBE site is never scored, however it is worded', () => {
+  // `system1_decide` records `hook: 'tool'` (lib/decide-tool.js:212 -- "`hook: 'tool'` is not a seam") and a stored
+  // session evaluation will record its own hook. Either can carry the probe question BY IDENTITY and is still not a
+  // measurement of this row's probe. The filter is what makes that a rule rather than a coincidence.
+  const mount = { event: 'mount', run: 'R1', probeHash: probeFingerprint() }
+  const call = { event: 'call', run: 'R1', hook: 'tool', questions: { probe: PROBE_QUESTION } }
+  assert.equal(probeAnswerOf(call), null, 'a tool call is not a probe, even carrying the probe question')
+  assert.notEqual(probeAnswerOf({ ...call, hook: 'draft' }), null, 'while the same line AT a seam is one')
+  assert.notDeepEqual(probeScore([mount, call]), probeScore([mount, { ...call, hook: 'draft' }]),
+    'and the score sees the difference rather than averaging the two together')
+  // THE TURN MEASUREMENT MUST STAY SCORABLE: it is a probe site too, and a filter that dropped it would silently
+  // remove the scheduled measurement from every calibration in the report.
+  assert.notEqual(probeAnswerOf({ ...call, hook: 'turn' }), null, 'the scheduled turn measurement is still scored')
+  // AND THE STORED-SESSION EVALUATION'S OWN HOOK IS NOT A SITE, which is the requirement §11 states.
+  assert.equal(probeAnswerOf({ ...call, hook: 'session-review' }), null, 'a stored evaluation contributes no probe rows')
+})
+
 test('a reworded probe is SCORED as a probe when the row says which question it asked', () => {
   // The end-to-end half of the identity change, shape-agnostic on purpose: without the second argument a row's own
   // calls are judged "not the probe" and every calibration over them is silently empty -- a wrong number rather than
