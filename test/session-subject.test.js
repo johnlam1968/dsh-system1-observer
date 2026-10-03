@@ -17,13 +17,29 @@ const message = (seq, type, text) => ({
   type,
   data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } },
 })
+/** An assistant turn that ALSO carries a tool call, which is where the real log puts every call (529 of them measured). */
+const assistantWithCall = (seq, text, id, name, args) => ({
+  seq,
+  time: seq,
+  type: 'assistant/message',
+  data: { message: { role: 'assistant', content: [{ type: 'text', text }, { type: 'tool-call', id, name, arguments: args }] } },
+})
+// THE IDS ARE NOT DECORATION: the harness writes a call as BOTH a `tool/call` event and a `tool-call` block, and ties
+// the result back by this id. A fixture without ids tests the positional fallback instead of the real path.
+const toolCall = (seq, id, name, args) => ({ seq, time: seq, type: 'tool/call', data: { callId: id, name, arguments: args } })
+const toolResult = (seq, id, text) => ({ seq, time: seq, type: 'tool/result', data: { message: { toolCallId: id, content: [{ type: 'text', text }] } } })
 
+// THE TOOL RESULTS SIT BETWEEN THE MESSAGES, which is how the harness writes them and the whole point of the window.
+// A fixture with every tool event after the last message cannot tell a window from a slice of messages.
 const EVENTS = [
   message(1, 'user/message', 'please summarise the deployment logs'),
-  message(2, 'assistant/message', 'here is the summary'),
-  message(3, 'user/message', 'now shorten it'),
-  message(4, 'assistant/message', 'shorter'),
-  { seq: 5, time: 5, type: 'tool/result', data: { message: { content: [{ type: 'text', text: 'tool output' }] } } },
+  toolCall(2, 'k1', 'grep', '{"pattern":"error"}'),
+  toolResult(3, 'k1', 'the log says the deployment failed'),
+  assistantWithCall(4, 'I looked it up.', 'k2', 'read', '{"file_path":"/tmp/log"}'),
+  message(5, 'user/message', 'now shorten it'),
+  toolCall(6, 'k3', 'wc', '{"file":"/tmp/log"}'),
+  toolResult(7, 'k3', 'nothing usable'),
+  message(8, 'assistant/message', 'shorter'),
 ]
 
 const queryWith = (events = EVENTS) => ({
@@ -49,20 +65,57 @@ test('the kinds map onto event types, and a kind that maps to nothing is NAMED',
 
 test('the slice takes the last N matched messages, and 0 means the whole session', () => {
   const whole = sliceEvents(EVENTS, { kinds: ['operator', 'assistant'], lastMessages: 0 })
-  assert.equal(whole.matched, 4, 'the four messages, and not the tool result')
-  assert.equal(whole.total, 5, 'out of five events')
-  assert.deepEqual(whole.events.map((event) => event.seq), [1, 2, 3, 4], 'newest last, as the composer expects')
+  assert.equal(whole.matched, 4, 'the four messages, and not the tool events')
+  assert.equal(whole.total, 8, 'out of eight events')
+  assert.deepEqual(whole.messages.map((event) => event.seq), [1, 4, 5, 8], 'the messages, newest last')
+  assert.deepEqual(whole.events.map((event) => event.seq), [1, 2, 3, 4, 5, 6, 7, 8], 'and the WINDOW is everything they span')
   const tail = sliceEvents(EVENTS, { kinds: ['operator', 'assistant'], lastMessages: 2 })
-  assert.deepEqual(tail.events.map((event) => event.seq), [3, 4], 'the last two messages, not the last two events')
+  assert.deepEqual(tail.messages.map((event) => event.seq), [5, 8], 'the last two messages, not the last two events')
+  // THE WINDOW IS WHY THIS FUNCTION NO LONGER RETURNS A BARE MESSAGE LIST: the tool call and its result that sit
+  // between the two selected messages travel with them, and the pair before the window does not.
+  assert.deepEqual(tail.events.map((event) => event.seq), [5, 6, 7, 8], 'the window spans the selected messages and carries the tool record inside it')
   const onlyOperator = sliceEvents(EVENTS, { kinds: ['operator'], lastMessages: 0 })
-  assert.deepEqual(onlyOperator.events.map((event) => event.seq), [1, 3], 'one kind is a legitimate slice')
+  assert.deepEqual(onlyOperator.messages.map((event) => event.seq), [1, 5], 'one kind is a legitimate slice')
+  assert.deepEqual(onlyOperator.events.map((event) => event.seq), [1, 2, 3, 4, 5], 'and the window still spans them')
+})
+
+test('the WINDOW keeps the tool RESULTS that a slice of messages alone drops', async () => {
+  // THE DEFECT THIS EXISTS FOR, measured on a real session: a slice of messages keeps every tool CALL (they ride
+  // inside the assistant turns' content blocks) and drops every tool RESULT (they are `tool/result` events). The
+  // composed TOOL CALLS section then reads `call 1: bash({...})` for all 529 calls with no `-> ` line under any of
+  // them, and the set asks "If a lookup in TOOL CALLS returned nothing usable, what did the agent do next?".
+  const read = await readStoredSubject({ sessionQuery: queryWith(), sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0 })
+  const opt = { scope: 'session', maxChars: 4000, toolMaxChars: 2000 }
+  const fromWindow = composeTurnState(Object.assign({ events: read.events }, opt)).sections['TOOL CALLS']
+  const fromMessagesOnly = composeTurnState(Object.assign({ events: read.messages }, opt)).sections['TOOL CALLS']
+  assert.match(fromWindow, /call 1: grep\(\{"pattern":"error"\}\)\n  -> the log says the deployment failed/, 'each result is under the call it belongs to, by id')
+  assert.match(fromWindow, /call 3: wc\(\{"file":"\/tmp\/log"\}\)\n  -> nothing usable/, 'AND the result a stored judgement never saw at all')
+  assert.match(fromMessagesOnly, /call 1: read/, 'messages alone still show a call, because calls ride inside the messages')
+  assert.equal(/-> /.test(fromMessagesOnly), false, 'and drop every result -- which is the defect, in one assertion')
+})
+
+test('the coverage says how much session there was, which is the denominator O26 was missing', async () => {
+  const read = await readStoredSubject({ sessionQuery: queryWith(), sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0 })
+  assert.deepEqual(read.coverage, {
+    events: 8,
+    messages: 4,
+    chars: 'please summarise the deployment logs'.length + 'I looked it up.'.length + 'now shorten it'.length + 'shorter'.length,
+    toolEvents: 4,
+  })
+  // AN EMPTY SESSION STILL REPORTS ZERO RATHER THAN `undefined`, so a reader never has to guess whether the number was
+  // absent or the session was.
+  const empty = await readStoredSubject({ sessionQuery: queryWith([]), sessionId: 'S1' })
+  assert.deepEqual(empty.coverage, { events: 0, messages: 0, chars: 0, toolEvents: 0 })
 })
 
 test('a stored subject is read, and every failure is a sentence rather than a throw', async () => {
   const read = await readStoredSubject({ sessionQuery: queryWith(), sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 3 })
   assert.equal(read.problem, null)
   assert.equal(read.session.id, 'S1', 'the header comes back with the events')
-  assert.deepEqual(read.events.map((event) => event.seq), [2, 3, 4])
+  assert.deepEqual(read.messages.map((event) => event.seq), [4, 5, 8], 'the messages the caller lists')
+  // THE WINDOW OPENS AT THE FIRST SELECTED MESSAGE, not at the first message in the session: the range is the one the
+  // reader asked for, so a tool result that answered an earlier turn is not dragged in with it.
+  assert.deepEqual(read.events.map((event) => event.seq), [4, 5, 6, 7, 8], 'and the window the composer takes')
 
   // A SESSION THAT DOES NOT EXIST, and a service that is not mounted: both are problems, and neither throws -- the
   // caller is a tool that has to explain what happened.
@@ -86,7 +139,7 @@ test('the events go into the ONE composer, which composes THE EXCHANGE -- and th
   const state = composeTurnState({ events: read.events, scope: 'session' })
   const text = String(state.state ?? '')
   assert.match(text, /SESSION TRANSCRIPT:\nOPERATOR: please summarise the deployment logs/, 'the conversation opens the state')
-  assert.match(text, /AGENT: here is the summary/, 'with the response to it')
+  assert.match(text, /AGENT: I looked it up\./, 'with the response to it')
   assert.match(text, /OPERATOR: now shorten it/, 'and the next request')
   // O16 WAS THIS ASSERTION'S OPPOSITE: as an exchange, the composer dropped the newest turn, and its test said so in
   // as many words. With the scope it is included, which is the whole point of a stored judgement.

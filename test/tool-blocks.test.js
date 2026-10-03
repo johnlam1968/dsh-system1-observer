@@ -68,3 +68,35 @@ test('junk in the events does not throw, and is not counted as evidence', () => 
   assert.equal(out.text, '')
   assert.deepEqual(assembleToolCalls().text, '')
 })
+
+// MEASURED ON A REAL SESSION, and both halves were invisible while the section was empty: the harness writes each
+// call TWICE -- a `tool/call` event and a `tool-call` block in the assistant message, same id -- and the result once,
+// carrying that id. Counting both shapes gave 1,058 calls for 529 real ones, so `results[index]` attached every
+// result after the first to the WRONG call: call 2 (a duplicate of call 1) was shown the README's contents. A
+// mis-attributed result is worse than a missing one, because it reads as evidence.
+test('a call written twice under one id is ONE call, and its result pairs with it BY ID', () => {
+  const call = (seq, id, name, args) => [
+    envelope(seq, 'assistant/message', [{ type: 'tool-call', id, name, arguments: args }]),
+    { seq: seq + 1, type: 'tool/call', data: { callId: id, name, arguments: args } },
+  ]
+  const result = (seq, id, text) => ({
+    seq,
+    type: 'tool/result',
+    // THE REAL SHAPE, including the trap: `id` is the RESULT MESSAGE'S OWN id and is NOT the call id. A reader that
+    // takes `id` first matches nothing -- measured on a real session, where that produced 529 calls, 529 results and
+    // zero pairings.
+    data: { message: { id: 'msg-' + seq, toolCallId: id, source: { kind: 'tool', callId: id }, content: [{ type: 'text', text }] } },
+  })
+  const out = assembleToolCalls([
+    envelope(1, 'user/message', [{ type: 'text', text: 'go' }]),
+    ...call(2, 'c1', 'bash', '{"command":"ls"}'),
+    result(4, 'c1', 'file-a'),
+    ...call(5, 'c2', 'grep', '{"pattern":"x"}'),
+    result(7, 'c2', 'nothing'),
+  ], { includeText: false })
+  assert.equal(out.calls.length, 2, 'two calls, not four -- the same id twice is one call')
+  assert.equal(out.results.length, 2)
+  assert.match(out.text, /call 1: bash\(\{"command":"ls"\}\)\n  -> file-a/, 'the first result belongs to the first call')
+  assert.match(out.text, /call 2: grep\(\{"pattern":"x"\}\)\n  -> nothing/, 'and the second result to the second call')
+  assert.doesNotMatch(out.text, /no preceding call/, 'and every result found its call, so nothing is reported orphaned')
+})
