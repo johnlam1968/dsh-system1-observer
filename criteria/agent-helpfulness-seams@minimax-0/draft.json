@@ -1,0 +1,22 @@
+[
+  {
+    "id": "draft_grounded_in_history",
+    "type": "choice",
+    "instructions": "How well does the outgoing request stay grounded in what was actually said earlier in this turn, rather than introducing new material the operator never asked about?",
+    "options": [
+      {
+        "label": "grounded",
+        "criterion": "every claim or question in the draft can be traced to the operator's message or to a tool result"
+      },
+      {
+        "label": "adds_assumptions",
+        "criterion": "the draft introduces constraints, files, or goals that were not stated by the operator and not required by the result"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the draft is too short or too generic to judge whether it adds material",
+        "abstain": true
+      }
+    ]
+  }
+]

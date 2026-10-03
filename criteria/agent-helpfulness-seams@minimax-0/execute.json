@@ -1,0 +1,22 @@
+[
+  {
+    "id": "execute_arguments_complete",
+    "type": "choice",
+    "instructions": "Are the arguments given to the tool sufficient for the tool to run, or are key parameters missing or empty?",
+    "options": [
+      {
+        "label": "complete",
+        "criterion": "every argument the tool needs to do its job is present and non-empty"
+      },
+      {
+        "label": "missing",
+        "criterion": "at least one required argument is empty, unset, or a placeholder"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the tool and arguments are not enough to tell whether anything is missing",
+        "abstain": true
+      }
+    ]
+  }
+]

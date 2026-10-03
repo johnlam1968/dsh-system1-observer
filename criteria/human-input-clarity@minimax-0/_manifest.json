@@ -1,0 +1,8 @@
+{
+  "description": "first MiniMax authoring, operator input -- kept beside the later authoring, because the two disagree about what matters",
+  "author": "MiniMax-M3",
+  "appliesTo": {
+    "user": "operator-1",
+    "model": "unspecified"
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "pre_execute_tool_match",
+    "type": "choice",
+    "instructions": "Is the tool the assistant picked the kind of tool that does what this text is asking for?",
+    "options": [
+      {
+        "label": "match",
+        "criterion": "the tool's documented capability is the operation the text is asking for"
+      },
+      {
+        "label": "mismatch",
+        "criterion": "the tool is the wrong kind for the task (e.g. asking a read-only tool to write, or a search tool to edit)"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the text or the tool is ambiguous enough that match/mismatch cannot be decided",
+        "abstain": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "result_text_faithful",
+    "type": "choice",
+    "instructions": "Does the result text being written to the record faithfully represent what the tool returned, rather than adding interpretation, advice, or claims that were not in the tool output?",
+    "options": [
+      {
+        "label": "faithful",
+        "criterion": "the text quotes or paraphrases the tool output without adding claims the tool did not make"
+      },
+      {
+        "label": "adds_claims",
+        "criterion": "the text adds explanations, recommendations, or facts that were not present in the tool output"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the text is too short or generic to tell whether anything was invented",
+        "abstain": true
+      }
+    ]
+  }
+]

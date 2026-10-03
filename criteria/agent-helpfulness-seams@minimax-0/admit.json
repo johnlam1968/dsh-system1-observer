@@ -1,0 +1,22 @@
+[
+  {
+    "id": "admit_intent_observable",
+    "type": "choice",
+    "instructions": "How much of the operator's intent can be read from this message alone, without guessing what they mean?",
+    "options": [
+      {
+        "label": "actionable",
+        "criterion": "the message names a concrete task, file, command, or question the agent can act on directly"
+      },
+      {
+        "label": "partial",
+        "criterion": "the message states a goal but omits one or more details the agent will have to assume"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the message is too short, vague, or off-topic to extract any concrete intent",
+        "abstain": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "id": "assemble_request_present",
+    "type": "noul",
+    "instructions": "Does the system prompt being assembled contain an explicit instruction that tells the agent what to do for this task, rather than a generic persona or empty template?",
+    "criteria": {
+      "true": "the prompt names a concrete task or instruction the agent should carry out",
+      "false": "the prompt is generic, a persona, or has no actionable instruction"
+    }
+  }
+]

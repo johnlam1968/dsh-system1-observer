@@ -1,0 +1,11 @@
+[
+  {
+    "id": "post_execute_error",
+    "type": "noul",
+    "instructions": "Does this tool result text describe an error, a failure, or an exception, as opposed to a normal successful response?",
+    "criteria": {
+      "true": "the text contains an error message, stack trace, exit code, or explicit failure marker",
+      "false": "the text is a normal success output or a structured response without an error"
+    }
+  }
+]

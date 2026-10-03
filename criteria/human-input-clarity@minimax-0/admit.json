@@ -1,0 +1,133 @@
+[
+  {
+    "id": "admit_asks_specifically",
+    "type": "noul",
+    "instructions": "Does the operator's message name a specific target (file path, function, identifier, URL, command, error message), rather than asking the agent to figure out what to work on?",
+    "criteria": {
+      "true": "the message names at least one concrete target the agent can look up or operate on",
+      "false": "the message points at no specific file, function, error, or artefact"
+    }
+  },
+  {
+    "id": "admit_goal_stated",
+    "type": "choice",
+    "instructions": "Is the operator's intended outcome stated explicitly in this message, or only implied?",
+    "options": [
+      {
+        "label": "stated",
+        "criterion": "the message says what the operator wants done or known when the agent is finished"
+      },
+      {
+        "label": "implied",
+        "criterion": "the message gives inputs but leaves the desired outcome for the agent to guess"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the message is too short to tell whether an outcome is implied or stated",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "admit_success_criterion_present",
+    "type": "noul",
+    "instructions": "Does the operator's message include any condition that would let the agent tell when the task is done (e.g. 'output X', 'exit code 0', 'no warnings', 'matches this regex')?",
+    "criteria": {
+      "true": "the message contains at least one verifiable condition or expected output",
+      "false": "no verifiable success condition is given"
+    }
+  },
+  {
+    "id": "admit_constraints_present",
+    "type": "choice",
+    "instructions": "Does the operator's message name any constraints the agent must respect (language, version, branch, file to leave alone, behaviour to avoid), or is it unconstrained?",
+    "options": [
+      {
+        "label": "constrained",
+        "criterion": "the message names at least one constraint that limits how the task may be done"
+      },
+      {
+        "label": "unconstrained",
+        "criterion": "no constraint is named and the agent has free choice of approach"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the message is too short to tell whether constraints are present",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "admit_scope_for_action",
+    "type": "choice",
+    "instructions": "How bounded is the scope of what the operator is asking for? A narrow scope is one task on one target; a wide scope asks for an open-ended investigation.",
+    "options": [
+      {
+        "label": "narrow",
+        "criterion": "the request targets one artefact and one change"
+      },
+      {
+        "label": "broad",
+        "criterion": "the request asks for a survey, a refactor, or an investigation with no clear stopping point"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the request is too vague to bound",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "admit_conflict_free",
+    "type": "noul",
+    "instructions": "Are the requirements in this message internally consistent, or do they contradict each other (asking both to add a feature and to make no changes, asking for both Python 2 and Python 3, etc.)?",
+    "criteria": {
+      "true": "the requirements in the message do not contradict each other",
+      "false": "the message contains at least one pair of requirements that cannot both be satisfied"
+    }
+  },
+  {
+    "id": "admit_relevant_to_history",
+    "type": "choice",
+    "instructions": "Does this message build on the prior transcript in a coherent way, or does it ignore what was just said?",
+    "options": [
+      {
+        "label": "coherent",
+        "criterion": "the message responds to, refines, or follows up on the agent's last turn or a tool result"
+      },
+      {
+        "label": "disconnected",
+        "criterion": "the message starts a brand-new topic with no link to the prior exchange"
+      },
+      {
+        "label": "first_turn",
+        "criterion": "this is the first operator message, so there is no prior exchange to relate to"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the transcript does not show enough context to judge coherence",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "admit_understood_without_clarification",
+    "type": "choice",
+    "instructions": "Could a competent agent act on this message without needing to ask a clarifying question first?",
+    "options": [
+      {
+        "label": "actable",
+        "criterion": "the message gives enough information for an agent to begin work without asking"
+      },
+      {
+        "label": "needs_clarification",
+        "criterion": "at least one obvious clarifying question is required before work can begin"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the message is too short or technical to decide",
+        "abstain": true
+      }
+    ]
+  }
+]
