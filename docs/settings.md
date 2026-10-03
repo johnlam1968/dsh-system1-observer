@@ -364,17 +364,37 @@ already the ONE place that decides what the judge sees. (B) does not need a seco
 **source of events** for the same one. That is why the coding is small, and it is also why the two modes cannot drift
 apart in what they show.
 
-**Which stored representation, decided by the code rather than by convenience.** Three candidates exist on this
-machine, and the code already rules one out:
+**THE HARNESS ALREADY ANSWERS THIS, AND IT IS A SERVICE.** `@deepseek-ai/dsh-session-query` exports
+`SessionQueryEngine extends Service` with the calls this design needs, in its own vocabulary:
+
+| its method | what (B) uses it for |
+|---|---|
+| `listSessions()` | the picker's list of stored sessions |
+| `readSession(id)` / `listEvents(id)` | the stored session's events, to feed the one composer |
+| **`filterEvents(id, filters)`** | **the slices** -- "slices of it, with certain filters" is a method the harness already has, not something to invent |
+| `readSurface(id)` | the surface, if a slice should be defined by it |
+| `readTitle(id)` | the session's headline, which the card otherwise cannot obtain |
+
+So (B) does **not** read the archive itself. It injects that service, exactly as it already reads the live session
+through `agent.session.snapshotEvents(0)`. The measurement that settles it: this machine's largest stored archive is
+23 MB holding **10,939 concatenated zstd frames**, and Node's one-shot `zstdDecompressSync` AND its streaming decoder
+both stop after the FIRST frame -- the harness carries a `PublicZstdFrameDecoder` for precisely that reason ("an
+adapter built exclusively from Node's supported one-shot API"). A plugin walking those frames by hand would be
+reimplementing an internal package whose format is not a plugin's contract, which is the opposite of what this
+project is for.
+
+**What this leaves, and why it is small.** Three candidates existed, and the code rules out one of them regardless:
 
 | source | verdict |
 |---|---|
-| a LIVE agent's `agent.session.snapshotEvents(0)` | already used by the observation path (`index.js:278`) -- the live case |
-| `~/.dsh/sessions/<workspace-slug>/session-<uuid>/session.v4.jsonl.zstd` | **the honest stored source**: one JSON line per session event, readable with Node's `zstdDecompressSync` (verified on this machine) |
-| `~/.dsh/storages/session_projcache/sessions/<uuid>.json` | **not** the source: `lib/nudge-label.js:29` records that "the projcache is a UI cache and truncates", so a measurement over it would agree with you about nothing |
+| a LIVE agent's `agent.session.snapshotEvents(0)` | already used by the observation path (`index.js:278`) -- the live case, unchanged |
+| the `SessionQueryEngine` service | **the stored case**: the harness's own reader, filtered slices included |
+| `~/.dsh/storages/session_projcache/sessions/<uuid>.json` | **not** a source: `lib/nudge-label.js:29` records that "the projcache is a UI cache and truncates", so a measurement over it would agree with you about nothing |
 
-Locating a session means mapping a session id to its workspace directory (the slug spelling) and reading one file;
-that is the only genuinely new plumbing, and it is one module with a fixture per shape.
+**The genuinely new plumbing is therefore smaller than planned**: one module that turns the service's
+`SessionEventRecord`s into the event shape `composeTurnState` already consumes
+(`{ seq, time, type, data: { message: { role, content } } }`), plus a mapping from the four settings onto the
+service's own filter vocabulary -- which is to be pinned by reading its `filters.d.ts` rather than guessed.
 
 **The settings it adds.** Four, each a thing a person would actually change, and nothing else -- no policy knob for
 "how to slice" beyond the slice itself:
