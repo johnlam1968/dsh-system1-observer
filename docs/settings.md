@@ -511,3 +511,39 @@ and the backup of the original block is `cordis.patch.yml.bak-20261003-122941` b
 the host to project the set list to the card, exactly as the stored-session picker does. Until then both are text
 fields, and the two callers that can read the list -- the agent's config tool and the `system1Observer` service --
 already expose it.
+
+## 13. Three state scopes, and why a set is the unit of cost
+
+The plugin asks a model about a STATE, and a state comes in exactly three sizes. Recorded 2026-10-03 as the operator's
+framing, because it is what the sets are organised by:
+
+| scope | the state | asked when | key in the `questions` map |
+|---|---|---|---|
+| **seam** | one loop point's text | a seam fires (`assemble`, `admit`, `draft`, ...) | `questions[<seam>]` |
+| **multi-turn** | an aggregate of an exchange | the scheduled turn measurement | `questions.turn` |
+| **session** | a whole conversation, live or stored | on demand, by a person or an agent | `questions.session` |
+
+**Every judgement is ONE narrow question.** The sets obey a rule their own rationale files state: *"It is a predicate or
+an ordinal ladder, never a wide question"* -- no question asks the model to summarise, infer intent, or characterise in
+prose. A wide question is several questions wearing one id, and it cannot be calibrated.
+
+**And a SET is the unit that saves the cost**, which is the reason to group questions rather than ask one at a time:
+the state is composed once per call and several questions ride on it. `lib/observe.js` builds a seam's questions and
+sends them in ONE call (`decide({ state, questions })`), and `system1_evaluate` does the same for a session. Asking
+five questions separately would compose -- and pay for -- the same state five times.
+
+**What this changed in the code**, because the taxonomy found a real gap rather than only naming a pattern:
+
+- `SESSION_HOOK = 'session'` and `QUESTION_SCOPES` (the nine seams, the aggregate, and the session scope) in
+  `lib/questions.js`. The session scope is deliberately NOT in `FIREABLE_HOOKS`: nothing fires at it.
+- The schema declares all three scopes, because an undeclared key is dropped by `projectForm` -- the failure the
+  schema's own comment records for `turn`.
+- **`system1_evaluate` asked the TURN questions for a session judgement** before this. It now asks the session scope,
+  falling back to the aggregate when no session questions are configured -- which is every row today, since no set in
+  `criteria/` carries a `session` key yet. The fallback is what keeps the change behaviour-preserving.
+
+**Still missing, named rather than faked.** (1) No session questions have been AUTHORED: `questions.session` works and
+falls back, but writing them is a judgement about which qualities of a whole conversation matter, and that is the
+operator's, exactly as the seam sets were. (2) A row names ONE set file, so a set carrying every scope is how one row
+covers all three -- `helpfulness-set-merged@1.json` does for the ten seams and `turn`. Naming a set per scope would
+need `questionSet` to become a map, and that is not built.

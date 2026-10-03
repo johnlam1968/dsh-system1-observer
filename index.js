@@ -16,7 +16,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
-import { FIREABLE_HOOKS, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
+import { QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
 import { listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
@@ -174,10 +174,11 @@ const Config = Schema.object({
     // any other field is saved, which is what this schema test's own comment warns about: "a seam missing here is a
     // seam whose stored questions vanish on the next save by any other field."
     //
-    // `FIREABLE_HOOKS` IS ALREADY THAT LIST -- `[...PROBE_SEAMS, TURN_HOOK]`, exported by lib/questions.js -- so this
-    // names one list rather than reconstructing it. Measured: the plugin's only live measurement (22:13, turn 5)
+    // `QUESTION_SCOPES` IS THAT LIST -- the nine seams, the aggregate, and the SESSION scope, exported by
+    // lib/questions.js -- so this names one list rather than reconstructing it. The session scope is not a firing:
+    // nothing fires at it, and `system1_evaluate` asks it on demand (§11). Measured: the plugin's only live measurement (22:13, turn 5)
     // asked twelve questions from criteria/helpfulness-set@2.json, and today the resolved config carries no turn key.
-    Object.fromEntries(FIREABLE_HOOKS.map(hook => [hook, Schema.array(Schema.any())])),
+    Object.fromEntries(QUESTION_SCOPES.map(scope => [scope, Schema.array(Schema.any())])),
   ).volatile().description('Per-seam questions, keyed by seam name. An array of `{id, type, instructions}` where `type` is `noul` (optional `criteria`), `choice` (`options`: `{label, criterion, abstain}`) or `score` (`levels`). A seam left empty asks nothing. Legacy mode -- the probe question, or `question` -- applies until at least one seam carries a question.'),
   // THE KILL SWITCH. `!= false` in `lib/observe.js`, NOT `=== true`: an absent field has to leave the
   // observer ON, because a switch that turns itself off when nobody set it is worse than no switch. There
@@ -526,10 +527,17 @@ async function apply(ctx, config) {
       }),
       // THE AGGREGATE QUESTION SET, through the reader the mount line uses: with nothing configured this falls back to
       // the probe question exactly as the live path does, so a tool does not invent its own convention.
-      questions: () => buildQuestions({
-        seamEnabled: { [TURN_HOOK]: true },
-        questions: { [TURN_HOOK]: readConfigValue(liveConfig().questions)?.[TURN_HOOK] },
-      }, TURN_HOOK),
+      questions: () => {
+        const configured = readConfigValue(liveConfig().questions) ?? {}
+        // A SESSION HAS ITS OWN SCOPE. Before this it asked the TURN questions, which is the gap the three-scope
+        // taxonomy exposed: a conversation judged with questions written about one exchange.
+        //
+        // THE FALLBACK IS DELIBERATE AND PRESERVES BEHAVIOUR: a row with no session questions -- every row today,
+        // since no set in `criteria/` carries a `session` key -- keeps asking the aggregate set it already asked.
+        const session = configured[SESSION_HOOK]
+        const specs = Array.isArray(session) && session.length > 0 ? session : configured[TURN_HOOK]
+        return buildQuestions({ seamEnabled: { [SESSION_HOOK]: true }, questions: { [SESSION_HOOK]: specs } }, SESSION_HOOK)
+      },
       decide: (request, options) => decide(request, options),
       record: (line) => {
         const { event, ...fields } = line

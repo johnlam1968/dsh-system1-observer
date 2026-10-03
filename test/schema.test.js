@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Config } from '../index.js'
 import { PROBE_SEAMS } from '../lib/seams.js'
-import { FIREABLE_HOOKS, TURN_HOOK } from '../lib/questions.js'
+import { QUESTION_SCOPES, TURN_HOOK } from '../lib/questions.js'
 
 // WHY THIS EXISTS: the settings host projects a form onto this schema before every read and every write
 // (`dsh-settings` `volatileForm` + `projectForm`), and that projection has two silent behaviours that this
@@ -27,7 +27,7 @@ test('every probe seam is declared under `questions`, so no seam can be silently
     // EVERY FIREABLE HOOK, NOT ONLY THE SEAMS. The turn hook carries a question set and is not a probe seam, so a list
     // of seams alone looks correct while dropping it -- and `turnSpecs` reads `config.questions[TURN_HOOK]`, so an
     // undeclared turn key is a scheduled measurement that cannot be configured at all.
-    [...FIREABLE_HOOKS],
+    [...QUESTION_SCOPES],
     'the schema keys must be every hook that can carry questions, in order -- a hook on one side only is a hook that does not work',
   )
 })
