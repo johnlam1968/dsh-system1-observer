@@ -673,3 +673,35 @@ still not in use.
 3. **The harness axis (12.2)** -- a declared label and `harnessHash` on the line, without which 4's iterations cannot
    be attributed to the technique that was changed.
 4. Then the loop: evaluate, read, rewrite the set, re-evaluate.
+
+### 13.4 The set-writing tool, and what `validate` cannot see
+
+`system1_questions` is built (round 2 of this objective): `list`, `read`, `validate`, `write`, with the loader's own
+check running **before** anything is written, an existing scope file not overwritten without `replace: true`, an empty
+list refused, and the answer's hash **read back from disk**. MiniMax-M3 reviewed the write path and named the defects a
+loader structurally cannot catch. Agreed postures, recorded so the next round does not re-litigate them:
+
+| defect | can the loader see it? | posture |
+|---|---|---|
+| a question the call's state cannot answer (a seam question needing the conversation) | no | **try to catch it** -- this is the most common silent defect (four of MiniMax's own seam questions were unanswerable) |
+| inverted polarity on a `noul` | no | **warn**, never refuse: there are no labelled cases to test against, and refusing would block legitimate questions |
+| paraphrased questions in one batch | no | **silent**: detecting it needs to know which questions are paraphrases, which the specs do not say |
+| state filtering and context rot | no | **silent**: an authoring-time concern the tool cannot see |
+| a `score` whose `levels` change length between revisions | no | **warn**: the index rescales, so an old reading and a new one are not the same number |
+
+**Two of the review's proposals are REJECTED, with the reason, because the reason is architectural and would otherwise
+be re-proposed:**
+
+1. *"Refuse when the same `id` appears in two scope files of one composition."* **Not needed here.** The answer map is
+   keyed by question id **within one call**, and a call is for one scope, so the same id at `draft` and at `result`
+   cannot collide -- and the corpus already uses that deliberately (the frozen ten-seam set asked `would_change` and
+   `outcome` at two seams each). `system1_results` groups by scope for the same reason. A refusal here would forbid a
+   legitimate and already-used shape.
+2. *"Refuse instructions shorter than N characters, or without a question verb."* **Length is not vagueness** -- "Is it
+   concise?" is five words and precise, while a hundred-word question can be empty. The real check is the
+   answerability lint in 13.5, which asks whether the question can be answered from the state, not how it is phrased.
+
+**Kept from the review, and not built yet:** the *ghost composition* problem (an agent that always writes a new `@`
+revision leaves `list` showing sets nothing measures). It cannot be answered inside the questions tool, because
+"is this set used" is a question about the TRACE -- so it belongs in `system1_results`, as a count of lines per
+`questionSetHash` beside the compositions `list` reports.

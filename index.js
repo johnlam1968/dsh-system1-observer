@@ -27,6 +27,7 @@ import { describeSubject, subjectOfAgent } from './lib/subject.js'
 import { composeTurnState } from './lib/turn-state.js'
 import { createEvaluateTool } from './lib/evaluate-tool.js'
 import { createResultsTool } from './lib/results-tool.js'
+import { createQuestionsTool } from './lib/questions-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
@@ -496,6 +497,13 @@ async function apply(ctx, config) {
       tools.register(createResultsTool({
         path: evidence.path,
         runId: evidence.runId(),
+      }))
+      // SYSTEM1_QUESTIONS: the composing half of the loop (ROADMAP 13.3 item 2). It validates with the SAME
+      // loader the row uses before it writes anything, refuses to overwrite a published scope without an explicit
+      // `replace`, and answers with the composition hash read back from disk -- so an agent can say which
+      // instrument it just created rather than which one it intended to.
+      tools.register(createQuestionsTool({
+        dir: () => setSettings(liveConfig()).dir,
       }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
