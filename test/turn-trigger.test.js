@@ -7,6 +7,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { shouldFire, turnQuestions } from '../lib/turn-trigger.js'
+import { PROBE_QUESTION } from '../lib/seams.js'
+import { ABSTAIN_LABEL } from '../lib/probe-score.js'
 
 /** A criteria directory with the compositions these tests select, written here so no shipped corpus is edited. */
 function setsDir() {
@@ -100,4 +102,25 @@ test('a set that declares NO turn scope is refused BY NAME, not as "nothing conf
   const broken = turnQuestions({ config: { questionSetsDir: dir, questionSet: 'does-not-exist' } })
   assert.equal(broken.refused, true)
   assert.doesNotMatch(broken.reason, /no question set is configured under/)
+})
+
+// THE OTHER HALF OF REGISTER ROW O17. A probe row at `turn` is `correct: false` ALWAYS (`lib/probe-score.js`:
+// `expected` is `LABEL_OF_SEAM[hook]`, and there is no seam called `turn`), so the scorer no longer scores one. That
+// makes a hand-written probe in the `turn` scope UNSCORED -- and unscored by silence is what this repository refuses.
+// It is refused by name instead.
+test('a `turn` scope that asks the PROBE question is refused, not asked and never scored', () => {
+  // THE BUILT-IN PROBE, REBUILT AS A SPEC: one option must be the abstain one, or the loader refuses the shape first.
+  const probe = {
+    id: 'probe', type: 'choice', instructions: PROBE_QUESTION.instructions,
+    options: Object.entries(PROBE_QUESTION.criteria).map(([label, criterion]) => ({ label, criterion, ...(label === ABSTAIN_LABEL ? { abstain: true } : {}) })),
+  }
+  const out = turnQuestions({ config: { questions: { turn: [probe] } } })
+  assert.equal(out.refused, true)
+  assert.match(out.reason, /`probe` IS the probe question/, 'named, so the fix is obvious: ' + out.reason)
+  assert.deepEqual(out.questions, {})
+  // AND A REWORDED PROBE IS STILL THE PROBE: the row's own `probeQuestion` is what identity is judged against.
+  const reworded = turnQuestions({ config: { probeQuestion: 'Which part of OUR loop produced this?', questions: { turn: [{ ...probe, instructions: 'Which part of OUR loop produced this?' }] } } })
+  assert.equal(reworded.refused, true, 'a row that reworded its probe is judged against ITS wording')
+  // WHILE AN ORDINARY TURN SET IS UNTOUCHED, which is the case every working row is in.
+  assert.equal(turnQuestions({ config: configured, closed: true }).refused, false)
 })

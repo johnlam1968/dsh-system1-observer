@@ -144,7 +144,10 @@ test('a call through the tool records a line naming the tool and its questions',
   assert.deepEqual(probeViolations(lines), [], 'the line satisfies the acceptance check it could otherwise violate')
 })
 
-test('a refused question and a failed judgement both record NOTHING', async () => {
+test('a REFUSED question records nothing, and a FAILED judgement records the attempt', async () => {
+  // THE DISTINCTION IS SPEND, and this test used to assert that BOTH record nothing -- register row O18, which made
+  // the expensive outcome the invisible one. A refused set never reaches a backend, so there is no call to record; a
+  // judgement that failed DID reach one, and on a metered backend was very probably paid for.
   const refused = []
   await assert.rejects(() => createDecideTool({ decide: async () => ({}), record: (l) => refused.push(l) })
     .execute({ state: 'x', questions: [{ id: 'bad', type: 'score', instructions: 'How?', levels: ['one'] }] }))
@@ -152,8 +155,24 @@ test('a refused question and a failed judgement both record NOTHING', async () =
 
   const failed = []
   const tool = createDecideTool({ decide: async () => ({ kind: 'error', reason: 'the service refused' }), record: (l) => failed.push(l) })
-  await tool.execute({ state: 'x', questions: [spec] })
-  assert.deepEqual(failed, [], 'a judgement that did not happen is not a measurement')
+  const out = await tool.execute({ state: 'x', questions: [spec] })
+  assert.equal(failed.length, 1, 'a judgement that FAILED is still an attempt, and possibly a bill')
+  assert.deepEqual(failed[0].failure, { reason: 'the service refused' })
+  assert.deepEqual(failed[0].questionIds, [spec.id], 'and the line still names what was asked')
+  assert.equal(out.failure.reason, 'the service refused', 'the caller is told the same thing the record is')
+
+  // A THROWN TRANSPORT FAILURE IS THE MOST EXPENSIVE OUTCOME OF ALL: the throw still reaches the caller, and the line
+  // is written before it does.
+  const thrown = []
+  await assert.rejects(() => createDecideTool({ decide: async () => { throw new Error('socket closed') }, record: (l) => thrown.push(l) })
+    .execute({ state: 'x', questions: [spec] }), /socket closed/)
+  assert.deepEqual(thrown[0].failure, { reason: 'socket closed' }, 'the attempt is on the record')
+  // AND A CALL THAT SUCCEEDED CARRIES NO FAILURE, so the field means one thing.
+  const ok = []
+  await createDecideTool({ decide: async () => ({ kind: 'answers', answers: { a: 1 } }), record: (l) => ok.push(l) })
+    .execute({ state: 'x', questions: [spec] })
+  assert.equal(Object.hasOwn(ok[0], 'failure'), false)
+  assert.deepEqual(ok[0].answers, { a: 1 })
 })
 
 test('a tool constructed with no recorder still works, and records nothing', async () => {

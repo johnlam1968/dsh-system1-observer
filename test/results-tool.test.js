@@ -5,7 +5,7 @@
 // disappearing behind 34 answers.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise } from '../lib/results-tool.js'
+import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../lib/results-tool.js'
 // THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
 import { answerOf, readTraceLines, writerOf } from '../lib/trace-read.js'
 
@@ -194,4 +194,37 @@ test('the tool declares what it emits, and its name is the one the registry know
       assert.ok(tool.output.schema.properties[key] !== undefined, key + ' is emitted and declared')
     }
   })
+})
+
+// REGISTER ROW O18 FROM THE READER'S SIDE. `system1_decide` now records every outcome, including a failure -- so a
+// line shape that did not exist before is arriving in the trace. Without this count it would land in `asked` and
+// nowhere else: a question asked ten times with three timeouts would report `n=7` and say nothing about the three.
+test('a call that FAILED is counted as asked and failed, not silently dropped from n', async () => {
+  const lines = [
+    call({ at: 'T1' }),
+    // The tool writer's shape on a failure: `answers: {}`, the ids asked, and the reason. No `questions` map, because
+    // the turn/tool writers record ids.
+    { event: 'call', hook: 'tool', run: 'r1', at: 'T2', tool: 'system1-observer', questionIds: ['q'], answers: {}, failure: { reason: 'the service refused' } },
+    call({ at: 'T3' }),
+  ]
+  const summary = summariseQuestions(lines)
+  const q = summary.find((entry) => entry.id === 'q')
+  assert.equal(q.asked, 3, 'all three were asked')
+  assert.equal(q.read, 2, 'two produced an answer')
+  assert.equal(q.failed, 1, 'and one produced nothing, which is a fact about the measurement')
+  // AND THE REFUSAL ABOUT THE SECOND WRITER DOES NOT CLAIM A TOOL LINE CAME FROM THE TURN WRITER, which is what a
+  // shape test did: `answer === undefined && answers !== undefined` is true of every `system1_decide` line too.
+  const windowed = summarise([...lines, { event: 'call', hook: 'turn', turn: 5, run: 'r1', at: 'T4', questionIds: ['q'], answers: { q: { type: 'noul', probability: 0.5 } } }])
+  assert.equal(windowed.counts.secondWriter, 1, 'one line came from the turn writer')
+  assert.match(windowed.refusals.join(' '), /^1 call line\(s\) came from the turn writer/)
+  assert.doesNotMatch(windowed.refusals.join(' '), /2 call line\(s\) came from the turn writer/, 'the tool line is not one of them')
+  // AND THE RENDER SHOWS THE FAILURE, rather than `n=2` beside three attempts.
+  const tool = createResultsTool({ path: '/dev/null', readFile: () => lines.map((l) => JSON.stringify(l)).join('\n') })
+  const value = await tool.execute({})
+  const text = tool.output.render({}, value)[0].text
+  // THE TWO SHAPES ARE NEVER POOLED, so the failure appears in the tool line's own group: `n=0 FAILED=1` beside the
+  // seam group's `n=2`. That is the accounting working -- the three attempts are visible and attributed.
+  assert.match(text, /q \[\?\]: n=0 FAILED=1 \(asked, no answer/, 'the failure is on the record: ' + (text.split('\n').find((l) => l.includes('FAILED')) ?? '(nothing said FAILED)'))
+  assert.match(text, /hook tool \[the `answers` shape -- a tool or evaluation line, NOT the turn writer\]/, 'and a tool line is not labelled the turn writer')
+  assert.doesNotMatch(text.split('hook tool')[1].split('\n')[0], /\[the turn writer\]/, 'which is what a shape test used to say about it')
 })

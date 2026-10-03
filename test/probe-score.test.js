@@ -49,9 +49,14 @@ test('a call from a NON-PROBE site is never scored, however it is worded', () =>
   assert.notEqual(probeAnswerOf({ ...call, hook: 'draft' }), null, 'while the same line AT a seam is one')
   assert.notDeepEqual(probeScore([mount, call]), probeScore([mount, { ...call, hook: 'draft' }]),
     'and the score sees the difference rather than averaging the two together')
-  // THE TURN MEASUREMENT MUST STAY SCORABLE: it is a probe site too, and a filter that dropped it would silently
-  // remove the scheduled measurement from every calibration in the report.
-  assert.notEqual(probeAnswerOf({ ...call, hook: 'turn' }), null, 'the scheduled turn measurement is still scored')
+  // AND THE SCHEDULED TURN MEASUREMENT IS NOT A SITE EITHER, which REVERSES what this assertion said. It claimed the
+  // turn measurement must stay scorable "or a filter would silently remove it from every calibration". Measured, the
+  // opposite is true: a probe row at `turn` gets `expected: null` (there is no seam called `turn`), so it is
+  // `correct: false` ALWAYS and can only drag the report down. The scheduled measurement asks its OWN questions,
+  // which are not the probe, so no probe row is removed by this filter -- see register row O17.
+  const turnRow = probeAnswerOf({ ...call, hook: 'turn' })
+  assert.equal(turnRow, null, 'a probe at a scheduled boundary has no seam to be right about, so it is not scored')
+  assert.equal(probeScore([mount, { ...call, hook: 'turn' }]).scored, 0, 'and it contributes no SCORED rows at all, rather than rows that are always wrong')
   // AND THE STORED-SESSION EVALUATION'S OWN HOOK IS NOT A SITE, which is the requirement §11 states.
   assert.equal(probeAnswerOf({ ...call, hook: 'session-review' }), null, 'a stored evaluation contributes no probe rows')
 })
