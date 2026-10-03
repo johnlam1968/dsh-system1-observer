@@ -1,7 +1,10 @@
-// THE SINK BEING LEFT. The plan's section 4 requires that a trace-path change is written to the sink being LEFT as
-// well as the new one, so that moving the record leaves a record of the move. It holds because `evidence` is built at
-// MOUNT while the live config reads only the cap, price and the knobs -- a property a refactor could remove without
-// noticing. This test is what makes that removal fail loudly.
+// THE SINK, AND WHAT A MOUNT-BOUND SETTING COSTS. The plan's section 4 wanted a trace-path change recorded in the sink
+// being LEFT as well as the new one. That property is UNREACHABLE while `tracePath` is mount-bound, and this test
+// used to enshrine the opposite: it drove `set tracePath` through the tool and required a `config` line in the old
+// sink. But the settings host refuses a write to a non-volatile field, so that route could only ever fail at the
+// editor -- AFTER the tool had written a line recording a change that never landed. The refusal now comes before the
+// record, and this pins that, naming what would make the original property reachable again: `docs/settings.md` §4
+// item 9, a reopen-and-rotate story for the trace path.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -43,15 +46,15 @@ test("a trace-path change is RECORDED IN THE SINK BEING LEFT, not in the one it 
   const tool = registered.find((definition) => definition.name === 'system1_observe_config')
   assert.notEqual(tool, undefined, 'the settings tool is registered')
 
-  // No `configEditor` is injected here, so the WRITE cannot be persisted -- and that is the point: the RECORD must
-  // already have been written, to the sink the row is still pointing at.
-  await assert.rejects(() => tool.execute({ action: 'set', knob: 'tracePath', value: newPath }), /configEditor/)
+  // THE REFUSAL COMES FIRST, AND THAT IS THE FIX. A line written for a change that cannot land is a measurement of
+  // something that did not happen -- which is what the old assertion here required, one layer down.
+  await assert.rejects(() => tool.execute({ action: 'set', knob: 'tracePath', value: newPath }), /mount-bound/)
   assert.equal(existsSync(newPath), false, 'nothing was created at the new path by this call')
+  assert.deepEqual(readLines(oldPath).filter((line) => line.event === 'config'), [],
+    'and nothing recorded a move that could not land')
 
-  const lines = readLines(oldPath)
-  const configLines = lines.filter((line) => line.event === 'config')
-  assert.equal(configLines.length, 1, 'the move is recorded in the sink being LEFT')
-  assert.equal(configLines[0].knob, 'tracePath')
-  assert.equal(configLines[0].to, newPath)
-  assert.equal(configLines[0].from, oldPath, 'and it says where the record came from')
+  // IT IS STILL A KNOB: "the tool covers all settings" means every field can be READ, and only the writable ones can
+  // be written. A mount-bound field that vanished from the tool would be a setting the agent cannot see at all.
+  const read = await tool.execute({ action: 'get', knob: 'tracePath' })
+  assert.equal(read.value, oldPath, 'a mount-bound setting is readable')
 })

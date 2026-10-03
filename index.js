@@ -404,17 +404,21 @@ async function apply(ctx, config) {
     // by the thing that owns the schema instead of by a copy of it that would drift.
     tools.register(createConfigTool({
       read: () => plainConfig(liveConfig()),
+      // THE SCHEMA ITSELF, as a function: the tool digests it into per-setting type/bounds/writability for `list`
+      // and checks `set` against it. Passed rather than imported so the tool stays testable without the plugin,
+      // and read per call so a field added here appears there without a second list to maintain.
+      schema: () => Config.dict,
       record: (line) => {
         const { event, ...fields } = line
         evidence.trace(event, fields)
       },
-      // AND THE RECORD OF A MOVE LANDS IN THE SINK BEING LEFT, which the plan's section 4 requires. It holds by
-      // MECHANISM rather than by intent: `evidence` is built at MOUNT with `resolveTracePath(mount, here)`, and the
-      // live reads above are for `maxTraceBytes`, price and the knobs -- not the path. So a `tracePath` change is
-      // recorded through the evidence that still points at the OLD file, and the new path takes effect when the row
-      // re-mounts. That is the property the constraint wanted. IT IS NOT TESTED, and it is the kind of property a
-      // refactor could remove without noticing -- making `evidence` read its path live would move the record of the
-      // move into the sink the move created, which is exactly the hole the constraint exists to close.
+      // AND THE RECORD OF A MOVE WOULD LAND IN THE SINK BEING LEFT, which the plan's section 4 wanted. It still holds
+      // by MECHANISM -- `evidence` is built at MOUNT with `resolveTracePath(mount, here)`, and the live reads above
+      // are for `maxTraceBytes`, price and the knobs, not the path -- but the ROUTE is now closed: `tracePath` is the
+      // one mount-bound field, so the tool refuses a `set` on it before recording anything. That was the correction:
+      // the old route failed at the editor (`not volatile`) after the line had already been written, leaving a record
+      // of a move that never landed. It becomes reachable again only if `tracePath` does -- `docs/settings.md` §4
+      // item 9, a reopen-and-rotate story.
       write: async (change) => {
         if (configEditor === null) {
           throw new Error('system1_observe_config: the configEditor service is not available in this profile, so no change can be persisted.')
