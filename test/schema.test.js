@@ -134,6 +134,9 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // `probeQuestion` is the instrument's identity, and its hash is written on the MOUNT line: a value that changed
     // mid-run would leave calls scored under one question and keyed under another.
     'probeQuestion',
+    // AND THE QUESTION SET, for exactly the same reason: a set decides which questions are asked, and its hash goes on
+    // the mount line into `instrument`.
+    'questionSet', 'questionSetsDir',
   ]
   const walked = Object.keys(dict)
   assert.ok(walked.length > 0, 'the schema declares no fields at all')

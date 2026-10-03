@@ -18,6 +18,7 @@ import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { FIREABLE_HOOKS, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
+import { readSelectedSet, setSettings } from './lib/question-sets.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -122,6 +123,17 @@ const Config = Schema.object({
   // selected while the row judges everything would be the interface lying about the measurement.
   subjectKinds: Schema.array(Schema.string()).default(['operator', 'assistant']).volatile().description('Which message kinds a stored judgement sees. The names map onto the event types the harness writes; a name that maps to nothing is refused by name.'),
   subjectLastMessages: Schema.number().min(0).default(0).volatile().description('How many of the stored session’s newest messages to judge. 0 is the whole session, which is the honest default for a feature whose point is judging a conversation as a whole.'),
+  // ---------------------------------------------------------------------------------------------
+  // QUESTION SETS AS FILES (§12): a questions map in a `.json` file, selected by name (the file's stem).
+  //
+  // MOUNT-BOUND, FOR THE REASON `probeQuestion` IS. A set decides WHICH QUESTIONS ARE ASKED, so it is part of the
+  // instrument: its content hash is written on the MOUNT line and enters `instrument` in `lib/compare.js`, so runs
+  // under different sets are refused comparison by the key rather than by a warning in a document. A value that
+  // changed mid-run would leave calls asked under one set and keyed under another -- the silent mixing the key exists
+  // to prevent. Editing a set therefore needs a re-mount, and then the new hash makes the runs honestly incomparable.
+  // ---------------------------------------------------------------------------------------------
+  questionSetsDir: Schema.string().description('Directory of question-set files: one `.json` per set, each a questions map keyed by seam. YAML only, because a set is part of the instrument -- the mount line records a hash of the set in force.'),
+  questionSet: Schema.string().description('Which set in `questionSetsDir` this row asks, by name (the file\u2019s stem). Empty means the inline `questions` object, which is what every row did before sets existed. YAML only, for the same reason as the directory.'),
   probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a
@@ -307,7 +319,13 @@ async function apply(ctx, config) {
     if (!Array.isArray(content)) return ''
     return content.map((block) => (typeof block?.text === 'string' ? block.text : '')).join('\u0000')
   }
-  const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
+  const hooks = readHooks(mount)
+
+  /** The selected set's content hash, or the empty string when the row asks its inline questions. */
+  const setHashOf = (config) => {
+    const settings = setSettings(config)
+    return readSelectedSet(settings.dir, settings.name).hash
+  }                        // a typo refuses the mount, naming the seam
 
   // AND THE LIVE READ OF THE SAME THING, for the service's `config()`. `readHooks` THROWS on an unknown seam -- which
   // is right at mount, where a typo must refuse the row, and wrong here, where a consumer reading a description must
@@ -383,6 +401,9 @@ async function apply(ctx, config) {
         // instrument and no reader has to be told: `instrument` in `lib/compare.js` then refuses to compare its runs
         // with a row that asked the built-in question. That is the constraint working rather than a warning.
         probeHash: probeFingerprint(probeOf(mount).instructions),
+        // WHICH SET WAS IN FORCE, hashed from its bytes: `instrument` includes it, so editing one character of a set
+        // makes its runs incomparable rather than silently averaged -- the same mechanism as `probeHash`.
+        questionSetHash: setHashOf(mount),
         callsEnabled: readConfigValue(live.callsEnabled) !== false,
         // The DEVIANT set, because "nothing is off" is the common case and a list of nine booleans buries it --
         // and the two seams that carry no text are excluded, because they are not switched off, they are

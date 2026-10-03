@@ -28,7 +28,12 @@ test('the key has the four parts that must match, and a run with no mount has no
     assert.deepEqual(key.hooks, ['admit', 'draft'])
     // CONTENT, NOT REPRESENTATION. This asserted the `|`-joined string until that separator turned out to be
     // ambiguous; parsing it means the assertion survives the encoding being changed for a good reason.
-    assert.deepEqual(JSON.parse(key.instrument), ['service', 'typesafe', 'jev-latest', 'abc123abc123'])
+    // FIVE PARTS NOW: the question-set hash joined the tuple, so a run under a different set is a different
+    // instrument. `''` here because this fixture mounts no set, which is what most rows do.
+    assert.deepEqual(JSON.parse(key.instrument), ['service', 'typesafe', 'jev-latest', 'abc123abc123', ''])
+    // AND THE SET IS THE POINT OF ADDING IT: two runs whose sets differ are refused comparison rather than averaged.
+    assert.notDeepEqual(taskKeyOf(mount({ questionSetHash: 'set1hash0000' })), taskKeyOf(mount({ questionSetHash: 'set2hash0000' })))
+    assert.equal(JSON.parse(taskKeyOf(mount({ questionSetHash: 'set1hash0000' })).instrument).pop(), 'set1hash0000')
 })
 
 test('the key is order-insensitive, because the order of a hook list is not an experiment', () => {
