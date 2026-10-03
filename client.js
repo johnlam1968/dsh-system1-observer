@@ -1748,6 +1748,13 @@ window.__ModuleLoader__.load({
       const slice = `${subject.messages ?? 0} of ${subject.total ?? 0} message(s)`
         + (Array.isArray(subject.kinds) && subject.kinds.length > 0 ? ' \u00b7 ' + subject.kinds.join(', ') : '')
         + (subject.lastMessages > 0 ? ' \u00b7 newest ' + subject.lastMessages : '')
+        // THE DENOMINATOR, ON THE CARD TOO. Register row O26: a state cut to 8,000 chars of a 259,445-character
+        // conversation was displayed exactly like a reading of the whole thing, because nothing said how much there
+        // was. The agent's render and the trace line carry it now; this is the third place the same number is read.
+        + (Number.isInteger(subject.chars) && subject.chars > 0
+          ? ' \u00b7 ' + (data.stateChars ?? 0) + ' of ' + subject.chars + ' chars of conversation'
+            + (data.truncated === true ? ' (truncated)' : '')
+          : '')
       const answers = Object.entries(data.answers ?? {}).map(([id, answer]) => {
         const record = answer !== null && typeof answer === 'object' ? answer : {}
         // WHAT THE TRANSPORT PRODUCES: a narrowed noul is `{ type: 'noul', probability, confidence }` and a choice

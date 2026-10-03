@@ -449,7 +449,7 @@ test('the evaluation card renders the subject, the slice and the answers from th
     phase: 'result',
     block: {
       meta: {
-        subject: { source: 'stored', sessionId: 'session-abc', kinds: ['operator', 'assistant'], lastMessages: 0, messages: 4, total: 9 },
+        subject: { source: 'stored', sessionId: 'session-abc', kinds: ['operator', 'assistant'], lastMessages: 0, messages: 4, total: 9, chars: 259445 },
         stateHash: 'abcdef123456',
         stateChars: 1200,
         truncated: true,
@@ -462,6 +462,10 @@ test('the evaluation card renders the subject, the slice and the answers from th
   assert.match(text, /conversation evaluation/)
   assert.match(text, /session-abc/, 'the subject is named')
   assert.match(text, /4 of 9 message/, 'and the slice says how much of it was judged')
+  // AND HOW MUCH CONVERSATION THERE WAS TO JUDGE IT FROM: register row O26, where 8,000 chars of a 259,445-character
+  // conversation was displayed exactly like a reading of the whole thing. The card says the same ratio the agent's
+  // render and the trace line do.
+  assert.match(text, /1200 of 259445 chars of conversation/, 'the state against the conversation it was cut from')
   assert.match(text, /operator, assistant/)
   assert.match(text, /abcdef123456/, 'the identity of what was sent')
   assert.match(text, /truncated/, 'and whether the budget cut it')
