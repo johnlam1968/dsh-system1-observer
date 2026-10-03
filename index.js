@@ -26,6 +26,7 @@ import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/red
 import { describeSubject, subjectOfAgent } from './lib/subject.js'
 import { composeTurnState } from './lib/turn-state.js'
 import { createEvaluateTool } from './lib/evaluate-tool.js'
+import { createResultsTool } from './lib/results-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
@@ -488,6 +489,14 @@ async function apply(ctx, config) {
       calibrationBins: () => readConfigValue(liveConfig().calibrationBins),
       probe: () => probeOf(liveConfig()).instructions,
     }))
+      // SYSTEM1_RESULTS: the trace read as MEASUREMENTS rather than as a chronology (ROADMAP 13.3 item 1). It
+      // shares the trace tool's path, and it exists because the question an agent asks before changing a setting
+      // is "what do I have" -- whose honest answer is usually about n, about silence, and about what could not be
+      // attributed, rather than about answers.
+      tools.register(createResultsTool({
+        path: evidence.path,
+        runId: evidence.runId(),
+      }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
     // it at call time. Reaching for a model here would freeze whichever transport happened to be ready first and
