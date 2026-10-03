@@ -118,10 +118,39 @@ test('a window spanning backends, truncation, or a config change is refused rath
   assert.match(summarise([call()]).refusals.join(' '), /cannot say whether a reading is CALIBRATED/)
 })
 
-test('the unattributable reading is refused out loud, and the mount is the context instead', () => {
-  const summary = summarise([call(), { event: 'mount', run: 'r1', model: 'm', provider: 'p', hooks: [], probeHash: 'h', sessions: [] }])
-  assert.match(summary.refusals.join(' '), /no call line records the question set or the harness technique/)
-  assert.equal(summary.mount.probeHash, 'h')
+test('an unattributable reading is refused out loud, and the RUN TABLE is the join that fixes it', () => {
+  // (a) nothing declared anywhere: both gaps are named, in the terms a reader can act on.
+  const bare = summarise([call(), { event: 'mount', run: 'r1', model: 'm', provider: 'p', hooks: [], probeHash: 'h', sessions: [] }])
+  assert.match(bare.refusals.join(' '), /no call line records a harness technique/)
+  assert.match(bare.refusals.join(' '), /no mount line records the QUESTION SET/)
+  assert.equal(bare.mount.probeHash, 'h')
+  assert.deepEqual(bare.runs, [{ run: 'r1', calls: 1, model: 'm' }], 'the run is listed even when it names neither')
+
+  // (b) a row that DOES record them: the runs table joins the reading to the set and the technique, and neither gap
+  // is claimed -- which is what makes item 4 of the plan possible at all.
+  // THE CALL CARRIES THE AXES TOO, because that is how a real row records them: `observe.js` reads both labels at the
+  // point of use, so a call line names the technique and the operator in force when it was asked, and the mount line
+  // names what the run started with.
+  const attributed = summarise([
+    call({ harnessHash: 'abc123abc123', userHash: 'def456def456' }),
+    { event: 'mount', run: 'r1', model: 'm', provider: 'p', hooks: [], probeHash: 'h', questionSetHash: 'set123456789', harnessHash: 'abc123abc123', userHash: 'def456def456' },
+  ])
+  assert.deepEqual(attributed.runs, [{ run: 'r1', calls: 1, model: 'm', questionSetHash: 'set123456789', harnessHash: 'abc123abc123', userHash: 'def456def456' }])
+  assert.equal(attributed.refusals.some((r) => /no call line records a harness technique|no mount line records the QUESTION SET/.test(r)), false)
+})
+
+test('a window spanning two TECHNIQUES or two OPERATORS is refused rather than pooled', () => {
+  const twoTechniques = summarise([call({ harnessHash: 'aaa' }), call({ harnessHash: 'bbb' })])
+  assert.match(twoTechniques.refusals.join(' '), /spans 2 harness technique\(s\)/)
+  // AND AN UNLABELLED LINE IS A THIRD VALUE, not something to skip: it cannot be assigned to either treatment.
+  const mixed = summarise([call({ harnessHash: 'aaa' }), call()])
+  assert.match(mixed.refusals.join(' '), /carries NO declared technique, which cannot be assigned/)
+  const twoOperators = summarise([call({ userHash: 'aaa' }), call({ userHash: 'bbb' })])
+  assert.match(twoOperators.refusals.join(' '), /spans 2 operator\(s\)/)
+  assert.match(twoOperators.refusals.join(' '), /only under ONE common question set/)
+  // one technique, one operator: no such refusal
+  const one = summarise([call({ harnessHash: 'aaa', userHash: 'bbb' }), call({ harnessHash: 'aaa', userHash: 'bbb' })])
+  assert.equal(one.refusals.some((r) => /harness technique|operator\(s\)/.test(r)), false)
 })
 
 test('grouping by agent keeps two agents apart rather than pooling them', () => {

@@ -109,10 +109,22 @@ test('replace: true overwrites knowing the cost, and says it replaced', async ()
   assert.deepEqual((await tool.execute({ action: 'read', set: 'house@1', scope: 'draft' })).specs, [noul('replaced_question')])
 })
 
-test('writing into a composition that does not exist is refused with the way forward', async () => {
+test('a NEW composition is created by its first write, and a name already taken by a FILE is refused', async () => {
+  // The tool used to refuse a missing composition while its refusal advised creating one by writing its first scope
+  // file -- advice it then refused to take. Creating a directory cannot damage an existing set, and `@next` is how a
+  // revision starts, so the write creates it. Round 4's loop test depends on exactly this step.
   const dir = fixture()
-  const out = await createQuestionsTool({ dir }).execute({ action: 'write', set: 'nowhere@1', scope: 'draft', specs: [noul('x')] })
-  assert.match(out.problems[0], /no composition called `nowhere@1`/)
+  const tool = createQuestionsTool({ dir })
+  const out = await tool.execute({ action: 'write', set: 'nowhere@1', scope: 'draft', specs: [noul('x')] })
+  assert.equal(out.created, true)
+  assert.deepEqual(out.problems, undefined)
+  assert.deepEqual((await tool.execute({ action: 'read', set: 'nowhere@1', scope: 'draft' })).specs, [noul('x')])
+
+  // A NAME ALREADY TAKEN BY A FLAT FILE is refused, because treating it as a composition would put the scope file
+  // beside it and leave two things claiming one name.
+  writeFileSync(join(dir, 'flat.json'), JSON.stringify({ draft: [noul('y')] }))
+  const clash = await tool.execute({ action: 'write', set: 'flat.json', scope: 'draft', specs: [noul('z')] })
+  assert.match(String(clash.problems), /flat set file/)
 })
 
 test('an unwired directory, and a call with no action at all, are named problems rather than silence', async () => {

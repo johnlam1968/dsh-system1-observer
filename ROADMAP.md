@@ -730,3 +730,39 @@ MiniMax-M3 reviewed the design and proposed three things that are refused here, 
 prompt silently MERGES two experiments, and the trace cannot tell. A rename splits one into two, which is visible and
 recoverable by a reader; a merge is not. The label is a **promise** by the operator, and the field's own description
 says so.
+
+### 13.5 The loop, and the gate that is still missing
+
+Item 4 -- ask, read, rewrite, ask again -- is joined as of round 4: `system1_results` now emits a **run table** (what
+each run mounted with: model, question set hash, harness hash, operator hash, and its call count), which is how a
+reading is joined to the instrument that produced it, and it refuses to pool across **three** axes -- a window spanning
+two question sets, two techniques, or two operators is reported per group with the reason. Separation is measured, never
+self-reported.
+
+**What the loop cannot yet do is tell BETTER from DIFFERENT, and MiniMax-M3's review named the trap precisely:**
+rewriting a question *because* its answers did not separate is symptom treatment, and rewriting *until* something
+separates is the garden of Eden -- the surviving number is conditioned on having searched until separation appeared. Its
+minimum honest evidence, recorded here as the design for the missing gate:
+
+- A small **labelled battery** (known-answer cases, written *before* the rewrite), run against the old and the new
+  question, plus an out-of-sample slice the rewrite never touched. ROADMAP 9.5 already called this the gate before a set
+  reaches an agent's context; nothing has built it.
+- At rewrite time: `parent_hash`, `rewrite_reason`, `battery_path`, and the before/after battery results -- on the
+  question file's own record, not in a chat log.
+- A separate **experiment line** (its own event, not a reading) linking parent hash to child hash with the battery
+  deltas. Without it, "better" is indistinguishable from "different".
+- **One knob at a time**: exactly one of {question, scope, harness label, model} may move between two comparable runs.
+  The set, technique, operator and backend refusals now enforce the parts they can see; a *paired* change of two axes is
+  refused by arithmetic on the run table rather than by a rule of thumb.
+
+**Its refusal list, triaged rather than adopted wholesale:**
+
+| proposed refusal | status |
+|---|---|
+| an anonymous rewrite (no parent hash, reason, or battery) | **not built** -- part of the gate above |
+| comparing two runs whose set hashes differ with no experiment line linking them | **built** as the set-axis refusal |
+| a `choice` with no abstain option, or a duplicate id | **already built** in `system1_questions` |
+| a rewrite that changes nothing | **not built** -- cheap, and worth adding beside the gate |
+| labelling a battery after seeing the run table | **not built** -- belongs with the battery |
+| aborting the whole read when any line is unattributed | **refused**: traces recorded before these fields existed are real evidence, so the view REPORTS the gap and refuses to pool across it rather than returning nothing. Aborting would delete the history that makes the gap visible |
+| an operator hash changing inside one run | **not built** -- the run table now exposes it, which is the part that matters first |
