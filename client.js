@@ -55,6 +55,137 @@ window.__ModuleLoader__.load({
     // the seat renders the generic row and nothing says why.
     const TRACE_TOOL_NAME = 'system1_trace'
 
+    // ---------------------------------------------------------------------------------------------
+    // THE SETTINGS THE CARD OWNS, IN ONE TABLE.
+    //
+    // Every field here is `.volatile()` in `index.js`, and the card must carry a control for each one:
+    // the host projects a schema and never draws a form, so a setting with no entry here is a setting
+    // nobody can reach. This table is the single source for FOUR things that were four hand-written
+    // lists -- the draft seed, the dirty check, the save ops, and the controls -- and the card test
+    // asserts it covers every volatile field the schema declares, so a setting added to `index.js` and
+    // not to this table fails the suite instead of shipping a knob with no way to turn it.
+    //
+    // `fallback` is the SCHEMA'S OWN DEFAULT, and it matters most for a switch that defaults ON: a
+    // boolean field nobody has written must read as its default, not as `false`, or the card reports a
+    // setting that is on as off. `callsEnabled` has the same rule and is not in this table because it
+    // is `!== false` on both sides of the wire.
+    const SETTINGS = [
+      // `choices` IS A FUNCTION HERE, and not for style: this table is defined ABOVE the `SEAMS` array (line 56
+      // against line 300), so reading it eagerly is a temporal-dead-zone throw that takes the whole factory down
+      // -- every card test failed with 'Cannot access SEAMS before initialization'. Resolved where it is used.
+      { panel: 'observe', field: 'hooks', kind: 'multi', choices: () => SEAMS.map(seam => seam.name), label: 'Call at these seams',
+        hint: 'Points of the loop to call, from the list the host accepts. Every hook you add costs one judge call per firing; the per-seam switches below decide which of them may actually fire.' },
+      { panel: 'send', field: 'provider', kind: 'text', label: 'Provider',
+        hint: 'The System One provider id the wire client posts to. Read at each call, so a change reaches the next firing.' },
+      { panel: 'send', field: 'model', kind: 'text', label: 'Model',
+        hint: 'The model name sent with each judgement.' },
+      { panel: 'send', field: 'timeoutMs', kind: 'number', min: 1, fallback: 8000, label: 'Timeout (ms)',
+        hint: 'How long one judgement may take before it is abandoned and recorded as a timeout.' },
+      { panel: 'send', field: 'wireUrl', kind: 'text', label: 'Wire URL',
+        hint: 'The endpoint the HTTP transport posts to. Only used when the wire transport is the one mounted.' },
+      // FOUND BY THE UI RATCHET, not by reading: this field had no control anywhere in the card, so the fallback
+      // question was writable from YAML and from the agent's config tool and from nowhere a person would look.
+      { panel: 'send', field: 'question', kind: 'longtext', label: 'Probe question',
+        hint: 'The question asked at a seam that has no question of its own, and the text a new question starts from. Write it as a sentence, and say in it what each answer would mean.' },
+      { panel: 'send', field: 'maxQuestionChars', kind: 'number', min: 1, fallback: 2000, label: 'Max question characters',
+        hint: 'The ceiling on one composed question before it is sent. A question over the cap is refused and said so on the line, never silently trimmed.' },
+      { panel: 'see', field: 'composeMaxChars', kind: 'number', min: 1, fallback: 8000, label: 'Composed state (chars)',
+        hint: 'How much of the held state the judge is shown.' },
+      { panel: 'see', field: 'toolBlockMaxChars', kind: 'number', min: 1, fallback: 4000, label: 'Tool block (chars)',
+        hint: 'How much of one tool block survives into the state the judge sees.' },
+      { panel: 'see', field: 'tailChars', kind: 'number', min: 0, fallback: 1000, label: 'Tail kept (chars)',
+        hint: 'Characters of the END that a truncated value always keeps, so the newest part survives the cut. Zero keeps the head only.' },
+      { panel: 'see', field: 'feedMaxPerSession', kind: 'number', min: 1, fallback: 500, label: 'Feed events per session',
+        hint: 'Events kept per session in the in-memory feed the session menu reads.' },
+      { panel: 'see', field: 'fsJournalMaxPaths', kind: 'number', min: 1, fallback: 50, label: 'Journal paths',
+        hint: 'Distinct paths the file journal keeps per session.' },
+      { panel: 'see', field: 'fsJournalMaxPerPath', kind: 'number', min: 1, fallback: 20, label: 'Journal entries per path',
+        hint: 'Entries kept per path in the file journal.' },
+      { panel: 'turn', field: 'turnEveryNTurns', kind: 'number', min: 0, fallback: 0, label: 'Measure every N turn boundaries',
+        hint: 'Fire the scheduled turn measurement every N turn boundaries. 0 switches it off entirely, which is the default.' },
+      { panel: 'keep', field: 'redactEnabled', kind: 'switch', fallback: true, label: 'Redact credentials',
+        hint: 'Whether the record is scrubbed of credential-looking values before it is written.' },
+      { panel: 'keep', field: 'redactKeys', kind: 'list', label: 'Extra field names to redact',
+        hint: 'Comma-separated field names, added to the built-in list. Additions only: the built-in names cannot be removed.' },
+      { panel: 'keep', field: 'pathMode', kind: 'select', choices: ['full', 'basename', 'omit'], fallback: 'full', label: 'Paths in the trace',
+        hint: 'How much of an absolute path the TRACE keeps. It never touches what the model is asked.' },
+      { panel: 'keep', field: 'redactSessionTelemetry', kind: 'switch', fallback: false, label: 'Redact session telemetry',
+        hint: 'Whether session-level telemetry lines are redacted as well as call lines.' },
+      { panel: 'keep', field: 'maxTraceBytes', kind: 'number', min: 0, fallback: 33554432, label: 'Rotate at (bytes)',
+        hint: 'Rotate the trace when the next line would cross this many bytes. 0 disables rotation.' },
+      // FRACTIONAL, and the flag is load-bearing: the first version of this table demanded a WHOLE number from every
+      // numeric field, so the price (0.042) failed validation and the card refused to save anything at all --
+      // including the fields beside it. A count and a rate are different kinds of number.
+      { panel: 'numbers', field: 'pricePerMTokInput', kind: 'number', fractional: true, min: 0, fallback: 0.042, label: 'Price (USD per MTok input)',
+        hint: 'The rate used to price the JUDGEMENT only. The subject model tokens are never captured.' },
+      { panel: 'numbers', field: 'idleGapMs', kind: 'number', min: 0, fallback: 60000, label: 'Idle gap (ms)',
+        hint: 'Within this gap, two judge calls count as ONE active stretch. It decides what the report activeMs means.' },
+      { panel: 'numbers', field: 'calibrationBins', kind: 'number', min: 2, fallback: 10, label: 'Calibration bins',
+        hint: 'How many equal-width bins the calibration report slices the probability scale into.' },
+      { panel: 'numbers', field: 'maxCompareLanes', kind: 'number', min: 1, fallback: 5, label: 'Comparison lanes',
+        hint: 'How many runs a comparison may show side by side.' },
+    ]
+    // THE PANELS, in reading order. `Act` is absent on purpose: it is designed (`docs/settings.md` §8) and
+    // not built, and a panel that opens onto nothing is worse than no panel.
+    const PANELS = [
+      { id: 'observe', title: 'Observe' },
+      { id: 'send', title: 'Send' },
+      { id: 'see', title: 'See' },
+      { id: 'turn', title: 'Turn' },
+      { id: 'keep', title: 'Keep' },
+      { id: 'numbers', title: 'Numbers' },
+    ]
+
+    /** The draft a table entry starts from: the stored value, or the SCHEMA'S default when none is stored. */
+    function seedTable(valueObject) {
+      const out = {}
+      for (const entry of SETTINGS) {
+        const raw = valueObject[entry.field]
+        if (entry.kind === 'number') out[entry.field] = numberText(raw === undefined ? entry.fallback : raw)
+        else if (entry.kind === 'switch') out[entry.field] = raw === undefined ? entry.fallback === true : raw === true
+        else if (entry.kind === 'list' || entry.kind === 'multi') out[entry.field] = Array.isArray(raw) ? raw.slice() : []
+        else out[entry.field] = raw === undefined || raw === null ? '' : String(raw)
+      }
+      return out
+    }
+
+    /** The ops for every table entry that moved. Scalars compare by value, lists by their canonical JSON. */
+    function tableOps(draftValues, currentValues) {
+      const ops = []
+      for (const entry of SETTINGS) {
+        const next = draftValues[entry.field]
+        const before = currentValues[entry.field]
+        const moved = Array.isArray(next) || Array.isArray(before)
+          ? JSON.stringify(next ?? null) !== JSON.stringify(before ?? null)
+          : next !== before
+        if (!moved) continue
+        ops.push({ op: 'set', path: [entry.field], value: entry.kind === 'number' ? Number(next) : next })
+      }
+      return ops
+    }
+
+    function tableDirty(draftValues, currentValues) {
+      return tableOps(draftValues, currentValues).length > 0
+    }
+
+    /** Whole numbers, or a sentence naming the field. The card refuses to SEND; it never trims a value. */
+    function tableProblems(draftValues) {
+      const out = []
+      for (const entry of SETTINGS) {
+        if (entry.kind !== 'number') continue
+        const text = String(draftValues[entry.field] ?? '').trim()
+        const parsed = Number(text)
+        const floor = entry.min ?? 0
+        const shapeOk = entry.fractional === true
+          ? Number.isFinite(parsed)
+          : Number.isInteger(parsed)
+        if (text === '' || !shapeOk || parsed < floor) {
+          out.push(entry.label + ': ' + (entry.fractional === true ? 'a number' : 'a whole number') + ', ' + floor + ' or more.')
+        }
+      }
+      return out
+    }
+
     const styles = {
       wrap: { display: 'grid', gap: '12px', maxWidth: '680px', color: 'var(--dsw-alias-label-primary)' },
       title: { margin: 0, fontSize: '14px', fontWeight: 600 },
@@ -694,7 +825,106 @@ window.__ModuleLoader__.load({
       const observe = draft.observeSubagents
       const include = draft.includeNonOperatorFacing
       const chars = draft.maxFieldChars
+      // ---------------------------------------------------------------------------------------------
+      // THE TABLE'S CONTROLS, GROUPED INTO THE PANELS OF `docs/settings.md` §6.
+      //
+      // The panels are `details` elements with stable ids, reusing the idiom the seam editors already use, and
+      // each summary carries the STATE of its group rather than only its name -- a reader scanning six closed
+      // rows should be able to see what the row is doing without opening anything.
+      // ---------------------------------------------------------------------------------------------
+      const chipOf = (id) => {
+        if (id === 'observe') return ' \u2014 ' + (Array.isArray(draft.hooks) ? draft.hooks.length : 0) + ' seam(s)'
+        if (id === 'send') return ' \u2014 ' + (draft.provider === '' ? '(no provider)' : draft.provider) + ' / ' + (draft.model === '' ? '(no model)' : draft.model)
+        if (id === 'see') return ' \u2014 state ' + draft.composeMaxChars + 'c, tool ' + draft.toolBlockMaxChars + 'c, tail ' + draft.tailChars + 'c'
+        if (id === 'turn') return ' \u2014 every ' + draft.turnEveryNTurns + ' boundary(ies)'
+        if (id === 'keep') return ' \u2014 redact ' + (draft.redactEnabled ? 'on' : 'off') + ', paths ' + draft.pathMode
+        if (id === 'numbers') return ' \u2014 $' + draft.pricePerMTokInput + '/MTok, ' + draft.calibrationBins + ' bins, ' + draft.maxCompareLanes + ' lanes'
+        return ''
+      }
+      const movedSetting = (entry) => {
+        const next = draft[entry.field]
+        const before = current[entry.field]
+        return Array.isArray(next) || Array.isArray(before)
+          ? JSON.stringify(next ?? null) !== JSON.stringify(before ?? null)
+          : next !== before
+      }
+      // ONE PLACE RESOLVES `choices`, so a lazy entry and an eager one behave identically.
+      const choicesOf = (entry) => (typeof entry.choices === 'function' ? entry.choices() : (entry.choices ?? []))
+      const settingEl = (entry) => {
+        const id = 'system1-observer-' + entry.field
+        const disabled = !props.canSave || saving
+        const value = draft[entry.field]
+        let control
+        if (entry.kind === 'switch') {
+          control = h('div', { style: styles.row },
+            h('input', {
+              id, name: entry.field, type: 'checkbox', checked: value === true, disabled,
+              onChange: (event) => props.onEdit(entry.field, event.currentTarget.checked),
+            }),
+            h('span', { style: styles.note }, value === true ? 'on' : 'off'))
+        } else if (entry.kind === 'select') {
+          control = h('select', {
+            id, name: entry.field, value, disabled,
+            onChange: (event) => props.onEdit(entry.field, event.currentTarget.value),
+          }, choicesOf(entry).map((choice) => h('option', { key: choice, value: choice }, choice)))
+        } else if (entry.kind === 'multi') {
+          control = h('div', { style: styles.rules }, choicesOf(entry).map((choice) => h('label', { key: choice, style: styles.switchRow },
+            h('input', {
+              id: id + '-' + choice, type: 'checkbox', disabled,
+              checked: Array.isArray(value) && value.includes(choice),
+              onChange: (event) => props.onEdit(entry.field, event.currentTarget.checked
+                ? (Array.isArray(value) ? value : []).concat(choice)
+                : (Array.isArray(value) ? value : []).filter((item) => item !== choice)),
+            }),
+            h('span', { style: styles.note }, choice))))
+        } else if (entry.kind === 'list') {
+          control = h('input', {
+            id, name: entry.field, type: 'text', disabled,
+            value: Array.isArray(value) ? value.join(', ') : '',
+            onChange: (event) => props.onEdit(entry.field, event.currentTarget.value
+              .split(',').map((item) => item.trim()).filter((item) => item !== '')),
+          })
+        } else if (entry.kind === 'number') {
+          control = h('div', { style: styles.row },
+            h('input', {
+              id, name: entry.field, type: 'text', inputMode: 'numeric', disabled,
+              value: String(value ?? ''),
+              onChange: (event) => props.onEdit(entry.field, event.currentTarget.value),
+            }),
+            h('button', {
+              id: id + '-reset', type: 'button', disabled, title: 'restore the schema default',
+              onClick: () => props.onReset(entry.field, numberText(entry.fallback)),
+            }, 'reset'))
+        } else if (entry.kind === 'longtext') {
+          control = h('textarea', {
+            id, name: entry.field, rows: 3, disabled, style: styles.rules, value: String(value ?? ''),
+            onChange: (event) => props.onEdit(entry.field, event.currentTarget.value),
+          })
+        } else {
+          control = h('input', {
+            id, name: entry.field, type: 'text', disabled, value: String(value ?? ''),
+            onChange: (event) => props.onEdit(entry.field, event.currentTarget.value),
+          })
+        }
+        return fieldEl(id, entry.label, control, entry.hint)
+      }
+      const panelEl = (group) => {
+        const entries = SETTINGS.filter((entry) => entry.panel === group.id)
+        if (entries.length === 0) return null
+        // A PANEL WITH AN UNSAVED CHANGE OPENS ITSELF. Save lives in the host's chrome at the bottom, so an edit
+        // inside a closed panel is an edit the person cannot see; this is the cheap version of a sticky save bar,
+        // and it is what the card test asserts about the panels.
+        const open = entries.some(movedSetting)
+        return h('details', {
+          key: group.id, id: 'system1-observer-panel-' + group.id, style: styles.seam,
+          open: open ? true : undefined,
+        },
+          h('summary', { style: styles.summary }, group.title + chipOf(group.id)),
+          ...entries.map(settingEl))
+      }
+
       return h(SettingsForm, { state: formState, labels, onSave, onDiscard },
+        ...PANELS.map(panelEl),
         // THE MASTER SWITCH, first because it governs everything below it. It is a tick rather than a
         // slider, and it takes effect on the NEXT seam firing -- the questions are kept, so turning it
         // back on resumes where it left off.
@@ -1037,6 +1267,8 @@ window.__ModuleLoader__.load({
         observeSubagents: booleanValue(valueObject.observeSubagents),
         includeNonOperatorFacing: booleanValue(valueObject.includeNonOperatorFacing),
         maxFieldChars: numberText(valueObject.maxFieldChars),
+        // EVERY FIELD THE TABLE OWNS, from one function: the draft cannot miss a setting the table lists.
+        ...seedTable(valueObject),
         // CANONICALISED ON READ. The host projects whatever is stored, including keys this card would
         // never write (`abstain: false`, an empty `criteria`), so the draft and the stored value are
         // compared through the same normaliser -- otherwise an untouched form would read as dirty.
@@ -1066,6 +1298,7 @@ window.__ModuleLoader__.load({
       const problemText = [
         charsValid ? '' : 'Enter a whole number of characters, 1 or more.',
         ...questionProblemList,
+        ...tableProblems(draft),
       ].filter(line => line !== '').join(' · ')
       const invalid = problemText !== ''
       const dirty = draft.callsEnabled !== current.callsEnabled
@@ -1075,6 +1308,8 @@ window.__ModuleLoader__.load({
         || draft.maxFieldChars !== current.maxFieldChars
         || !sameQuestions(draft.questions, current.questions)
         || !sameSeamEnabled(draft.seamEnabled, current.seamEnabled)
+        // AND THE TABLE'S FIELDS, by the same rule the save uses: dirty and save can never disagree.
+        || tableDirty(draft, current)
       // STRICT: a save needs a state that PERMITS writes AND a revision to fence them with, and both
       // must be true -- a missing `writable` is not a licence to write.
       const canSave = state !== undefined && state !== null
@@ -1138,6 +1373,8 @@ window.__ModuleLoader__.load({
         if (!sameQuestions(draft.questions, current.questions)) {
           ops.push({ op: 'set', path: ['questions'], value: draft.questions })
         }
+        // THE TABLE'S FIELDS, appended rather than enumerated: one list decides what may be written.
+        ops.push(...tableOps(draft, current))
         if (ops.length === 0) { setNotice('No changes to save.'); return }
         setSaving(true)
         try {

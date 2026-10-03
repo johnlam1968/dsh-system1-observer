@@ -580,6 +580,73 @@ test('the number field saves a number, not the string that was typed', async () 
   assert.equal(form.calls[0].revision, 7)
 })
 
+// THE UI RATCHET, AND THE POINT OF THE WHOLE PANEL CHANGE. The host projects a schema and never draws a form, so a
+// setting with no entry in the card's table is a setting nobody can reach -- which is exactly what O2 recorded for
+// nineteen of them. This is the UI analogue of the read-wiring ratchet in test/schema.test.js: it fails the moment a
+// field is added to `index.js` and not to `client.js`.
+test('EVERY volatile setting has a control, and the panels that group them all exist', async () => {
+  const { readFileSync } = await import('node:fs')
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const { Config } = await import('../index.js')
+  // The settings the table drives, read from the table itself rather than restated here.
+  const tableFields = [...source.matchAll(/field: '([a-zA-Z]+)'/g)].map((match) => match[1])
+  assert.ok(tableFields.length >= 20, 'the table was found: ' + tableFields.length + ' entries')
+  for (const field of tableFields) {
+    assert.notEqual(Config.dict[field], undefined, 'the card table names ' + field + ', which the schema does not declare')
+    assert.equal(Config.dict[field].meta?.volatile, true, field + ' is in the card table, so it must be writable')
+  }
+  // THE HAND-WRITTEN EDITORS, which have their own tests: the seam switches, the questions, the session list, the
+  // master switch and the three fields the card rendered before the table existed. This list was SHORT by three when
+  // the ratchet first ran, and the ratchet was right to complain -- it accused fields that do have controls, which is
+  // the failure mode of an exception list rather than of the card.
+  const HAND_WRITTEN = ['callsEnabled', 'sessions', 'seamEnabled', 'questions', 'observeSubagents', 'includeNonOperatorFacing', 'maxFieldChars']
+  const covered = new Set(tableFields.concat(HAND_WRITTEN))
+  const volatile = Object.keys(Config.dict).filter((field) => Config.dict[field].meta?.volatile === true)
+  const unreachable = volatile.filter((field) => !covered.has(field))
+  assert.deepEqual(unreachable, [], 'writable settings the card offers no control for: ' + unreachable.join(', '))
+  assert.equal(covered.has('tracePath'), false, 'the mount-bound field must not be claimed as writable')
+  // AND THE PANELS, by the ids the layout gives them: an id is what a test can address and what a person sees.
+  for (const group of ['observe', 'send', 'see', 'turn', 'keep', 'numbers']) {
+    assert.ok(source.includes("'system1-observer-panel-' + group.id"), 'the panel id is built from the group')
+    assert.ok(source.includes("{ id: '" + group + "'"), 'the ' + group + ' panel is declared')
+  }
+})
+
+test('a setting in the Numbers panel renders and saves as a NUMBER, fractional rates included', async () => {
+  // The fractional case is not decoration: the first version of the table demanded a whole number from every numeric
+  // field, so the price (0.042) failed validation and the card refused to save ANYTHING -- including fields beside
+  // it. This asserts the control renders, is editable, and stages a number rather than the text that was typed.
+  const form = stubForm()
+  const { React, registered } = await mount({ form })
+  paint(React, registered)
+  form.derive()
+  const second = paint(React, registered)
+  const price = second.inputs.find((input) => input.id === 'system1-observer-pricePerMTokInput')
+  assert.ok(price, 'the price control must render, or the setting is unreachable')
+  assert.equal(price.disabled, false, 'a derived form is editable')
+  price.onChange({ currentTarget: { value: '0.03' } })
+  const edited = paint(React, registered)
+  await formProps(edited.node).onSave()
+  assert.deepEqual(form.calls[0].ops, [{ op: 'set', path: ['pricePerMTokInput'], value: 0.03 }],
+    'a rate is staged as a number, not the string that was typed')
+})
+
+test('the Observe panel calls seams through checkboxes, and the list saves whole', async () => {
+  const form = stubForm()
+  const { React, registered } = await mount({ form })
+  paint(React, registered)
+  form.derive()
+  const second = paint(React, registered)
+  const seam = second.inputs.find((input) => input.id === 'system1-observer-hooks-draft')
+  assert.ok(seam, 'one checkbox per accepted hook, or the hooks cannot be chosen')
+  assert.equal(seam.type, 'checkbox')
+  seam.onChange({ currentTarget: { checked: true } })
+  const picked = paint(React, registered)
+  await formProps(picked.node).onSave()
+  assert.deepEqual(form.calls[0].ops, [{ op: 'set', path: ['hooks'], value: ['draft'] }],
+    'the hook list is written as a list, which is what the schema declares')
+})
+
 test("a fractional character count is refused, as the card's own copy promises", async () => {
   const form = stubForm()
   const { React, registered } = await mount({ form })
