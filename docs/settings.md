@@ -199,6 +199,16 @@ strongest evidence those rows are real rather than my own framing.
   call (`index.js:266-269`). That is true of every volatile field in this row, and it is why the plan's remaining
   items are wiring rather than architecture.
 
+### One correction that became a fix, and one that stayed a correction
+
+MiniMax described the redaction setting as carrying a `patternProblem` field "on the mount line". **That name existed
+nowhere in the code** -- the grep came back empty -- so the citation was wrong. But the *idea* was right and is now
+implemented, under almost that name: `redactPolicy` returns `patternProblems`, compiled once per policy, so a pattern
+that does not compile is dropped with its reason rather than thrown from the path of every line. A citation can be
+wrong about the code and right about the design, and the difference is worth keeping rather than flattening.
+
+Its other correction stands exactly as recorded above: `probeHash` is not a `KEY_PARTS` member.
+
 ### From its list of what the code cannot do yet
 
 Of nine numbered items, only the ninth survived the truncation: **no criterion dictionary resolution by name**
