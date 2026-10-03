@@ -346,3 +346,104 @@ change is complete rather than partial.
 **Not settled.** Whether `system1_trace` should *follow* a move it did not make, or report that the configured path
 holds only the lines since the move -- and whether the archive should be discoverable from the new file by name
 alone (proposed) or by a hash (which would make it verifiable).
+
+## 11. Design: a STORED SESSION as subject state (the second subject source)
+
+**What the plugin judges today, and what that leaves out.** Two call modes exist, and they share one subject source:
+the LIVE session. The **seams** fire per conversational loop (`admit`, `draft`, `result`, ...) and judge the text at
+that moment; the **scheduled turn measurement** judges an aggregate -- an implicit turn (a run of turn boundaries) or
+a slice of a live session. Both read the window the plugin holds, and both are gone when the session ends.
+
+**(B) adds the third thing: a session that is already over.** The subject is a stored session -- the whole of it, or a
+slice of it -- and the use case is the one the live modes cannot serve: *evaluate an existing human/LLM conversation
+to improve it*, at the scale of a whole session rather than a loop or a turn.
+
+**What makes this cheap, and it is the same composer.** `lib/turn-state.js`'s `composeTurnState({ events, nextMessage,
+maxChars, toolMaxChars, ... })` already turns a list of session events into the text a judge is shown, and it is
+already the ONE place that decides what the judge sees. (B) does not need a second composer: it needs a second
+**source of events** for the same one. That is why the coding is small, and it is also why the two modes cannot drift
+apart in what they show.
+
+**Which stored representation, decided by the code rather than by convenience.** Three candidates exist on this
+machine, and the code already rules one out:
+
+| source | verdict |
+|---|---|
+| a LIVE agent's `agent.session.snapshotEvents(0)` | already used by the observation path (`index.js:278`) -- the live case |
+| `~/.dsh/sessions/<workspace-slug>/session-<uuid>/session.v4.jsonl.zstd` | **the honest stored source**: one JSON line per session event, readable with Node's `zstdDecompressSync` (verified on this machine) |
+| `~/.dsh/storages/session_projcache/sessions/<uuid>.json` | **not** the source: `lib/nudge-label.js:29` records that "the projcache is a UI cache and truncates", so a measurement over it would agree with you about nothing |
+
+Locating a session means mapping a session id to its workspace directory (the slug spelling) and reading one file;
+that is the only genuinely new plumbing, and it is one module with a fixture per shape.
+
+**The settings it adds.** Four, each a thing a person would actually change, and nothing else -- no policy knob for
+"how to slice" beyond the slice itself:
+
+| setting | decides | control | live? |
+|---|---|---|---|
+| `subjectSource` | whether the subject is the live session or a stored one | select: `live` / `stored` | yes |
+| `subjectSession` | WHICH stored session: an id, or `newest` | picker over the sessions the host can see | yes |
+| `subjectKinds` | which message kinds are in the slice (operator, assistant, tool results) | multi-select | yes |
+| `subjectLastMessages` | how many of the session's messages to include; `0` is the whole session | numeric with reset | yes |
+
+**The result does not belong on the live path, and that decides where it surfaces.** A stored-session evaluation is
+not an observation of what is happening; it is a question asked on demand. So it becomes a **call of its own kind** --
+recorded as a call line whose hook distinguishes it from a seam firing -- and it surfaces as (a) a TOOL, so an agent
+can ask for it, and (b) that tool's card through the existing `tool.call.toolview` seat, so a person reads the
+judgement where they read every other tool result. The card's six settings panels gain an **Evaluate** panel for the
+four inputs above; the RESULT is not a setting and does not go in a panel.
+
+**What must not happen.** A stored evaluation must never be scored into the probe calibration: the calibration is
+about the probe question asked at a seam, and a whole-session judgement is a different kind of answer. The call-kind
+field is what keeps them apart, and a test should assert a stored evaluation adds no probe rows.
+
+**Not settled.** Whether a stored evaluation is a single call over the whole composed state or one call per slice;
+whether a stored session may be evaluated on a schedule (which would make it a fourth call mode rather than an
+on-demand question); and whether the composed state's fingerprint belongs on the line so two evaluations of the same
+session can be recognised as the same input.
+
+## 12. Design: managing question sets, and surfacing them
+
+**The gap, stated as the user experience.** Today a question set is a nested object in the profile's `questions`
+key, edited through the card's per-seam editor. It cannot be named, reused across rows, shared, or identified in a
+trace -- so two runs under different sets are compared as though one instrument produced both. §9 designs the
+loadable set; this section designs the **management and surfacing** around it, which is the part a person actually
+meets.
+
+**Where sets live, and why not in the profile.** A **directory of set files**, named by the setting
+`questionSetsDir`; a row selects one with `questionSet`. Files rather than inline JSON because a file is what can be
+hashed, versioned, reviewed as a diff, and shared between deployments -- and the content hash is what makes a run
+attributable (`instrument`, beside `probeHash`). The inline `questions` object keeps working exactly as it does
+today: `questionSet` empty means "the inline set", so nothing existing changes.
+
+**Who resolves them, and why it must be the host.** The browser half cannot read the filesystem. So the HOST
+resolves the directory once per read into `{ name, path, hash, problems }` for each file, and projects that list to
+the card and to the agent. The card picks a name and shows the hash and any problem; it never reads a file.
+
+**How a set is validated.** Through the reader that already exists (`lib/questions.js`), which never throws and
+turns a malformed spec into a named `problem` -- the property that keeps this plugin from failing a turn. A set that
+does not parse, or whose specs are not specs, is reported by name and by reason, and the row falls back to the built-in
+probe with that problem recorded on the line.
+
+**Surface one: the agent.** The config tool's `list` gains a `sets` key beside `knobs` and `schema`, carrying the
+resolved list -- declared in the tool's output schema, because that schema is enforced against the returned value.
+This is how a model finds out which sets exist without guessing a filename.
+
+**Surface two: the card.** The Send panel gains a set picker, the resolved hash, and the problems list, next to the
+inline question editor it already has. A person should be able to see at a glance whether the row is asking the inline
+set or a file, and which file.
+
+**Surface three: the service.** `system1Observer` gains a read-only `questionSets()` so another plugin can list them
+without re-implementing the resolver -- consistent with the rest of that service, which is frozen and has no mutator
+by construction.
+
+**Settings it adds.**
+
+| setting | decides | control | live? |
+|---|---|---|---|
+| `questionSetsDir` | where the set files are | text (a path) | yes |
+| `questionSet` | which set this row uses, by name; empty is the inline set | picker | yes |
+
+**Not settled.** Whether a set file holds one set or a map of them; whether a set must carry all ten seams or may
+override one; whether the directory is watched or read per call; and `criteria` by name (`ROADMAP.md` §4.2), which is
+what would let two questions be compared by construction rather than by inspection.
