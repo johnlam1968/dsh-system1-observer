@@ -24,7 +24,9 @@ empty list.
   "instructions": "Could a competent reader answer this request from the text alone?" }
 ```
 
-- `noul` -- a yes/no predicate. One question, one property.
+- `noul` -- a yes/no predicate. One question, one property. It may carry an explicit reading of each answer:
+  `"criteria": {"true": "...", "false": "..."}`, which the loader passes through to `noul()` -- useful when the id alone
+  does not make the polarity obvious.
 - `score` -- an ordinal ladder, `levels` from worst to best, 3 levels is usually enough. The levels are what make it
   calibratable: a score without a stated ladder is a noul wearing a number.
 - `choice` -- a closed list of `{label, criterion}`. **EXACTLY ONE option must carry `"abstain": true`** (the loader

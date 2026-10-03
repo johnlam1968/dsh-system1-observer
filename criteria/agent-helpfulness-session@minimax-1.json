@@ -1,0 +1,97 @@
+{
+  "session": [
+    {
+      "id": "session_opening_served",
+      "type": "noul",
+      "instructions": "Looking at the first OPERATOR message and the last AGENT message in SESSION TRANSCRIPT, does the final AGENT message address the specific request that was made in the opening OPERATOR message?"
+    },
+    {
+      "id": "session_wasted_operator_effort",
+      "type": "score",
+      "instructions": "Considering SESSION TRANSCRIPT and TOOL CALLS, how much operator effort was wasted on turns that did not move the task forward (e.g. restating the same request, repeating a correction, or pushing the agent out of a stall)?",
+      "levels": [
+        "most_turns_wasted",
+        "some_turns_wasted",
+        "few_or_no_turns_wasted"
+      ]
+    },
+    {
+      "id": "session_recovery_after_empty_lookup",
+      "type": "choice",
+      "instructions": "Look at TOOL CALLS for any tool whose result contains no usable content (an empty list, an empty error, a 'not found', or a response with nothing the agent could act on). In SESSION TRANSCRIPT, how did the AGENT respond after that empty result?",
+      "options": [
+        {
+          "label": "recovered_with_new_approach",
+          "criterion": "the agent tried a different query, a different tool, a reformulated question, or asked the operator for direction"
+        },
+        {
+          "label": "retreated_to_first_principles",
+          "criterion": "the agent answered from general knowledge or reasoning instead of the failed lookup"
+        },
+        {
+          "label": "gave_up_or_hallucinated",
+          "criterion": "the agent stopped, repeated the empty result, or produced an answer that contradicts the empty lookup"
+        },
+        {
+          "label": "cannot_tell",
+          "criterion": "no empty lookup occurred in TOOL CALLS, or the transcript does not show what the agent did next",
+          "abstain": true
+        }
+      ]
+    },
+    {
+      "id": "session_scope_creep",
+      "type": "choice",
+      "instructions": "Compared with the first OPERATOR message, did the final AGENT message stay inside the scope of the opening request?",
+      "options": [
+        {
+          "label": "stayed_in_scope",
+          "criterion": "the final answer addresses only what the opening request asked for"
+        },
+        {
+          "label": "mildly_expanded",
+          "criterion": "the final answer adds small extras (a brief tip, a related warning) that the operator did not ask for but did not obstruct"
+        },
+        {
+          "label": "significantly_drifted",
+          "criterion": "the final answer spends substantial effort on a different task than the one the operator opened with"
+        },
+        {
+          "label": "cannot_tell",
+          "criterion": "SESSION TRANSCRIPT does not show a final AGENT message or the opening request is ambiguous",
+          "abstain": true
+        }
+      ]
+    },
+    {
+      "id": "session_final_rests_on_tools",
+      "type": "noul",
+      "instructions": "Where the final AGENT message makes a factual claim about external state (a file, an API, a record, a value), does SESSION TRANSCRIPT plus TOOL CALLS show that claim being supported by a tool result from this session?"
+    },
+    {
+      "id": "session_stuck_loops",
+      "type": "score",
+      "instructions": "Across SESSION TRANSCRIPT and TOOL CALLS, how visible are stuck loops \u2014 the agent repeating the same tool call, asking the same question, or returning to the same intermediate answer without forward progress?",
+      "levels": [
+        "visible_repetition_loop",
+        "some_repetition_but_progressed",
+        "no_visible_repetition"
+      ]
+    },
+    {
+      "id": "session_closing_usable",
+      "type": "noul",
+      "instructions": "Does the last AGENT message in SESSION TRANSCRIPT leave the operator with something they can act on next (a concrete result, a clear answer, a saved file, or an explicit next step), as opposed to an open question back to the operator or a placeholder?"
+    },
+    {
+      "id": "session_clarification_cost",
+      "type": "score",
+      "instructions": "Considering SESSION TRANSCRIPT, how much of the AGENT's work consisted of asking the operator clarifying questions before producing a useful answer?",
+      "levels": [
+        "asked_too_much_before_answering",
+        "asked_some_necessary_clarification",
+        "answered_without_clarifying"
+      ]
+    }
+  ]
+}
