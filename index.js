@@ -479,6 +479,7 @@ async function apply(ctx, config) {
         evidence.trace(event, fields)
       },
     }))
+
     // THE SETTINGS TOOL. `record` writes a config line BEFORE the change -- that ordering is the tool's contract,
     // and `evidence.trace` is the same sink every other line goes to, so a reader finds it where it looks.
     // `write` goes through the harness's configEditor rather than editing the profile file, and NO knob list is
@@ -509,7 +510,6 @@ async function apply(ctx, config) {
       },
     }))
   })
-
 
   // THE OBSERVER AS A SERVICE, so another plugin can read what this row recorded instead of re-implementing the
   // readers. Registered with `ctx.provide` -- NOT `ctx.set`, which only replaces an already-provided value and

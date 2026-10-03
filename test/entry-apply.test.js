@@ -291,6 +291,9 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   // registered TWICE, because a duplicate name throws in the registry. A count would have had to be bumped for a
   // legitimate addition while going on passing for an illegitimate duplicate.
   const names = registered.map((definition) => definition.name)
+  // THREE, FOR NOW: `system1_evaluate` exists as a module with its own seven tests and is STEPPED BACK from the row
+  // because the real registry refuses its schema and swallows the reason (register row O19). When that violation is
+  // read and fixed, this list gains the fourth name -- and this comment goes with it.
   assert.deepEqual([...names].sort(), ['system1_decide', 'system1_observe_config', 'system1_trace'], 'every tool, and nothing else')
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
   const tool = registered.find((definition) => definition.name === 'system1_trace')
