@@ -43,7 +43,7 @@ test("a trace-path change is RECORDED IN THE SINK BEING LEFT, not in the one it 
     timeoutMs: accessor(200),
   })
 
-  const tool = registered.find((definition) => definition.name === 'system1_observe_config')
+  const tool = registered.find((definition) => definition.name === 'system1_settings')
   assert.notEqual(tool, undefined, 'the settings tool is registered')
 
   // THE REFUSAL COMES FIRST, AND THAT IS THE FIX. A line written for a change that cannot land is a measurement of

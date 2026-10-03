@@ -414,7 +414,7 @@ test('it registers all FIVE seats: the two config pages, the session menu, and t
     { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_trace' } },
     // AND THE EVALUATION CARD, for the whole-conversation tool. Same seat, same open key domain, same silence on a
     // mismatch -- so the name is spelled identically here and in `lib/evaluate-tool.js`.
-    { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_evaluate' } },
+    { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_evaluate_session' } },
   ])
 })
 
@@ -442,7 +442,7 @@ test('the tool-name literals in the card match their modules, because a mismatch
 
 test('the evaluation card renders the subject, the slice and the answers from the projection', async () => {
   const { registered } = await mount()
-  const seat = registered.find((entry) => entry.target?.key === 'system1_evaluate')
+  const seat = registered.find((entry) => entry.target?.key === 'system1_evaluate_session')
   assert.notEqual(seat, undefined, 'the evaluation card claims its seat')
   const Card = seat.dispose.component
   const painted = Card({
@@ -475,11 +475,11 @@ test('the evaluation card renders the subject, the slice and the answers from th
 
 test('with no projection it shows the text the model saw, and a throwing projection does not take the row down', async () => {
   const { registered } = await mount()
-  const Card = registered.find((entry) => entry.target?.key === 'system1_evaluate').dispose.component
+  const Card = registered.find((entry) => entry.target?.key === 'system1_evaluate_session').dispose.component
   // A HOST THAT PREDATES THE PROJECTION: the text is the same judgement, shown as it is.
-  const fallback = textOf(Card({ phase: 'result', block: { content: [{ type: 'text', text: 'system1_evaluate: stored subject' }] } }))
+  const fallback = textOf(Card({ phase: 'result', block: { content: [{ type: 'text', text: 'system1_evaluate_session: stored subject' }] } }))
   assert.match(fallback, /no structured projection from this host/)
-  assert.match(fallback, /system1_evaluate: stored subject/)
+  assert.match(fallback, /system1_evaluate_session: stored subject/)
   // THE SEAT IS ALL-OR-NOTHING, so the card catches its own errors -- here a projection whose getter throws.
   const hostile = { meta: { get subject() { throw new Error('boom') } } }
   const guarded = textOf(Card({ phase: 'result', block: hostile }))

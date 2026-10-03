@@ -293,7 +293,7 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   const names = registered.map((definition) => definition.name)
   // FOUR, and O19 is why this list is worth pinning: a schema the registry refuses takes the WHOLE callback down, so
   // the symptom was a missing tool rather than a bad one.
-  assert.deepEqual([...names].sort(), ['system1_decide', 'system1_evaluate', 'system1_observe_config', 'system1_questions', 'system1_results', 'system1_trace'], 'every tool, and nothing else')
+  assert.deepEqual([...names].sort(), ['system1_decide', 'system1_evaluate_session', 'system1_measurements', 'system1_question_sets', 'system1_settings', 'system1_trace'], 'every tool, and nothing else')
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
   const tool = registered.find((definition) => definition.name === 'system1_trace')
   assert.match(tool.description, /System One observer trace/, 'the description is the hint the agent reads')

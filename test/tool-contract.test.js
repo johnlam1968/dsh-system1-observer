@@ -36,7 +36,7 @@ const decide = createDecideTool({
 })
 const spec = { id: 'asked', type: 'noul', instructions: 'Is this true?' }
 
-const TOOLS = { [TRACE_TOOL_NAME]: trace, [DECIDE_TOOL_NAME]: decide, system1_observe_config: config }
+const TOOLS = { [TRACE_TOOL_NAME]: trace, [DECIDE_TOOL_NAME]: decide, system1_settings: config }
 
 /** The tool's own declared shape, used to say WHY a call is malformed rather than only that it is. */
 const CASES = [
@@ -50,13 +50,13 @@ const CASES = [
   { tool: TRACE_TOOL_NAME, args: { tail: -1 }, why: 'a negative window is not a window' },
 
   // ---- config: action required and enumerated; knob required for every action but list
-  { tool: 'system1_observe_config', args: { action: 'list' }, valid: true, why: 'the one action that needs nothing else' },
-  { tool: 'system1_observe_config', args: { action: 'get', knob: 'callsEnabled' }, valid: true, why: 'a read with its knob' },
-  { tool: 'system1_observe_config', args: {}, why: '`action` is declared required' },
-  { tool: 'system1_observe_config', args: { action: 'nope' }, why: '`action` is declared as an enum' },
-  { tool: 'system1_observe_config', args: { action: 'get' }, why: 'the declared description says `knob` is required for every action but `list`' },
-  { tool: 'system1_observe_config', args: { action: 'set', knob: 'callsEnabled' }, why: '`set` without a value changes nothing and must not report success' },
-  { tool: 'system1_observe_config', args: { action: 'list', extra: 1 }, why: '`additionalProperties` is declared false' },
+  { tool: 'system1_settings', args: { action: 'list' }, valid: true, why: 'the one action that needs nothing else' },
+  { tool: 'system1_settings', args: { action: 'get', knob: 'callsEnabled' }, valid: true, why: 'a read with its knob' },
+  { tool: 'system1_settings', args: {}, why: '`action` is declared required' },
+  { tool: 'system1_settings', args: { action: 'nope' }, why: '`action` is declared as an enum' },
+  { tool: 'system1_settings', args: { action: 'get' }, why: 'the declared description says `knob` is required for every action but `list`' },
+  { tool: 'system1_settings', args: { action: 'set', knob: 'callsEnabled' }, why: '`set` without a value changes nothing and must not report success' },
+  { tool: 'system1_settings', args: { action: 'list', extra: 1 }, why: '`additionalProperties` is declared false' },
 
   // ---- decide: state and questions required; a set that asks nothing is refused by name
   { tool: DECIDE_TOOL_NAME, args: { state: 'x', questions: [spec] }, valid: true, why: 'one well-formed question' },

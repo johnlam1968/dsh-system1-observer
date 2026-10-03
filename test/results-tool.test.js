@@ -5,7 +5,9 @@
 // disappearing behind 34 answers.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { answerValue, createResultsTool, MIN_N_FOR_RATE, readLines, RESULTS_TOOL_NAME, summarise } from '../lib/results-tool.js'
+import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise } from '../lib/results-tool.js'
+// THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
+import { answerOf, readTraceLines, writerOf } from '../lib/trace-read.js'
 
 const call = (over = {}) => ({
   event: 'call',
@@ -19,15 +21,15 @@ const call = (over = {}) => ({
 })
 
 test('a probability is read from the shapes the model actually narrows to', () => {
-  assert.deepEqual(answerValue({ type: 'noul', probability: 0.8 }), { value: 0.8, kind: 'probability' })
-  assert.deepEqual(answerValue({ type: 'noul', probabilityTrue: 0.2 }), { value: 0.2, kind: 'probability' })
-  assert.deepEqual(answerValue({ type: 'choice', label: 'an_answer' }), { value: 'an_answer', kind: 'label' })
-  assert.deepEqual(answerValue({ type: 'score', level: 'partly' }), { value: 'partly', kind: 'level' })
+  assert.deepEqual(answerOf({ type: 'noul', probability: 0.8 }), { value: 0.8, kind: 'probability' })
+  assert.deepEqual(answerOf({ type: 'noul', probabilityTrue: 0.2 }), { value: 0.2, kind: 'probability' })
+  assert.deepEqual(answerOf({ type: 'choice', label: 'an_answer' }), { value: 'an_answer', kind: 'label' })
+  assert.deepEqual(answerOf({ type: 'score', level: 'partly' }), { value: 'partly', kind: 'level' })
   // A CONFIDENCE IS NOT AN ANSWER: a noul that carries only a confidence has no probability to report, and reading
   // the confidence as one would invent a reading.
-  assert.equal(answerValue({ type: 'noul', confidence: 1 }), null)
-  assert.equal(answerValue(null), null)
-  assert.equal(answerValue('0.8'), null)
+  assert.equal(answerOf({ type: 'noul', confidence: 1 }), null)
+  assert.equal(answerOf(null), null)
+  assert.equal(answerOf('0.8'), null)
 })
 
 test('probabilities are NEVER averaged, and below the bound they are listed raw', () => {
@@ -73,7 +75,8 @@ test('skips are reported beside the answers, with their reasons, and the share o
     { event: 'mount', run: 'r1', model: 'jev-latest', provider: 'typesafe', hooks: ['draft'], probeHash: 'abc', sessions: ['s1'] },
   ]
   const summary = summarise(lines)
-  assert.deepEqual(summary.counts, { total: 5, call: 1, skip: 3, mount: 1, config: 0, other: 0, broken: 0, secondWriter: 0 })
+  // ONE VOCABULARY, from `lib/trace-read.js`: every kind the plugin can write is counted by name.
+  assert.deepEqual(summary.counts, { total: 5, broken: 0, call: 1, skip: 3, mount: 1, config: 0, error: 0, rotate: 0, other: 0, secondWriter: 0 })
   assert.deepEqual(summary.skips, [
     { reason: 'no question configured for this seam', n: 2 },
     { reason: 'no text at this seam', n: 1 },
@@ -164,7 +167,7 @@ test('grouping by agent keeps two agents apart rather than pooling them', () => 
 })
 
 test('unparseable lines are counted, not dropped', () => {
-  const parsed = readLines('{"event":"call"}\nnot json\n\n{"event":"skip"}')
+  const parsed = readTraceLines('{"event":"call"}\nnot json\n\n{"event":"skip"}')
   assert.equal(parsed.lines.length, 2)
   assert.equal(parsed.broken, 1)
   const summary = summarise(parsed.lines, { broken: parsed.broken })
@@ -182,7 +185,7 @@ test('a missing trace is UNAVAILABLE rather than an empty measurement', async ()
 test('the tool declares what it emits, and its name is the one the registry knows', () => {
   const tool = createResultsTool({ path: '/dev/null', readFile: () => '' })
   assert.equal(tool.name, RESULTS_TOOL_NAME)
-  assert.equal(tool.name, 'system1_results')
+  assert.equal(tool.name, 'system1_measurements')
   for (const key of ['window', 'counts', 'skips', 'groups', 'mount', 'refusals', 'problem']) {
     assert.ok(tool.output.schema.properties[key] !== undefined, key + ' is declared')
   }

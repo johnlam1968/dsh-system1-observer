@@ -187,7 +187,7 @@ const Config = Schema.object({
     //
     // `QUESTION_SCOPES` IS THAT LIST -- the nine seams, the aggregate, and the SESSION scope, exported by
     // lib/questions.js -- so this names one list rather than reconstructing it. The session scope is not a firing:
-    // nothing fires at it, and `system1_evaluate` asks it on demand (§11). Measured: the plugin's only live measurement (22:13, turn 5)
+    // nothing fires at it, and `system1_evaluate_session` asks it on demand (§11). Measured: the plugin's only live measurement (22:13, turn 5)
     // asked twelve questions from criteria/helpfulness-set@2.json, and today the resolved config carries no turn key.
     Object.fromEntries(QUESTION_SCOPES.map(scope => [scope, Schema.array(Schema.any())])),
   ).volatile().description('Per-seam questions, keyed by seam name. An array of `{id, type, instructions}` where `type` is `noul` (optional `criteria`), `choice` (`options`: `{label, criterion, abstain}`) or `score` (`levels`). A seam left empty asks nothing. Legacy mode -- the probe question, or `question` -- applies until at least one seam carries a question.'),
@@ -604,7 +604,7 @@ async function apply(ctx, config) {
       // item 9, a reopen-and-rotate story.
       write: async (change) => {
         if (configEditor === null) {
-          throw new Error('system1_observe_config: the configEditor service is not available in this profile, so no change can be persisted.')
+          throw new Error('system1_settings: the configEditor service is not available in this profile, so no change can be persisted.')
         }
         return createConfigWriter({ editor: configEditor, rowId: 'system1-observer' })(change)
       },

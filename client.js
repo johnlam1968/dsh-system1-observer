@@ -56,7 +56,7 @@ window.__ModuleLoader__.load({
     const TRACE_TOOL_NAME = 'system1_trace'
     // THE WHOLE-CONVERSATION TOOL'S NAME, restated for the same reason: the seat key must match `lib/evaluate-tool.js`
     // exactly, and a typo never renders. `test/client-card.test.js` pins both names to their modules.
-    const EVALUATE_TOOL_NAME = 'system1_evaluate'
+    const EVALUATE_TOOL_NAME = 'system1_evaluate_session'
 
     // ---------------------------------------------------------------------------------------------
     // THE SETTINGS THE CARD OWNS, IN ONE TABLE.

@@ -137,7 +137,7 @@ test('an unwired directory, and a call with no action at all, are named problems
 test('the tool declares what it emits, and names the scopes a set may be written for', async () => {
   const tool = toolFor(fixture())
   assert.equal(tool.name, QUESTIONS_TOOL_NAME)
-  assert.equal(tool.name, 'system1_questions')
+  assert.equal(tool.name, 'system1_question_sets')
   assert.deepEqual([...WRITABLE_SCOPES].sort(), ['admit', 'assemble', 'close', 'draft', 'execute', 'post_execute', 'pre_execute', 'request', 'result', 'session', 'turn'])
   const value = await tool.execute({ action: 'list' })
   for (const key of Object.keys(value)) {

@@ -646,8 +646,8 @@ closing the loop.
 | # | capability | what exists | what is missing |
 |---|---|---|---|
 | 1 | talk to another agent on a chosen model | `ctx.subagents` (`startContinuable`, `sendMessage`, `listChildren`, `prompt`) and `ctx.agents` (`create`, `resume`, `list`, `get`) and `ctx.agentTeams.spawnTeammate`, plus `ctx.agentDefaultModel.currentSelection/saveSelection` -- and the AGENT-FACING tools already built on them (`subagent`, `send_message`, `peer_send`, `workflow`) | nothing in the plugin. **Verified that a spawned session is already observed:** two distinct `agentId`s on `call` lines (13 calls and 7 calls) and three `sessionId`s |
-| 2 | compose/retrieve sets per seam, turn, session | `system1_observe_config` with `action: list` returns the sets (names, hashes, seams, problems, `appliesTo`), and `set` selects one; `system1Observer.questionSets()` exposes them to other plugins | **COMPOSING is not exposed.** No tool writes a set: an agent composes by writing files with its own filesystem tools. A `system1_questions` tool (list, read, validate, write one scope file) is unbuilt |
-| 3 | see the measurement results | `system1_trace` (raw, with `run`/`hook`/`tail`/`full`) over the JSONL trace | **AGGREGATION.** No view of n, of the distribution per question, or of which questions never separate. A `system1_results` tool is unbuilt |
+| 2 | compose/retrieve sets per seam, turn, session | `system1_settings` with `action: list` returns the sets (names, hashes, seams, problems, `appliesTo`), and `set` selects one; `system1Observer.questionSets()` exposes them to other plugins | **COMPOSING is not exposed.** No tool writes a set: an agent composes by writing files with its own filesystem tools. A `system1_question_sets` tool (list, read, validate, write one scope file) is unbuilt |
+| 3 | see the measurement results | `system1_trace` (raw, with `run`/`hook`/`tail`/`full`) over the JSONL trace | **AGGREGATION.** No view of n, of the distribution per question, or of which questions never separate. A `system1_measurements` tool is unbuilt |
 | 4 | iterate configuration and conversation | the pieces in 2 and 3, plus the harness's own agent tools | the loop itself: **no set here has ever been rewritten because of a measurement** |
 | 5 | write a report | the agent's own file tools | the honest numbers a report needs -- that is 3 |
 
@@ -664,11 +664,11 @@ still not in use.
 
 ### 13.3 Build order, from what is missing rather than from what is interesting
 
-1. **`system1_results`** -- aggregate the trace: per question id, n, the distribution, and a flag for a question that
+1. **`system1_measurements`** -- aggregate the trace: per question id, n, the distribution, and a flag for a question that
    never separates; group by hook, by run, by `questionSetHash`/`stateHash`, and by `agentId`. Report the skips and
    their reasons beside the answers, because a 99%-skip trace is a finding. This is what makes 5 possible and 4 worth
    doing.
-2. **`system1_questions`** -- list, read, validate and WRITE one scope file of a composition (the loader already
+2. **`system1_question_sets`** -- list, read, validate and WRITE one scope file of a composition (the loader already
    validates; the tool would put a set in front of the same check before it is written).
 3. **The harness axis (12.2)** -- a declared label and `harnessHash` on the line, without which 4's iterations cannot
    be attributed to the technique that was changed.
@@ -676,7 +676,7 @@ still not in use.
 
 ### 13.4 The set-writing tool, and what `validate` cannot see
 
-`system1_questions` is built (round 2 of this objective): `list`, `read`, `validate`, `write`, with the loader's own
+`system1_question_sets` is built (round 2 of this objective): `list`, `read`, `validate`, `write`, with the loader's own
 check running **before** anything is written, an existing scope file not overwritten without `replace: true`, an empty
 list refused, and the answer's hash **read back from disk**. MiniMax-M3 reviewed the write path and named the defects a
 loader structurally cannot catch. Agreed postures, recorded so the next round does not re-litigate them:
@@ -695,7 +695,7 @@ be re-proposed:**
 1. *"Refuse when the same `id` appears in two scope files of one composition."* **Not needed here.** The answer map is
    keyed by question id **within one call**, and a call is for one scope, so the same id at `draft` and at `result`
    cannot collide -- and the corpus already uses that deliberately (the frozen ten-seam set asked `would_change` and
-   `outcome` at two seams each). `system1_results` groups by scope for the same reason. A refusal here would forbid a
+   `outcome` at two seams each). `system1_measurements` groups by scope for the same reason. A refusal here would forbid a
    legitimate and already-used shape.
 2. *"Refuse instructions shorter than N characters, or without a question verb."* **Length is not vagueness** -- "Is it
    concise?" is five words and precise, while a hundred-word question can be empty. The real check is the
@@ -703,7 +703,7 @@ be re-proposed:**
 
 **Kept from the review, and not built yet:** the *ghost composition* problem (an agent that always writes a new `@`
 revision leaves `list` showing sets nothing measures). It cannot be answered inside the questions tool, because
-"is this set used" is a question about the TRACE -- so it belongs in `system1_results`, as a count of lines per
+"is this set used" is a question about the TRACE -- so it belongs in `system1_measurements`, as a count of lines per
 `questionSetHash` beside the compositions `list` reports.
 
 ### 12.6 The declared axes, as built, and three proposals refused
@@ -733,7 +733,7 @@ says so.
 
 ### 13.5 The loop, and the gate that is still missing
 
-Item 4 -- ask, read, rewrite, ask again -- is joined as of round 4: `system1_results` now emits a **run table** (what
+Item 4 -- ask, read, rewrite, ask again -- is joined as of round 4: `system1_measurements` now emits a **run table** (what
 each run mounted with: model, question set hash, harness hash, operator hash, and its call count), which is how a
 reading is joined to the instrument that produced it, and it refuses to pool across **three** axes -- a window spanning
 two question sets, two techniques, or two operators is reported per group with the reason. Separation is measured, never
@@ -761,7 +761,7 @@ minimum honest evidence, recorded here as the design for the missing gate:
 |---|---|
 | an anonymous rewrite (no parent hash, reason, or battery) | **not built** -- part of the gate above |
 | comparing two runs whose set hashes differ with no experiment line linking them | **built** as the set-axis refusal |
-| a `choice` with no abstain option, or a duplicate id | **already built** in `system1_questions` |
+| a `choice` with no abstain option, or a duplicate id | **already built** in `system1_question_sets` |
 | a rewrite that changes nothing | **not built** -- cheap, and worth adding beside the gate |
 | labelling a battery after seeing the run table | **not built** -- belongs with the battery |
 | aborting the whole read when any line is unattributed | **refused**: traces recorded before these fields existed are real evidence, so the view REPORTS the gap and refuses to pool across it rather than returning nothing. Aborting would delete the history that makes the gap visible |

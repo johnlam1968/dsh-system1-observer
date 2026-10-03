@@ -529,7 +529,7 @@ prose. A wide question is several questions wearing one id, and it cannot be cal
 
 **And a SET is the unit that saves the cost**, which is the reason to group questions rather than ask one at a time:
 the state is composed once per call and several questions ride on it. `lib/observe.js` builds a seam's questions and
-sends them in ONE call (`decide({ state, questions })`), and `system1_evaluate` does the same for a session. Asking
+sends them in ONE call (`decide({ state, questions })`), and `system1_evaluate_session` does the same for a session. Asking
 five questions separately would compose -- and pay for -- the same state five times.
 
 **What this changed in the code**, because the taxonomy found a real gap rather than only naming a pattern:
@@ -538,7 +538,7 @@ five questions separately would compose -- and pay for -- the same state five ti
   `lib/questions.js`. The session scope is deliberately NOT in `FIREABLE_HOOKS`: nothing fires at it.
 - The schema declares all three scopes, because an undeclared key is dropped by `projectForm` -- the failure the
   schema's own comment records for `turn`.
-- **`system1_evaluate` asked the TURN questions for a session judgement** before this. It now asks the session scope,
+- **`system1_evaluate_session` asked the TURN questions for a session judgement** before this. It now asks the session scope,
   falling back to the aggregate when no session questions are configured -- which is every row today, since no set in
   `criteria/` carries a `session` key yet. The fallback is what keeps the change behaviour-preserving.
 
