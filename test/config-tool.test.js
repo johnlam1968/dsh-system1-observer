@@ -219,3 +219,30 @@ test('a knob that arrives as an accessor is unwrapped, and a function is never r
   assert.equal(got.value, 'typesafe')
 })
 
+test('a wired SET LISTING is reported by `list`, in the object AND in the table a model reads', async () => {
+  // The agent's surface for question sets (§12). O21 said the table did not carry them; it DOES -- the render's
+  // signature is `render(args, value)`, and my first test called it with one argument, so `value` was undefined and
+  // the table it produced was the wrong branch's. This is the same two-argument signature the tool tests use.
+  const tool = createConfigTool({
+    read: () => ({}), write: async () => {}, record: () => {}, knobs: ['questionSet'],
+    sets: () => ({ sets: [{ name: 'house', path: '/tmp/house.json', hash: 'abc123abc123', seams: ['admit'], problem: null }], problem: null }),
+  })
+  const out = await tool.execute({ action: 'list' })
+  assert.deepEqual(out.sets.sets.map((set) => set.name), ['house'])
+  assert.equal(out.sets.sets[0].hash, 'abc123abc123', 'the content hash is what makes a run attributable')
+  const rendered = tool.output.render({}, out)[0].text
+  assert.match(rendered, /house/, 'the set is in the table a model reads')
+  assert.match(rendered, /abc123abc123/, 'with its content hash')
+  assert.match(rendered, /admit/, 'and the seams it names')
+  // A LISTING THAT THROWS IS A SENTENCE, and the table says so rather than showing no sets at all.
+  const broken = createConfigTool({
+    read: () => ({}), write: async () => {}, record: () => {}, knobs: [], sets: () => { throw new Error('permission denied') },
+  })
+  const failed = await broken.execute({ action: 'list' })
+  assert.match(String(failed.sets.problem), /permission denied/)
+  assert.deepEqual(failed.sets.sets, [])
+  assert.match(broken.output.render({}, failed)[0].text, /UNAVAILABLE/, 'the table names the failure')
+  // AND A TOOL BUILT WITHOUT A LISTING REPORTS EXACTLY WHAT IT DID BEFORE SETS EXISTED.
+  const plain = createConfigTool({ read: () => ({ questionSet: '' }), write: async () => {}, record: () => {} })
+  assert.equal('sets' in (await plain.execute({ action: 'list' })), false)
+})
