@@ -656,6 +656,7 @@ run 2026-01-02T10-04-15-523Z-a1b2c3d4   1544 events · 10:04:15.888 → 10:31:02
 `$SYSTEM1_OBSERVER_TRACE`, `<DSH_HOME>/logs/`, and the package's `data/` directory — most recent, not
 first found, so a stale one-line trace cannot shadow the live one.
 
-**Where things live:** [`docs/DESIGN.md`](docs/DESIGN.md) is the one-page map, [`docs/settings.md`](docs/settings.md)
-the decision record, [`docs/findings.md`](docs/findings.md) the register, and [`docs/IDEAS.md`](docs/IDEAS.md) the
-store for what is not decided yet.
+**Where things live:** [`ROADMAP.md`](ROADMAP.md) is the design record and the ideas -- what the plugin is for, the
+phases, and what is not decided yet. [`docs/settings.md`](docs/settings.md) is the decision record, section by
+section, with the measurement behind each; [`docs/findings.md`](docs/findings.md) is the register of what broke and
+what it taught; [`docs/conventions.md`](docs/conventions.md) is how work is done here.

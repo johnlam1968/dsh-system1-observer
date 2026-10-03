@@ -1,7 +1,17 @@
 # Roadmap — from a seam observer to a question-set engine
 
-**Status:** direction agreed with the operator; nothing in P1+ is built yet. This document exists so the
-decisions are legible before the code is.
+**Status:** direction agreed with the operator. **Part of it is built as of 2026-10-03** -- this line said "nothing in
+P1+ is built yet" while the sets themselves came into existence, which is the kind of stale claim this repository
+exists to catch:
+
+- **Built:** question sets as versioned artifacts (`criteria/`, one directory per composition, one file per scope, a
+  `_manifest.json` declaring what each is for, selected by name and identified by content hash on the mount line); the
+  three state scopes (`seam`, `turn`, `session`) with all three declared in the schema; self-authored sets and their
+  rationales; the stored-session subject, whole or sliced; the trace read back (§10.3's measurements layer).
+- **Not built:** the loop §1 describes -- evaluate, read the result, **rewrite the set**, re-evaluate. No set here has
+  been rewritten because of a measurement yet, which is the only thing that makes this a question-set *engine*. Also
+  open: criteria as a named reusable dictionary, labelled-case scoring (kappa, reliability bins) as a gate before a
+  set reaches a context, and the act layer (§9).
 
 ---
 
@@ -509,7 +519,7 @@ rate, and reading the current config.
 
 ### 11.3 The set: self-authored, because the corpus is guardrail-shaped
 
-`criteria/helpfulness-set@1.json` -- 10 questions (7 noul, 3 score), written from observed failures rather than
+`criteria/helpfulness-set@1/turn.json` -- 9 questions (7 noul, 2 score), written from observed failures rather than
 adapted from a published rubric, with the rationale per question in `helpfulness-set@1.md`. It complies with the
 shapes this repository already enforces, and the file validates. **It is written, not validated**: nothing has been
 scored against labelled cases, which is the gate before anything reaches an agent's context.
@@ -518,3 +528,99 @@ scored against labelled cases, which is the gate before anything reaches an agen
 observer already records the operator's next message, so the model's judgement can be checked against a label nobody
 asked it for. Every other question depends on the model being right about its own call; this one does not, which makes
 it the cheapest real calibration available in this project.
+
+## 12. The pair, the harness, and what the measurement is finally for
+
+SS9-S11 establish that the unit of work is a set and that a set can be conditioned on a model. This section is the
+operator's next step, recorded 2026-10-03, and it moves the unit of attention off the model entirely.
+
+### 12.1 It takes two
+
+`Operator:` *"It takes two for a conversation. Human should also user specific question sets. User A is different
+from User B. More broadly, the pair User A + LLM A worth attention. Some users have better interaction the others."*
+
+That contains two questions that must not be conflated:
+
+1. **How good is this person's input?** The `admit` scope, judged by the `human-input-clarity` compositions, with
+   `appliesTo.user` letting a composition be written for one operator's characteristic failure.
+2. **Does this pair fit?** A `session`-scope set asking whether this operator's style elicited this model's weak
+   behaviour. Answerable, because `SESSION TRANSCRIPT` labels both sides.
+
+**Half of the pair is already in the comparability key:** `instrument` carries the model (`lib/compare.js`), so LLM A
+and LLM B are already distinguishable. The person is not, and the missing piece is a **declared** label hashed onto
+the line (`userHash`), recorded exactly as `stateHash` is -- never a raw id, because a person's identity is a fact
+about them on a durable record, and this repository's rule is already that the model's copy stays raw while the record
+is redacted.
+
+**The tension that decides the design, and it is the operator's to settle:** a user-specific set and a cross-user
+comparison are **mutually exclusive**. If User A's messages are judged by different questions than User B's, then "A
+interacts better than B" is not measurable -- two numbers from two different questions. So a comparison needs one
+**common** set, and a tailored set is read alone.
+
+### 12.2 The harness axis, which the key does not carry
+
+`Operator:` *"A practical approach for actually task a specific LLM involve prompting/steering/loop/harness
+techniques, with the knowledge from task specific benchmark results."*
+
+Those are the levers, and **none of them is in `instrument`**: two runs under different system prompts or different
+loop policies are treated as the same instrument today while being different treatments. That is a confound sitting
+under every pair-level claim, and it is the largest structural gap this section records.
+
+It must be **declared, never inferred**. The plugin sees the assembled prompt, but that text contains the operator's
+request as well as the harness, so hashing it would confound the subject with the treatment. So an
+operator-declared label, hashed onto the line as `harnessHash`, beside `userHash`.
+
+### 12.3 Benchmarks predict the model; only the harness is left
+
+`Operator:` *"Each LLM have went through a lot of benmarking, the details of those evaluation reveals
+strength/weakness of a LLM. A starting point is to look up openrouter's API about model, that endpoint will return a
+benchmarking field. ... Most of the result of a LLM (such as the 3B model) when we apply questions on its output are
+likely expected, by the benchmarks. ... Now an interesting field (probably not explored yet in papers or github repos)
+is the human+LLM pair."*
+
+**Both endpoints were checked the same day, and one does not do what was expected.**
+`GET https://openrouter.ai/api/v1/models` returns **466 models, 255 carrying `benchmarks`**: `design_arena` as
+per-category elo/win_rate/rank, and `artificial_analysis` as indices that are frequently `null`
+(`ministral-8b-2512` has arena data and null indices). All four Ministral entries carry the field. On HuggingFace the
+equivalent exists (`model-index`, top level) but is **`null`** for the model in use here
+(`mistralai/Ministral-3-3B-Instruct-2512`, whose card instead offers `arxiv:2601.08584`) -- so OpenRouter is the
+structured source and HuggingFace is prose.
+
+**The design consequence:** a benchmark result is a **hypothesis to falsify at the harness**, not a question to ask
+again. A composition can carry it with no new mechanism, because a manifest is free-form beyond `appliesTo`:
+
+```json
+{"appliesTo": {"model": "ministral-3-3b", "useCase": "coding"},
+ "hypotheses": [{"weakness": "long-context recall", "testedBy": "draft_restates_the_goal"}]}
+```
+
+and the plain expectation is worth writing down: **most of what a question returns about a model's output will be what
+the benchmarks already predicted.** The measurement earns its keep when it is about the harness.
+
+### 12.4 The five invariants, collected
+
+1. **One narrow question per judgement** -- a predicate, an ordinal ladder, or a closed classification.
+2. **A question may only name state the call carries** -- at a seam, that seam's text and nothing else. The most
+   silently violated: a model will answer an unanswerable question.
+3. **Refusal axes versus grouping axes.** What changes what a number MEANS (the model, the question set) goes in
+   `instrument` and refuses comparison. What says who or what it is about (the user, the harness technique, the use
+   case) is recorded and sliced, never a reason to refuse.
+4. **Declared, never inferred** -- a technique, a person, a subject.
+5. **Refuse rather than ask nothing** -- an unreadable set, an empty composition, a broken spec: a named reason, not
+   silence that looks like a measurement.
+
+### 12.5 Small things, in the order they unblock
+
+- **`userHash` and `harnessHash`** on the session-review line, with the two declared labels and their card fields.
+  Until these exist, 12.1 and 12.2 are prose.
+- **A reader that groups lines by pair and prints its n.** With one operator today, a pair figure would be an anecdote
+  with a decimal point.
+- **A mechanical answerability lint.** The loader checks shape and passed all of MiniMax-M3's sets while **four of its
+  seam questions were unanswerable** -- they needed the surrounding conversation. A lint forbidding `AGENT RESPONSE`,
+  `OPERATOR REQUEST`, `TOOL CALLS` and `SESSION TRANSCRIPT` in a seam-scoped spec would have caught four of four. It
+  will not catch the subtle ones, which is why adjudication stays a pass; four free catches is still worth twenty lines.
+- **Duplicate detection.** The composition hash already found that `helpfulness-set-minimax@1` and `helpfulness-set@2`
+  are byte-identical (`b0cc836a2f63`) -- the same questions under two names, which no filename reveals. Near-duplicates
+  (two sets differing by one question) are not detected, and with several authorings of one seam they are likely.
+- **A per-scope hash on the line.** `readSelectedSet` already returns a hash per scope; recording those would let a
+  reader attribute a change to one seam instead of to the whole composition, which is what editing one does today.
