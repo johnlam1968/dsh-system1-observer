@@ -92,6 +92,13 @@ window.__ModuleLoader__.load({
       // `test/client-card.test.js` fails on any writable setting without one. A PICKER over the sets is the piece
       // still missing: the browser half cannot read a filesystem, so the host would have to project the list, and the
       // agent's config tool and the `system1Observer` service already expose it to the two callers that can read it.
+      // THE DECLARED AXES (ROADMAP 12.1-12.2). Free text on purpose: the plugin cannot infer a technique from the
+      // assembled prompt without confounding it with the operator's request, so a person names it. Only the hash is
+      // recorded, never this text.
+      { panel: 'send', field: 'harnessLabel', kind: 'text', label: 'Harness technique',
+        hint: 'A name for the technique in force (system prompt, steering, loop policy). Its hash goes on every line, so runs under different techniques can be told apart. Renaming it starts a new group, which is the honest reading of a rename.' },
+      { panel: 'send', field: 'operatorLabel', kind: 'text', label: 'Operator',
+        hint: 'A name for the person driving. Only its hash is recorded, never this text. Comparing operators needs the same question set on both, or the comparison is of two different questions.' },
       { panel: 'send', field: 'questionSetsDir', kind: 'text', label: 'Question sets directory',
         hint: 'Where the set files live. Only `.json` files are sets; each is a questions map keyed by seam, and its name is the file stem. A directory that cannot be read is a named problem, not an empty list.' },
       { panel: 'send', field: 'questionSet', kind: 'text', label: 'Question set',

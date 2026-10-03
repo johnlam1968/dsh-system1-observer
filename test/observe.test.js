@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createObserver } from '../lib/observe.js'
 import { exitCodeOf } from '../lib/seams.js'
+import { labelHash } from '../lib/label-hash.js'
 
 function recorder() {
   const lines = []
@@ -560,4 +561,44 @@ test('a non-tool seam never carries an exit code, even when its text ends in one
   await observed(observer, 'draft', 'the model said\nexit code: 1', {})
   assert.equal(lines[0].toolExit, null)
   assert.equal(lines[0].tool, null)
+})
+
+test('a declared technique and operator ride every line as hashes, and only when declared', async () => {
+  const answer = { kind: 'answers', answers: { probe: { type: 'choice', label: 'ok', confidence: 1 } } }
+  const labelled = { ...config, harnessLabel: 'v3 concise-directed', operatorLabel: 'operator-a' }
+
+  // (a) DECLARED: the hashes are on the call line, and the text is nowhere on it.
+  const { lines, trace } = recorder()
+  const observer = createObserver({ decide: async () => answer, trace, readConfig: () => labelled })
+  await observed(observer, 'draft', 'hello')
+  assert.equal(lines[0].harnessHash, labelHash('v3 concise-directed'))
+  assert.equal(lines[0].userHash, labelHash('operator-a'))
+  assert.equal(JSON.stringify(lines[0]).includes('concise-directed'), false, 'the label TEXT never reaches the line')
+  assert.equal(JSON.stringify(lines[0]).includes('operator-a'), false)
+
+  // ...and on a SKIP line, because "which technique was in force when nothing was asked" is a question too -- and a
+  // trace where only some lines carry the axis is a trace you must cross-check against itself.
+  const skipped = createObserver({ decide: async () => answer, trace, readConfig: () => ({ ...labelled, callsEnabled: false }) })
+  await observed(skipped, 'draft', 'hello')
+  const last = lines[lines.length - 1]
+  assert.equal(last.event, 'skip')
+  assert.equal(last.harnessHash, labelHash('v3 concise-directed'))
+
+  // (b) UNDECLARED: absent rather than a hash of the empty string, so "no label" and "an empty label" can never be
+  // the same value on a line.
+  const bare = recorder()
+  const plain = createObserver({ decide: async () => answer, trace: bare.trace, readConfig: () => config })
+  await observed(plain, 'draft', 'hello')
+  assert.equal('harnessHash' in bare.lines[0], false)
+  assert.equal('userHash' in bare.lines[0], false)
+
+  // (c) READ LIVE, so a label changed while the row runs splits the lines instead of relabelling history.
+  let live = { ...config, harnessLabel: 'v1' }
+  const second = recorder()
+  const liveObserver = createObserver({ decide: async () => answer, trace: second.trace, readConfig: () => live })
+  await observed(liveObserver, 'draft', 'hello')
+  live = { ...config, harnessLabel: 'v2' }
+  await observed(liveObserver, 'draft', 'hello')
+  assert.equal(second.lines.length, 2)
+  assert.notEqual(second.lines[0].harnessHash, second.lines[1].harnessHash, 'two techniques, two hashes')
 })

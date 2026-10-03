@@ -705,3 +705,28 @@ be re-proposed:**
 revision leaves `list` showing sets nothing measures). It cannot be answered inside the questions tool, because
 "is this set used" is a question about the TRACE -- so it belongs in `system1_results`, as a count of lines per
 `questionSetHash` beside the compositions `list` reports.
+
+### 12.6 The declared axes, as built, and three proposals refused
+
+`harnessLabel` and `operatorLabel` are volatile settings with card controls; `lib/label-hash.js` turns each into a
+12-character digest; that digest rides **every** line -- call, skip and error -- read at the point of use, and is
+**absent** rather than a hash of the empty string when nothing is declared. Neither label enters `instrument`.
+
+MiniMax-M3 reviewed the design and proposed three things that are refused here, each for a reason worth keeping:
+
+1. **A per-run random salt on the hash.** It would defeat enumeration of a short label, and it would also destroy the
+   only use the axis has -- grouping the same technique ACROSS runs. A salt that varies per run makes every run its own
+   group, which is the same as recording nothing. If unguessability is ever needed, the fix is an opaque id the operator
+   keeps beside the label, and it is one change in `lib/label-hash.js`.
+2. **Hashing the tuple (label + model + provider).** Model and provider are ALREADY refusal axes in `instrument` and are
+   already fields on every line. Folding them into the technique hash would hide which axis changed: a model swap would
+   read as a technique change. The tuple is reconstructed by a reader from two fields, which is strictly more
+   informative than one hash over both.
+3. **A `technique_revision` integer.** The label is already the revision namespace -- `v3 concise-directed` and
+   `v4 concise-directed` are two groups, and this corpus's own labels carry their versions. An extra counter is another
+   writable field needing a reader, which the schema walk enforces.
+
+**And the part no field can fix, recorded rather than papered over:** keeping the same label while changing the system
+prompt silently MERGES two experiments, and the trace cannot tell. A rename splits one into two, which is visible and
+recoverable by a reader; a merge is not. The label is a **promise** by the operator, and the field's own description
+says so.

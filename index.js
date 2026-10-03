@@ -27,6 +27,7 @@ import { describeSubject, subjectOfAgent } from './lib/subject.js'
 import { composeTurnState } from './lib/turn-state.js'
 import { createEvaluateTool } from './lib/evaluate-tool.js'
 import { createResultsTool } from './lib/results-tool.js'
+import { labelHash } from './lib/label-hash.js'
 import { createQuestionsTool } from './lib/questions-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
@@ -136,6 +137,14 @@ const Config = Schema.object({
   // that the mount line records what the run STARTED with, not that the run never changed.
   // ---------------------------------------------------------------------------------------------
   questionSetsDir: Schema.string().default('').volatile().description('Directory of question-set files: one `.json` per set, each a questions map keyed by seam. Read at each call, so a save reaches a running row -- and the mount line records the hash of the set that was in force when the row mounted.'),
+  // THE HARNESS AXIS (ROADMAP 12.2) AND THE USER AXIS (12.1), declared rather than inferred. `harnessLabel` is the
+  // technique in force -- the system prompt, the steering, the loop policy -- and `operatorLabel` is who is driving.
+  // NEITHER enters `instrument` (`lib/compare.js`): they are GROUPING axes, so putting them in the comparability key
+  // would refuse the two comparisons this device exists to make. Only their HASHES reach the trace
+  // (`lib/label-hash.js`), never the text.
+  harnessLabel: Schema.string().default('').volatile().description('A name for the harness technique in force: the system prompt, the steering, the loop policy. Free text, declared rather than inferred, because the plugin cannot tell a technique from the operator\'s own request. Its hash is recorded on each line so runs under different techniques can be told apart; it is NOT part of the comparability key, because comparing techniques is the point.'),
+  operatorLabel: Schema.string().default('').volatile().description('A name for the person driving this row. Its hash is recorded on each line, never the text, so a reading can be grouped by who produced it. Not part of the comparability key: comparing users is a question this device exists to answer.'),
+
   questionSet: Schema.string().default('').volatile().description('Which set in `questionSetsDir` this row asks, by name (the file\u2019s stem). Empty means the inline `questions` object, which is what every row did before sets existed. Read at each call, so a set can be swapped on a running row.'),
   probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
@@ -405,6 +414,10 @@ async function apply(ctx, config) {
         // instrument and no reader has to be told: `instrument` in `lib/compare.js` then refuses to compare its runs
         // with a row that asked the built-in question. That is the constraint working rather than a warning.
         probeHash: probeFingerprint(probeOf(mount).instructions),
+        // THE DECLARED AXES, as the run STARTED (the same snapshot rule `hooks` follows). Omitted when nothing is
+        // declared, so an unlabelled run says so by absence rather than by a hash of the empty string.
+        ...(labelHash(mount.harnessLabel) === '' ? {} : { harnessHash: labelHash(mount.harnessLabel) }),
+        ...(labelHash(mount.operatorLabel) === '' ? {} : { userHash: labelHash(mount.operatorLabel) }),
         // WHICH SET WAS IN FORCE, hashed from its bytes: `instrument` includes it, so editing one character of a set
         // makes its runs incomparable rather than silently averaged -- the same mechanism as `probeHash`.
         questionSetHash: setHashOf(mount),
