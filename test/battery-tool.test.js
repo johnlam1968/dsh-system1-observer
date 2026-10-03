@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createBatteryTool, BATTERY_TOOL_NAME } from '../lib/battery-tool.js'
+import { checkAgainst } from '../lib/tool-args.js'
 
 /** A criteria directory with one session set of two questions, and a battery directory with one matching battery. */
 function fixture({ cases = 5, expected = (i) => ({ went_well: i < 3, served: i < 3 ? 'yes' : 'no' }), setQuestions = 2 } = {}) {
@@ -81,6 +82,12 @@ test('a WRONG answer is reported with what was expected, and the rate says so', 
   const text = tool.output.render({}, out)[0].text
   assert.match(text, /went_well \[noul\]: 4\/5 = 80%/)
   assert.match(text, /case c0: went_well expected true/)
+
+  // THE OUTPUT MUST SATISFY THE SCHEMA THE TOOL DECLARES, and this check is the one that would have caught the first
+  // live run: a plain miss emitted `reason: null` where the schema said string, and the harness REJECTED the whole
+  // result -- after the model calls had been paid for. `checkAgainst` is the same validator the arguments go through.
+  checkAgainst(tool.output.schema, out, BATTERY_TOOL_NAME)
+  assert.equal(Object.hasOwn(out.wrong[0].wrong[0], 'reason'), false, 'a miss with no reason carries no reason field')
 })
 
 test('it REFUSES BEFORE SPENDING, and says which of the two is wrong', async () => {

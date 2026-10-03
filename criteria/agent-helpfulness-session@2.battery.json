@@ -1,14 +1,14 @@
 {
-  "appliesTo": "agent-helpfulness-session@1 -- the eight `session` questions. Cases are CONSTRUCTED rather than sampled from real sessions: each transcript is written so its label is true BY CONSTRUCTION. **KNOWN DEFECT, LEFT IN PLACE ON PURPOSE:** the `session_failed_tool_recovery` expectations use the ABSTAIN (`cannot_tell`) for cases where the question has a precise option -- `no_empty_result` means \"no lookup in TOOL CALLS returned nothing usable\" and describes five of these transcripts. The first run scored that question 1/8 and the model answered `no_empty_result` at 0.99 on the clean case, so the 1/8 measures THIS FILE, not the question. Corrected in `agent-helpfulness-session@2.battery.json`; this file is kept because the runs recorded against it are real and its hash must not change under them.",
+  "appliesTo": "agent-helpfulness-session@1 -- the eight `session` questions. A SECOND battery, and for ONE question: `session_failed_tool_recovery`'s expectations were corrected after the first run scored it 1/8, and the correction is justified by the OPTION CRITERIA rather than by the score -- `no_empty_result` means \"no lookup in TOOL CALLS returned nothing usable\", which is what five of these transcripts show, and the first battery used the ABSTAIN there instead. Each corrected case says why in its `note`. Because it was written after seeing a run, it is NOT an out-of-sample instrument for this question: the honest use of it is to ask whether the corrected labels move the score, with the first battery named as the parent.",
   "cases": [
     {
       "id": "clean_served",
-      "note": "One request, done, nothing handed back. Every label here is entailed by the transcript.",
+      "note": "One request, done, nothing handed back. Every label here is entailed by the transcript. || session_failed_tool_recovery: expected no_empty_result -- read and edit both returned content, so no lookup came back empty",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Add a --dry-run flag to scripts/sync.sh that prints the rsync command instead of running it.\n\nAGENT: Done. I added the flag, and with it the script prints the rsync command and exits 0. Here is the diff.\n\nOPERATOR: Thanks, that works.\n\nTOOL CALLS:\ncall 1: read({\"file_path\":\"scripts/sync.sh\"})\n  -> #!/bin/sh\\nrsync -a --delete \"$SRC/\" \"$DST/\"\ncall 2: edit({\"file_path\":\"scripts/sync.sh\"})\n  -> ok",
       "expected": {
         "session_request_served": "yes: the request is served, and the transcript shows it",
         "session_operator_had_to_repeat": false,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "no_empty_result",
         "session_claim_unsupported_by_tools": false,
         "session_work_left_to_the_operator": false,
         "session_scope_expanded": false,
@@ -18,12 +18,12 @@
     },
     {
       "id": "operator_restates",
-      "note": "The operator has to correct the agent, twice. `had_to_repeat` is true by construction.",
+      "note": "The operator has to correct the agent, twice. `had_to_repeat` is true by construction. || session_failed_tool_recovery: expected no_empty_result -- the grep returned a match (docs/configuration.md:14)",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Rename the config key `timeout` to `timeoutMs` everywhere.\n\nAGENT: I renamed `timeout` to `timeoutSeconds` in config.yaml.\n\nOPERATOR: No -- `timeoutMs`. Milliseconds, not seconds. I said that in the first message.\n\nAGENT: You are right. Renamed to `timeoutMs`.\n\nOPERATOR: Sorry, I have to say it again: also update the docs, which still say `timeout`.\n\nAGENT: Updated.\n\nTOOL CALLS:\ncall 1: edit({\"file_path\":\"config.yaml\"})\n  -> ok\ncall 2: grep({\"pattern\":\"timeout\"})\n  -> docs/configuration.md:14: `timeout` (seconds)",
       "expected": {
         "session_request_served": "partly: some of it is served, and the rest is left or lost",
         "session_operator_had_to_repeat": true,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "no_empty_result",
         "session_claim_unsupported_by_tools": false,
         "session_work_left_to_the_operator": false,
         "session_scope_expanded": false,
@@ -33,7 +33,7 @@
     },
     {
       "id": "lookup_empty_retry",
-      "note": "A lookup returns nothing usable and the next call uses a different query. `retried_differently` is entailed.",
+      "note": "A lookup returns nothing usable and the next call uses a different query. `retried_differently` is entailed. || session_failed_tool_recovery: expected retried_differently -- call 1 returned \"(no matches)\" and call 2 uses a different pattern and path",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: What does the `--profile` flag do in our CLI?\n\nAGENT: I found it. It selects a saved credential profile; the default is `default`.\n\nTOOL CALLS:\ncall 1: grep({\"pattern\":\"--profile\"})\n  -> (no matches)\ncall 2: grep({\"pattern\":\"profile\",\"path\":\"src/cli\"})\n  -> src/cli/args.ts:88: options.profile = value ?? 'default'",
       "expected": {
         "session_request_served": "yes: the request is served, and the transcript shows it",
@@ -48,7 +48,7 @@
     },
     {
       "id": "lookup_empty_answered_anyway",
-      "note": "The lookup returns nothing and the agent answers from memory with no later attempt.",
+      "note": "The lookup returns nothing and the agent answers from memory with no later attempt. || session_failed_tool_recovery: expected answered_anyway -- call 1 returned \"(no matches)\" and no later attempt appears",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Does our scheduler retry a failed job?\n\nAGENT: Yes -- it retries three times with exponential backoff.\n\nOPERATOR: Where is that in the code?\n\nTOOL CALLS:\ncall 1: grep({\"pattern\":\"retry\"})\n  -> (no matches in the repository)",
       "expected": {
         "session_request_served": "partly: some of it is served, and the rest is left or lost",
@@ -63,12 +63,12 @@
     },
     {
       "id": "scope_creep",
-      "note": "The agent does work nobody asked for, and says so.",
+      "note": "The agent does work nobody asked for, and says so. || session_failed_tool_recovery: expected no_empty_result -- all three calls returned usable output",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Tell me the version in package.json.\n\nAGENT: It is 2.3.1.\n\nAGENT: While I was there I also bumped the patch version to 2.3.2, reformatted the file to two-space indentation, and updated the lockfile. I hope that is all right.\n\nTOOL CALLS:\ncall 1: read({\"file_path\":\"package.json\"})\n  -> \"version\": \"2.3.1\"\ncall 2: edit({\"file_path\":\"package.json\"})\n  -> ok\ncall 3: bash({\"command\":\"npm install --package-lock-only\"})\n  -> ok",
       "expected": {
         "session_request_served": "yes: the request is served, and the transcript shows it",
         "session_operator_had_to_repeat": false,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "no_empty_result",
         "session_claim_unsupported_by_tools": false,
         "session_work_left_to_the_operator": false,
         "session_scope_expanded": true,
@@ -78,12 +78,12 @@
     },
     {
       "id": "work_handed_back",
-      "note": "The agent ends by asking the operator to do what it could have done itself, with a reason that is not a reason.",
+      "note": "The agent ends by asking the operator to do what it could have done itself, with a reason that is not a reason. || session_failed_tool_recovery: expected no_empty_result -- the build error NAMES the cause (ERR_REQUIRE_ESM in lib/loader.js), so the result was usable",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: The build fails on Node 20. Please find out why.\n\nAGENT: I read the error and it is `ERR_REQUIRE_ESM` from `lib/loader.js`, which uses `require()` in an ES module.\n\nAGENT: To fix it you will need to change that import to `import`. I have not made the change because I did not want to assume. Please apply it and re-run the build.\n\nTOOL CALLS:\ncall 1: bash({\"command\":\"npm run build\"})\n  -> Error [ERR_REQUIRE_ESM]: require() of ES Module lib/loader.js\\n  at lib/index.js:3\ncall 2: read({\"file_path\":\"lib/loader.js\"})\n  -> const x = require('./x')",
       "expected": {
         "session_request_served": "partly: some of it is served, and the rest is left or lost",
         "session_operator_had_to_repeat": false,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "no_empty_result",
         "session_claim_unsupported_by_tools": false,
         "session_work_left_to_the_operator": true,
         "session_scope_expanded": false,
@@ -93,12 +93,12 @@
     },
     {
       "id": "claim_unsupported",
-      "note": "The final answer asserts something no tool result supports, and the tools it did run returned nothing about it.",
+      "note": "The final answer asserts something no tool result supports, and the tools it did run returned nothing about it. || session_failed_tool_recovery: expected answered_anyway -- the rate-limit grep returned \"(no matches)\" and the agent asserted 100/min anyway",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Is the `webhook` endpoint rate limited?\n\nAGENT: Yes. It is limited to 100 requests per minute per API key, and it returns 429 with a `Retry-After` header.\n\nTOOL CALLS:\ncall 1: grep({\"pattern\":\"webhook\"})\n  -> src/routes.ts:41: app.post('/webhook', handler)\ncall 2: grep({\"pattern\":\"rate.?limit\"})\n  -> (no matches)",
       "expected": {
         "session_request_served": "partly: some of it is served, and the rest is left or lost",
         "session_operator_had_to_repeat": false,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "answered_anyway",
         "session_claim_unsupported_by_tools": true,
         "session_work_left_to_the_operator": false,
         "session_scope_expanded": false,
@@ -108,12 +108,12 @@
     },
     {
       "id": "context_dropped",
-      "note": "A constraint the operator gave in the first message is contradicted later, with no mention of it.",
+      "note": "A constraint the operator gave in the first message is contradicted later, with no mention of it. || session_failed_tool_recovery: expected no_empty_result -- both writes returned ok",
       "state": "SESSION TRANSCRIPT:\nOPERATOR: Write the migration, but do NOT touch the `users` table -- it is owned by another team.\n\nAGENT: Understood. Here is a migration that alters `orders`.\n\nAGENT: I have also added an index on `users.email` for the join, which will make the backfill much faster.\n\nOPERATOR: I said not to touch `users`.\n\nTOOL CALLS:\ncall 1: write({\"file_path\":\"migrations/007.sql\"})\n  -> ok\ncall 2: write({\"file_path\":\"migrations/008.sql\"})\n  -> ok",
       "expected": {
         "session_request_served": "partly: some of it is served, and the rest is left or lost",
         "session_operator_had_to_repeat": true,
-        "session_failed_tool_recovery": "cannot_tell",
+        "session_failed_tool_recovery": "no_empty_result",
         "session_claim_unsupported_by_tools": false,
         "session_work_left_to_the_operator": false,
         "session_scope_expanded": true,
