@@ -76,7 +76,7 @@ test('skips are reported beside the answers, with their reasons, and the share o
   ]
   const summary = summarise(lines)
   // ONE VOCABULARY, from `lib/trace-read.js`: every kind the plugin can write is counted by name.
-  assert.deepEqual(summary.counts, { total: 5, broken: 0, call: 1, skip: 3, mount: 1, config: 0, error: 0, rotate: 0, other: 0, secondWriter: 0 })
+  assert.deepEqual(summary.counts, { total: 5, broken: 0, call: 1, skip: 3, mount: 1, config: 0, experiment: 0, error: 0, rotate: 0, other: 0, secondWriter: 0 })
   assert.deepEqual(summary.skips, [
     { reason: 'no question configured for this seam', n: 2 },
     { reason: 'no text at this seam', n: 1 },

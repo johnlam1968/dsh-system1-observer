@@ -29,6 +29,7 @@ import { createEvaluateTool } from './lib/evaluate-tool.js'
 import { createResultsTool } from './lib/results-tool.js'
 import { labelHash } from './lib/label-hash.js'
 import { createQuestionsTool } from './lib/questions-tool.js'
+import { createBatteryTool } from './lib/battery-tool.js'
 import { createSessionsTool } from './lib/sessions-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
@@ -533,6 +534,22 @@ async function apply(ctx, config) {
       // SYSTEM1_SESSIONS: the agent-facing half of the session story. DSH gives an agent live peers and a plugin
       // the whole corpus; nothing let an agent NAME a stored session, which is why every historical read here was a
       // shell script. `list` finds one, `read` shows its content sliced exactly as an evaluation would slice it.
+      // SYSTEM1_BATTERY: the gate that tells a BETTER question from a DIFFERENT one (ROADMAP 13.5). Batteries live
+      // BESIDE the sets they judge, in the same directory, because a battery is written against a set and the design
+      // records its path on the set's own record -- and `listSets` excludes the battery files so the picker cannot
+      // offer one as a set nobody wrote. It spends model calls, so it refuses before it spends, and it writes an
+      // `experiment` line rather than a reading: an accuracy on five fabricated cases must not sit in a table of
+      // judgements about somebody's real conversation.
+      tools.register(createBatteryTool({
+        dir: () => setSettings(liveConfig()).dir,
+        setsDir: () => setSettings(liveConfig()).dir,
+        decide: (request, options) => decide(request, options),
+        record: (line) => {
+          const { event, ...fields } = line
+          evidence.trace(event, fields)
+        },
+        toolId: 'system1-observer',
+      }))
       tools.register(createSessionsTool({
         query: () => sessionQuery,
         settings: () => subjectSettings(liveConfig()),
