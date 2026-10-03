@@ -41,9 +41,11 @@ window.__ModuleLoader__.load({
     // the row sits in the profile, `include:<rowId>` when it arrives through the patch. Accept both.
     const NAMESPACES = ['system1-observer', 'include:system1-observer']
 
-    // THE FOUR FIELDS THE HOST ACCEPTS TODAY -- the `.volatile()` ones, so the only ones a save can
-    // write. The other seven are YAML-only; a write against one is refused with
-    // `Config field "x" is not volatile`, so they are deliberately absent. The third is `.min(1)`.
+    // SEVEN OF THE TWENTY-SIX FIELDS A SAVE CAN WRITE TODAY, and the number is worth stating because the sentence
+    // that stood here said four: the schema marks 26 `.volatile()`, this card renders these seven, and the other
+    // nineteen are reachable only through YAML until the panels in `docs/settings.md` §6 are built. One field --
+    // `tracePath` -- is mount-bound, and a write against it is refused with `Config field "x" is not volatile`,
+    // which is why §6 shows it read-only rather than omitting it.
     //
     // THE SCHEMA'S OWN DEFAULT, not a number invented here: `index.js` declares `maxFieldChars` with no
     // `.default()`, `lib/observe.js` falls back to 20000, and the README's table says 20000. This constant
