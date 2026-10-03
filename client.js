@@ -107,6 +107,10 @@ window.__ModuleLoader__.load({
         hint: 'Whether the record is scrubbed of credential-looking values before it is written.' },
       { panel: 'keep', field: 'redactKeys', kind: 'list', label: 'Extra field names to redact',
         hint: 'Comma-separated field names, added to the built-in list. Additions only: the built-in names cannot be removed.' },
+      // A REGEX CAN CONTAIN A COMMA (`{1,3}`), so this is `lines` and not `list`: one pattern per line, which is the
+      // only separator a regular expression cannot contain.
+      { panel: 'keep', field: 'redactPatterns', kind: 'lines', compile: 'regex', label: 'Extra redaction patterns',
+        hint: 'One regular expression per line, applied to the record AFTER the shipped rules. Additions only -- the built-in rules cannot be switched off. A pattern that does not compile is refused here and dropped at the point of use, never thrown.' },
       { panel: 'keep', field: 'pathMode', kind: 'select', choices: ['full', 'basename', 'omit'], fallback: 'full', label: 'Paths in the trace',
         hint: 'How much of an absolute path the TRACE keeps. It never touches what the model is asked.' },
       { panel: 'keep', field: 'redactSessionTelemetry', kind: 'switch', fallback: false, label: 'Redact session telemetry',
@@ -144,22 +148,42 @@ window.__ModuleLoader__.load({
         if (entry.kind === 'number') out[entry.field] = numberText(raw === undefined ? entry.fallback : raw)
         else if (entry.kind === 'switch') out[entry.field] = raw === undefined ? entry.fallback === true : raw === true
         else if (entry.kind === 'list' || entry.kind === 'multi') out[entry.field] = Array.isArray(raw) ? raw.slice() : []
+        // A `lines` FIELD DRAFTS AS TEXT: a textarea holds a string, and a regex can contain a comma, so the lines
+        // are the one separator that survives. The array comes back on save.
+        else if (entry.kind === 'lines') out[entry.field] = Array.isArray(raw) ? raw.join('\n') : ''
         else out[entry.field] = raw === undefined || raw === null ? '' : String(raw)
       }
       return out
     }
 
-    /** The ops for every table entry that moved. Scalars compare by value, lists by their canonical JSON. */
+    /** A `lines` draft is text on the way in and a list on the way out: one place does the conversion. */
+    function toLines(value) {
+      if (Array.isArray(value)) return value
+      if (typeof value !== 'string') return []
+      return value.split('\n').map((line) => line.trim()).filter((line) => line !== '')
+    }
+
+    function storedValue(entry, draftValue) {
+      if (entry.kind === 'number') return Number(draftValue)
+      if (entry.kind === 'lines') return toLines(draftValue)
+      return draftValue
+    }
+
+    /**
+     * The ops for every table entry that moved. Scalars compare by value, lists and `lines` by their canonical
+     * JSON -- and this is the ONLY comparison: a panel decides whether to open itself from the same function, so a
+     * panel cannot call itself clean while a save would write it.
+     */
     function tableOps(draftValues, currentValues) {
       const ops = []
       for (const entry of SETTINGS) {
-        const next = draftValues[entry.field]
-        const before = currentValues[entry.field]
+        const next = storedValue(entry, draftValues[entry.field])
+        const before = storedValue(entry, currentValues[entry.field])
         const moved = Array.isArray(next) || Array.isArray(before)
           ? JSON.stringify(next ?? null) !== JSON.stringify(before ?? null)
           : next !== before
         if (!moved) continue
-        ops.push({ op: 'set', path: [entry.field], value: entry.kind === 'number' ? Number(next) : next })
+        ops.push({ op: 'set', path: [entry.field], value: next })
       }
       return ops
     }
@@ -172,6 +196,17 @@ window.__ModuleLoader__.load({
     function tableProblems(draftValues) {
       const out = []
       for (const entry of SETTINGS) {
+        // A PATTERN THE LIBRARY WOULD DROP IS REFUSED HERE FIRST. `compilePatterns` drops and reports rather than
+        // throwing, because it sits in the path of every line -- but a person editing one should be told before
+        // they save, not left to find the reason on a line later.
+        if (entry.compile === 'regex') {
+          for (const line of toLines(draftValues[entry.field])) {
+            try { new RegExp(line, 'giu') } catch (error) {
+              out.push(entry.label + ': ' + (error instanceof Error ? error.message : String(error)))
+            }
+          }
+          continue
+        }
         if (entry.kind !== 'number') continue
         const text = String(draftValues[entry.field] ?? '').trim()
         const parsed = Number(text)
@@ -841,13 +876,10 @@ window.__ModuleLoader__.load({
         if (id === 'numbers') return ' \u2014 $' + draft.pricePerMTokInput + '/MTok, ' + draft.calibrationBins + ' bins, ' + draft.maxCompareLanes + ' lanes'
         return ''
       }
-      const movedSetting = (entry) => {
-        const next = draft[entry.field]
-        const before = current[entry.field]
-        return Array.isArray(next) || Array.isArray(before)
-          ? JSON.stringify(next ?? null) !== JSON.stringify(before ?? null)
-          : next !== before
-      }
+      // THE SAME COMPARISON THE SAVE USES. This was a second, hand-written comparator, and the two could disagree --
+      // which is how a panel comes to look clean while the Save button has work to do.
+      const movedFields = new Set(tableOps(draft, current).map((op) => op.path[0]))
+      const movedSetting = (entry) => movedFields.has(entry.field)
       // ONE PLACE RESOLVES `choices`, so a lazy entry and an eager one behave identically.
       const choicesOf = (entry) => (typeof entry.choices === 'function' ? entry.choices() : (entry.choices ?? []))
       const settingEl = (entry) => {
@@ -895,6 +927,12 @@ window.__ModuleLoader__.load({
               id: id + '-reset', type: 'button', disabled, title: 'restore the schema default',
               onClick: () => props.onReset(entry.field, numberText(entry.fallback)),
             }, 'reset'))
+        } else if (entry.kind === 'lines') {
+          control = h('textarea', {
+            id, name: entry.field, rows: 3, disabled, spellCheck: false, style: styles.rules,
+            value: typeof value === 'string' ? value : '',
+            onChange: (event) => props.onEdit(entry.field, event.currentTarget.value),
+          })
         } else if (entry.kind === 'longtext') {
           control = h('textarea', {
             id, name: entry.field, rows: 3, disabled, style: styles.rules, value: String(value ?? ''),

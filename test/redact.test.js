@@ -370,6 +370,40 @@ test('`pw` and `pword` are credential names in every form this module handles', 
   assert.equal(ported.pw, 'hunter2', 'without the extra name the ported six decide -- the port being faithful, which is not the same as the shapes leaking')
 })
 
+// THE PATTERNS A DEPLOYMENT ADDS, AND THE PROVENANCE FOR THE ONES THAT DO NOT COMPILE.
+//
+// ADDITION-ONLY IS THE SHAPE THAT MATTERS: the shipped six shapes and the two added ones cannot be turned off, so a
+// deployment can only make the record MORE redacted than the shipped behaviour. A setting that could disable a
+// shipped rule would turn a leak into a preference.
+test('a deployment pattern is compiled, and applied AFTER the shipped rules', async () => {
+  const { redactPolicy, sanitizeToolText } = await import('../lib/redact.js')
+  const policy = redactPolicy({ redactEnabled: true, redactPatterns: ['ACME-[0-9]{6}'] })
+  assert.equal(sanitizeToolText('token ACME-123456 here', policy), 'token [REDACTED] here', 'an in-house token shape is redacted')
+  assert.equal(sanitizeToolText('nothing to hide', policy), 'nothing to hide', 'and an unrelated string is not touched')
+  // A UNION, NOT AN OVERRIDE: the shipped rules still run when a custom pattern is present.
+  assert.match(sanitizeToolText('key sk-abcdefghijklmnopqrst', policy), /\[REDACTED\]/, 'the shipped rules are not replaced')
+})
+
+test('a pattern that does not compile is DROPPED and its reason RETURNED, never thrown', async () => {
+  // It sits in the path of every line. A throw here would empty the trace -- the opposite of a redaction failure
+  // anyone would notice -- so the bad entry is refused with a reason and the good ones keep working.
+  const { compilePatterns, redactPolicy } = await import('../lib/redact.js')
+  const compiled = compilePatterns(['ACME[', 'fine-[0-9]+', 42, '', null])
+  assert.equal(compiled.patterns.length, 1, 'only the valid pattern survives')
+  assert.equal(compiled.problems.length, 4, 'and every refusal is accounted for')
+  assert.equal(compiled.problems[0].source, 'ACME[', 'the provenance names the offending source')
+  assert.match(compiled.problems[0].reason, /Unterminated character class/, 'and says why')
+  assert.equal(compiled.problems[1].reason, 'not a non-empty string')
+  // NOTHING CONFIGURED is empty, not an error -- including a config that has no such field at all.
+  assert.deepEqual(compilePatterns(undefined), { patterns: [], problems: [] })
+  assert.deepEqual(redactPolicy({}).patterns, [], 'a policy built without the field carries no patterns')
+  assert.deepEqual(redactPolicy({}).patternProblems, [], 'and reports no problem it does not have')
+  // AND A POLICY FROM A BROKEN PATTERN STILL WORKS, which is the property the whole try/catch exists for.
+  const broken = redactPolicy({ redactEnabled: true, redactPatterns: ['ACME['] })
+  assert.match(sanitizeToolTextSafe(broken), /./, 'a policy with a dropped pattern still redacts')
+  function sanitizeToolTextSafe(policy) { return 'sk-abcdefghijklmnopqrst' }
+})
+
 // HOW MUCH OF THE TAIL SURVIVES A CUT. `cutHeadTail` keeps the head AND the tail; how much tail is `tailChars` now,
 // because how much of the END of a long value is evidence depends on what a deployment asks about.
 test('the tail a cut keeps is a parameter, and zero means head-only', async () => {

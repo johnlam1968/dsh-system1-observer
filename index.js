@@ -198,6 +198,9 @@ const Config = Schema.object({
   // THE RECORD'S OWN SWITCHES, all three volatile because all three must be live: a trace that had to be
   // restarted to stop leaking is a trace that leaks until somebody notices.
   redactEnabled: Schema.boolean().default(true).volatile().description('Redact the trace copy. ON by default, and it NEVER touches what the model is asked: `state` stays raw, because a model asked to classify `[REDACTED]` measures the scrubber. Off lets credential shapes through on purpose — truncation still applies, because a kill switch that also removed the size cap would be a foot-gun.'),
+  // PATTERNS, NOT KEYS: a key names a FIELD, a pattern matches TEXT, and a deployment with an in-house token format
+  // has the second problem. Addition-only, so this cannot switch off a shipped rule.
+  redactPatterns: Schema.array(Schema.string()).default([]).volatile().description('Extra regular expressions, as source strings, applied to the record AFTER the shipped rules. A pattern that does not compile is dropped and its reason reported, never thrown. Additions only: the built-in rules cannot be turned off.'),
   redactKeys: Schema.array(Schema.string()).default([]).volatile().description('Extra field names to redact, beside the six built in (key, token, secret, password, authorization, credential). Matched by the tokenizer, so `apiKey`, `api_key` and `API-KEY` all match `key` — and `monkey`, `keyboard` and `turkey` do not, because containment is deliberately not part of the rule.'),
   // THE RATE IS CONFIGURABLE, AND NAMED, AND DATED. Four sibling plugins hard-code the same number, and the one
   // that says why puts it best: two copies of a price drift. This is the fifth copy -- one, and named.
