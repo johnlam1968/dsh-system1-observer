@@ -5,9 +5,10 @@
 // implementation is silently wrong.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ABSTAIN_LABEL, PROBE_LABELS, SEAM_OF_LABEL, isProbeQuestion, probeAnswerOf, probeScore } from '../lib/probe-score.js'
+import { probeFingerprint, ABSTAIN_LABEL, PROBE_LABELS, SEAM_OF_LABEL, isProbeQuestion, probeAnswerOf, probeScore } from '../lib/probe-score.js'
 import { PROBE_QUESTION } from '../lib/seams.js'
 import { noul } from '../lib/model/questions.js'
+import { probeOf } from '../lib/questions.js'
 
 /** One `call` line as the observer writes it, with the probe asked under whatever id is given. */
 function callEvent(hook, answer, { qid = 'probe', question = PROBE_QUESTION, at = '2026-01-02T00:00:00.000Z' } = {}) {
@@ -15,6 +16,39 @@ function callEvent(hook, answer, { qid = 'probe', question = PROBE_QUESTION, at 
 }
 
 // --- the identity predicate, which is the whole reason this is not scored by seam or by id --------------
+test('the identity follows the INSTRUCTIONS, so a reworded probe is still the probe it was asked as', () => {
+  // THE ASYMMETRY IS THE CODE'S OWN, NOT A PREFERENCE: `probeFingerprint` hashes the instructions -- the instrument's
+  // identity -- while `isProbeQuestion` treats the CRITERIA as fixed, on the stated ground that a reworded criterion
+  // is the same instrument because only the labels decide what an answer means. So the question TEXT is configurable
+  // and the answer SET is not. Without the parameter below, a reworded row would have every call judged "not the
+  // probe" and dropped from every calibration, silently.
+  const mine = { ...PROBE_QUESTION, instructions: 'Which part of OUR loop produced this?' }
+  assert.equal(isProbeQuestion(mine), false, 'against the built-in, a reworded question is a different instrument')
+  assert.equal(isProbeQuestion(mine, mine.instructions), true, 'against its own row it is the probe')
+  assert.notEqual(probeFingerprint(mine.instructions), probeFingerprint(), 'and the mount hash says so')
+  assert.equal(probeFingerprint('same text'), probeFingerprint('same text'), 'the hash is a function of the text alone')
+  assert.deepEqual(Object.keys(mine.criteria), Object.keys(PROBE_QUESTION.criteria), 'the labels are unchanged')
+})
+
+test('probeOf takes the question from the config, and an empty one is a NAMED problem', () => {
+  assert.equal(probeOf({}).configured, false, 'nothing configured')
+  assert.equal(probeOf({}).question, PROBE_QUESTION, 'absent is the constant itself, by reference')
+  assert.equal(probeOf({}).problem, null, 'and that is not a problem')
+  // PRESENT BUT UNUSABLE IS NAMED, not silent: a row that quietly reverted to a question nobody chose is the failure
+  // this repository keeps refusing.
+  assert.equal(probeOf({ probeQuestion: '   ' }).problem, 'probeQuestion: an empty string; the built-in question is in force')
+  assert.equal(probeOf({ probeQuestion: '' }).configured, false)
+  const mine = probeOf({ probeQuestion: '  Which bit is this?  ' })
+  assert.equal(mine.configured, true)
+  assert.equal(mine.instructions, 'Which bit is this?', 'trimmed')
+  assert.equal(mine.question.type, 'choice', 'and still a choice question with the built-in answers')
+  // THE ANSWERS ARE KEPT WHOLE -- label, criterion text and the abstain label -- because only the INSTRUCTIONS are
+  // configurable. My first version asserted `criteria.unclear.abstain`, which does not exist: the criterion is its
+  // text, and the abstain marker belongs to the built question rather than to the criterion.
+  assert.equal(Object.hasOwn(mine.question.criteria, ABSTAIN_LABEL), true, 'the abstain label survives, which is what keeps the question well-posed')
+  assert.equal(mine.question.criteria.unclear, 'none of these fits the text', 'and the criterion text comes with it')
+})
+
 test('the probe is identified structurally, so the operator’s question is not mistaken for it', () => {
   assert.equal(isProbeQuestion(PROBE_QUESTION), true)
   // `lib/questions.js` builds a custom question under the SAME id as the probe, so an id check cannot work.
