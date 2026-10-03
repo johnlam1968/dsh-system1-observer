@@ -205,3 +205,32 @@ Of nine numbered items, only the ninth survived the truncation: **no criterion d
 (`lib/questions.js` validates question shapes but does not resolve `criteria` by reference). It also noted, in the
 part that survived, that the *already possible* pieces are the schema fields, the Act panel from §6, the live
 `system1Observer` reads, and the `config` event on the trace -- all of which exist today.
+
+## 8. The act layer's settings, as designed by MiniMax-M3 (table-only re-request)
+
+Recorded as received, because a design from an independent reader is evidence about the plan rather than about the
+code. It read `ROADMAP.md` §9-§11 closely enough to cite §9.1-§9.7, §10.2-§10.3 and §11.1 by number.
+
+| setting | decides | control | live? | why a setting |
+|---|---|---|---|---|
+| `actEnabled` | whether the act row is on at all -- distinct from the observer's `callsEnabled` | row-level toggle | yes | §9.1/§9.4: ships off; record off must not imply injection off |
+| `actInjectEnabled` | whether the row writes into the prompt context, or stays in shadow mode | checkbox, default off | yes | §9.4: first release injects nothing; shadow mode is the acceptance gate |
+| `actForbiddenCapabilities` | which side effects the row may take -- a subset of `prompt-section` | multi-select | **no, mount-bound** | §9.2: "informs, does not decide" is a contract, not a preference |
+| `actTriggerHooks` | at which seam firings the row composes `X` and runs `S` | multi-select of seams, default `admit` | yes | §9.2 reads `admit`; §10.2 adds the turn boundary |
+| `xSpec` | the assembly of `X`: source, roles, window | structured editor | yes | §9.6 promotes `X` from a constant to a value |
+| `xBudgetMaxChars` | the hard ceiling on `X` before it is sent | numeric, default 8000 | yes | §9.6/§9.7: `X` is paid per call, and its truncation must be recorded |
+| `sSetSelector` | which question-set artifact `S` is used | picker over the sets, version-pinned | yes | §9.5/§10.3: sets are content-hashed artifacts |
+| `sSubjectMatch` | how a set's `appliesTo` is matched against the trace's `subject` | rule editor | yes | §11.1: a 3B and a frontier model need different sets |
+| `actInjectThreshold` | the band on the reading at which injection happens | two numerics, default 0.7 / 0.10 | yes | §9.4/§10.2: bands, not bars; the middle band is a real state |
+| `actOnUnsure` | what happens in the middle band or on no answer | choice: `record-only` / `inject-nudge-template` / `skip` | yes | §9.4/§10.2: an operator asks this first |
+| `xRedactPolicy` | which redaction applies to `X` | keys + patterns | yes | §9.6: `X` leaves the machine, so a constant here is a constant leak |
+| `actCallBudgetPerSession` | the ceiling on judge calls per session | numeric with reset | yes | §9.6: a per-session cap is what stops the row compounding |
+
+**Skipped as constants, correctly:** the `turn` hook label, the `xId`/`xHash` field shape (provenance travels with
+the line), the shadow default at first release (release policy), the deny-list defaults, and the model client path.
+
+**What I would change, and why.** `xRedactPolicy` duplicates `redactKeys` and `pathMode`. The rule this repository
+runs on is one home per fact, and `X` is composed from the same trace the observer already redacts -- so unless a
+deployment genuinely needs a *different* posture for outbound `X`, the act row should read the existing redaction
+settings and the design should say so, rather than shipping a second place to configure the same decision. If it
+does need its own, that is an argument to record, not a field to add quietly.
