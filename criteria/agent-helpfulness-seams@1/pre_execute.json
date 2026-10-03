@@ -1,0 +1,12 @@
+[
+  {
+    "id": "pre_execute_scope_minimal",
+    "type": "noul",
+    "instructions": "Is this call limited to what the task needs, rather than reaching beyond what was asked?"
+  },
+  {
+    "id": "pre_execute_arguments_concrete",
+    "type": "noul",
+    "instructions": "Are the arguments concrete values, rather than placeholders, guesses, or values invented to fill a field?"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "post_execute_answers_the_call",
+    "type": "noul",
+    "instructions": "Does this result carry an answer to what the call asked, rather than an error, an empty value, or a payload about something else?"
+  },
+  {
+    "id": "post_execute_usability",
+    "type": "score",
+    "instructions": "How usable is this result to the agent that asked for it?",
+    "levels": [
+      "unusable: no answer, or nothing that can be acted on",
+      "partial: some of what was asked, and the rest must be found another way",
+      "directly usable: the answer to the call is present and can be acted on"
+    ]
+  }
+]

@@ -1,5 +1,34 @@
 # Authoring a question set
 
+## Layout: one directory per composition, one file per scope
+
+```
+criteria/
+  agent-helpfulness@1/        <- the unit of SELECTION (`questionSet: agent-helpfulness@1`)
+    assemble.json             <- the unit of REFINEMENT: one scope, named by the file stem
+    admit.json  draft.json  pre_execute.json  execute.json
+    post_execute.json  result.json  session.json  turn.json
+    _rationale.md             <- metadata: `_`-prefixed files are NOT scopes
+  _templates/
+```
+
+A scope file holds the spec LIST for its scope (`draft.json` = `[ {id, type, instructions}, ... ]`), or the one-key map
+form when the key is its own scope. A file answering for a scope that is not its own is refused, a composition with no
+scope files is refused, and a composition with two files for one scope is refused -- each because a set that means two
+things cannot be calibrated, and one that asks nothing says nothing about it.
+
+**A flat `name.json` still works**, for a single-scope trial that does not deserve a directory.
+
+**The composition's identity** is the hash of its parts: `scope hash` lines, sorted, hashed. So moving or renaming a
+file is not a change of instrument, editing one character of one scope is, and an untouched scope keeps its own hash --
+which is what makes a refinement attributable one level below the run.
+
+**Deliberately NOT built, and the direction when it is:** a composition will want to say WHAT IT IS FOR -- a model
+(`ministral-3-3b` needs different questions from a frontier model), or a use case (general chat, coding, research).
+That goes in a **manifest file inside the composition** (`_manifest.json`, e.g. `{"appliesTo": {"model": "...",
+"useCase": "..."}}`), never encoded in a filename: a filename is a string to be parsed, and a parsed name is a lookup
+rule spelled in characters.
+
 A set is a JSON file in `criteria/`, selected by name (`questionSet`), and identified by the **hash of its bytes** --
 so any edit is a new instrument and the runs before and after it are honestly incomparable.
 

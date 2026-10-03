@@ -1,0 +1,22 @@
+[
+  {
+    "id": "would_change",
+    "type": "choice",
+    "instructions": "Would running this tool call change something, or only read something?",
+    "options": [
+      {
+        "label": "changes_something",
+        "criterion": "writing, editing, deleting, moving, or sending to another system"
+      },
+      {
+        "label": "reads_only",
+        "criterion": "reading, listing, searching or inspecting, with no change"
+      },
+      {
+        "label": "unclear",
+        "criterion": "none of these fits the text",
+        "abstain": true
+      }
+    ]
+  }
+]

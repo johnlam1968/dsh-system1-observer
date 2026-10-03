@@ -1,0 +1,31 @@
+[
+  {
+    "id": "draft_states_a_checkable_goal",
+    "type": "choice",
+    "instructions": "Does the request about to be sent state a goal a reader could check the work against, rather than only naming a topic?",
+    "options": [
+      {
+        "label": "checkable_goal",
+        "criterion": "the wanted result is identifiable from the text itself"
+      },
+      {
+        "label": "topic_only",
+        "criterion": "it names a subject to look at, with no result to check against"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the text does not show enough to judge",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "draft_concise",
+    "type": "noul",
+    "instructions": "Is the request about to be sent concise enough to act on without further unpacking?",
+    "criteria": {
+      "true": "is short, scoped, and directly actionable",
+      "false": "is bloated, rambling, or padded with irrelevant content"
+    }
+  }
+]

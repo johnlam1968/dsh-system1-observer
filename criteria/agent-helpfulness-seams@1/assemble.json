@@ -1,0 +1,12 @@
+[
+  {
+    "id": "assemble_says_what_to_do",
+    "type": "noul",
+    "instructions": "Does this text tell the agent what to DO, in a way that can be acted on, rather than only describing a situation?"
+  },
+  {
+    "id": "assemble_limit_is_explicit",
+    "type": "noul",
+    "instructions": "Does it state at least one explicit limit or requirement (what must hold, or what must not happen) rather than leaving it implicit?"
+  }
+]

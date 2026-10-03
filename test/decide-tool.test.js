@@ -1,6 +1,6 @@
 // THE TOOL THE REPOSITORY EXPOSES. The interesting property is not that it calls a model -- it is that it takes
 // the SAME shape the observer is configured with, so a set file is handed over with no conversion. One test below
-// passes the real criteria/helpfulness-set@2.json straight in, which is the only way to show that.
+// passes the real criteria/helpfulness-set@2/turn.json straight in, which is the only way to show that.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -23,12 +23,13 @@ test('the definition is the shape the registry requires', () => {
 })
 
 test('a set file is passed as it is written, with no conversion', async () => {
-  const set = JSON.parse(readFileSync(new URL('../criteria/helpfulness-set@2.json', import.meta.url), 'utf8'))
+  // A SCOPE FILE HOLDS ITS OWN SPEC LIST, so the file IS the question array -- no key to unwrap.
+  const set = JSON.parse(readFileSync(new URL('../criteria/helpfulness-set@2/turn.json', import.meta.url), 'utf8'))
   const { calls, decide } = stub({ kind: 'answers', answers: { request_addressed: { status: 'ok' } }, envelope: { executed: { provider: 'typesafe' } } })
   const tool = createDecideTool({ decide })
-  const out = await tool.execute({ state: 'OPERATOR REQUEST: find plugins', questions: set.turn })
+  const out = await tool.execute({ state: 'OPERATOR REQUEST: find plugins', questions: set })
   assert.equal(calls.length, 1)
-  assert.deepEqual(Object.keys(calls[0].questions).sort(), set.turn.map((q) => q.id).sort(), 'every id in the file reaches the model')
+  assert.deepEqual(Object.keys(calls[0].questions).sort(), set.map((q) => q.id).sort(), 'every id in the file reaches the model')
   assert.equal(calls[0].state, 'OPERATOR REQUEST: find plugins')
   assert.deepEqual(out.executed, { provider: 'typesafe' })
 })

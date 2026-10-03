@@ -1,0 +1,26 @@
+[
+  {
+    "id": "reply_kind",
+    "type": "choice",
+    "instructions": "Is the model's own output an answer for the operator, a request to run a tool, or a statement that it cannot proceed?",
+    "options": [
+      {
+        "label": "an_answer",
+        "criterion": "prose the operator is meant to read"
+      },
+      {
+        "label": "a_tool_call",
+        "criterion": "a request to run a tool, with its arguments"
+      },
+      {
+        "label": "declining",
+        "criterion": "a statement that it cannot or will not proceed"
+      },
+      {
+        "label": "unclear",
+        "criterion": "none of these fits the text",
+        "abstain": true
+      }
+    ]
+  }
+]

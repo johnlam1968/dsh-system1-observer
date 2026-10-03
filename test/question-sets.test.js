@@ -44,7 +44,7 @@ test('every way a set can be unusable is a NAMED problem, and none of them throw
   assert.match(String(readSetFile(join(dir, 'shape.json')).problem), /is not an object of seams/)
   assert.match(String(readSetFile(join(dir, 'missing.json')).problem), /cannot read/)
   // NOTHING CONFIGURED IS NOT A FAILURE: an unset name means the inline questions, which is what every row does today.
-  assert.deepEqual(readSelectedSet('', ''), { questions: null, hash: '', path: '', problem: null, selected: false })
+  assert.deepEqual(readSelectedSet('', ''), { questions: null, hash: '', path: '', scopes: {}, problem: null, selected: false })
   // BUT A SET SELECTED WITH NOWHERE TO LOOK IS NAMED, because that row expects questions it will not get.
   assert.match(String(readSelectedSet('', 'house').problem), /no `questionSetsDir` is configured/)
   assert.match(String(readSelectedSet(dir, 'absent').problem), /cannot read/)
@@ -79,7 +79,12 @@ test('a directory that is missing or is not a directory is a named problem', () 
   // AND A FILE'S PARENT THAT EXISTS BUT HOLDS NO SETS IS AN EMPTY LIST, not a problem.
   const empty = mkdtempSync(join(tmpdir(), 'sets-empty-'))
   mkdirSync(join(empty, 'sub'))
-  assert.deepEqual(listSets(empty), { sets: [], problem: null })
+  // AN EMPTY DIRECTORY IS NOW A COMPOSITION, and a composition with no scope files is a NAMED PROBLEM rather than a
+  // set that asks nothing: selecting it would measure nothing at every seam and say nothing about it.
+  const listedEmpty = listSets(empty)
+  assert.equal(listedEmpty.problem, null)
+  assert.equal(listedEmpty.sets.length, 1)
+  assert.match(String(listedEmpty.sets[0].problem), /no scope files/)
 })
 
 test('the settings are read live, in the volatile accessor shape a running row passes', () => {
@@ -112,4 +117,52 @@ test('EVERY shipped set compiles clean for every scope it keys, and names only d
     }
   }
   assert.deepEqual(failures, [], 'a shipped set that does not compile is one the row refuses: ' + failures.join(' | '))
+})
+
+test('a COMPOSITION is one directory, one file per scope, and its hash is its parts', () => {
+  // The shape the operator chose: the scope name is the file stem -- spelled once, in the one place a reader looks --
+  // and `_`-prefixed files are metadata rather than scopes, which is where a manifest naming a model or a use case
+  // will go WITHOUT encoding anything in a filename.
+  const dir = mkdtempSync(join(tmpdir(), 'sets-comp-'))
+  mkdirSync(join(dir, 'house'))
+  writeFileSync(join(dir, 'house', 'draft.json'), JSON.stringify([{ id: 'draft_stands_alone', type: 'noul', instructions: 'standalone?' }]))
+  // the one-key map form is accepted when the key IS the file's own scope
+  writeFileSync(join(dir, 'house', 'result.json'), JSON.stringify({ result: [{ id: 'result_kept', type: 'noul', instructions: 'kept?' }] }))
+  writeFileSync(join(dir, 'house', '_rationale.md'), 'not a scope')
+  writeFileSync(join(dir, 'house', '_manifest.json'), JSON.stringify({ appliesTo: { model: 'ministral-3-3b' } }))
+
+  const listed = listSets(dir)
+  assert.equal(listed.problem, null)
+  assert.deepEqual(listed.sets.map((set) => set.name), ['house'])
+  const house = listed.sets[0]
+  assert.equal(house.kind, 'composition')
+  assert.deepEqual(house.seams, ['draft', 'result'], 'the scopes, sorted, and neither metadata file')
+  assert.deepEqual(Object.keys(house.scopeHashes).sort(), ['draft', 'result'])
+  assert.equal(house.hash.length, 12)
+
+  const selected = readSelectedSet(dir, 'house')
+  assert.equal(selected.problem, null)
+  assert.deepEqual(Object.keys(selected.questions).sort(), ['draft', 'result'])
+  assert.deepEqual(selected.questions.draft[0].id, 'draft_stands_alone')
+  assert.equal(selected.hash, house.hash, 'the composition hash is the same however it is reached')
+
+  // EDITING ONE SCOPE CHANGES THE COMPOSITION, because it is a different instrument -- and the UNTOUCHED scope keeps
+  // its own hash, which is what makes a refinement attributable one level finer than the run.
+  writeFileSync(join(dir, 'house', 'draft.json'), JSON.stringify([{ id: 'draft_stands_alone', type: 'noul', instructions: 'standalone, really?' }]))
+  const after = readSelectedSet(dir, 'house')
+  assert.notEqual(after.hash, selected.hash, 'an edited scope is a new composition')
+  assert.equal(after.scopes.result, selected.scopes.result, 'and the scope beside it is unchanged, hash and all')
+
+  // A FILE ANSWERING FOR A SCOPE THAT IS NOT ITS OWN IS REFUSED, because a set that means two things cannot be
+  // calibrated.
+  writeFileSync(join(dir, 'house', 'execute.json'), JSON.stringify({ result: [{ id: 'x', type: 'noul', instructions: 'y' }] }))
+  assert.match(String(readSelectedSet(dir, 'house').problem), /must hold a list of specs, or a single key "execute"/)
+})
+
+test('a FLAT single-scope file still works, because a trial does not need a directory', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sets-flat-'))
+  writeFileSync(join(dir, 'one-off.json'), JSON.stringify({ turn: [{ id: 'x', type: 'noul', instructions: 'y' }] }))
+  const listed = listSets(dir)
+  assert.deepEqual(listed.sets.map((set) => [set.name, set.kind]), [['one-off', 'file']])
+  assert.deepEqual(Object.keys(readSelectedSet(dir, 'one-off').questions), ['turn'])
 })

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "assemble_prompt_focused_on_task",
+    "type": "score",
+    "instructions": "Rate whether the system prompt text composed here is focused on the user's task rather than on irrelevant instructions, filler, or off-topic framing. Higher = more tightly focused on the task at hand.",
+    "levels": [
+      "off_task_or_unfocused",
+      "mixed_focus",
+      "task_focused"
+    ]
+  },
+  {
+    "id": "assemble_prompt_is_concrete",
+    "type": "choice",
+    "instructions": "Does this text name concrete specifics (files, symbols, values, behaviours) rather than reading as generic boilerplate?",
+    "options": [
+      {
+        "label": "names_concrete_specifics",
+        "criterion": "points at something identifiable in this system"
+      },
+      {
+        "label": "generic_boilerplate",
+        "criterion": "reads as a stock text with no concrete reference"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the text does not show enough to judge",
+        "abstain": true
+      }
+    ]
+  }
+]

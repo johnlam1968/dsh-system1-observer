@@ -1,0 +1,26 @@
+[
+  {
+    "id": "message_kind",
+    "type": "choice",
+    "instructions": "Is the operator's message asking the agent to do something, or giving it information?",
+    "options": [
+      {
+        "label": "asking_for_action",
+        "criterion": "a request or an instruction to do something"
+      },
+      {
+        "label": "giving_information",
+        "criterion": "context, a statement or a description, with nothing to do"
+      },
+      {
+        "label": "both",
+        "criterion": "a request and information in the same message"
+      },
+      {
+        "label": "unclear",
+        "criterion": "none of these fits the text",
+        "abstain": true
+      }
+    ]
+  }
+]

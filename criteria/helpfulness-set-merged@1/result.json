@@ -1,0 +1,22 @@
+[
+  {
+    "id": "outcome",
+    "type": "choice",
+    "instructions": "Did the tool report that it succeeded, or that it failed?",
+    "options": [
+      {
+        "label": "reported_success",
+        "criterion": "a result, with no error or failure reported"
+      },
+      {
+        "label": "reported_failure",
+        "criterion": "an error, a refusal, a non-zero exit or an explicit failure"
+      },
+      {
+        "label": "unclear",
+        "criterion": "none of these fits the text",
+        "abstain": true
+      }
+    ]
+  }
+]

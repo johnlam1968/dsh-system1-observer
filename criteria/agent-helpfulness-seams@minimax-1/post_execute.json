@@ -1,0 +1,32 @@
+[
+  {
+    "id": "post_execute_result_usable",
+    "type": "score",
+    "instructions": "Rate whether the tool result just returned contains the information needed to make progress on the task. Higher = result is complete, structured, and directly usable.",
+    "levels": [
+      "unusable_or_truncated",
+      "partially_useable",
+      "complete_and_usable"
+    ]
+  },
+  {
+    "id": "post_execute_result_indicates_failure",
+    "type": "choice",
+    "instructions": "Does the tool result just returned indicate that the call failed or returned an error rather than success?",
+    "options": [
+      {
+        "label": "error_or_failure",
+        "criterion": "result reports an error, fault, or non-success"
+      },
+      {
+        "label": "success",
+        "criterion": "result reports normal success"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the state does not show enough to judge",
+        "abstain": true
+      }
+    ]
+  }
+]

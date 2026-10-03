@@ -1,0 +1,12 @@
+[
+  {
+    "id": "result_keeps_the_specifics",
+    "type": "noul",
+    "instructions": "Does this recorded text keep the specific values a later reader needs (names, numbers, paths), rather than only a summary of them?"
+  },
+  {
+    "id": "result_failure_is_visible",
+    "type": "noul",
+    "instructions": "If anything failed, is that visible in this text rather than absent or implied?"
+  }
+]

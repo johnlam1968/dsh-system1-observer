@@ -1,0 +1,21 @@
+[
+  {
+    "id": "result_record_grounded",
+    "type": "noul",
+    "instructions": "Does the tool result written to the record accurately reflect what the tool returned, without invented or fabricated content?",
+    "criteria": {
+      "true": "the record is a faithful restatement of the tool output",
+      "false": "the record adds claims not in the tool output"
+    }
+  },
+  {
+    "id": "result_record_summarises_usefully",
+    "type": "score",
+    "instructions": "Rate whether the tool result written to the record is summarised usefully for the next step, rather than dumped in or omitted. Higher = useful, condensed, and actionable summary.",
+    "levels": [
+      "raw_dump_or_omitted",
+      "partially_summarised",
+      "useful_summary"
+    ]
+  }
+]

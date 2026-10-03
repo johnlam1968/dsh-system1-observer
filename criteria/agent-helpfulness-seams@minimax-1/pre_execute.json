@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pre_execute_arguments_match_tool",
+    "type": "choice",
+    "instructions": "Do the arguments of this call match the tool being called -- the fields and value kinds it expects -- rather than looking mismatched to it?",
+    "options": [
+      {
+        "label": "arguments_match",
+        "criterion": "the values fit the tool's own parameters"
+      },
+      {
+        "label": "mismatched",
+        "criterion": "a value or field does not fit what the tool takes"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the text does not show enough to judge",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "pre_execute_call_well_formed",
+    "type": "score",
+    "instructions": "Rate whether the tool call about to be made has arguments that are correctly typed and specific enough to be useful. Higher = arguments are specific, well-typed, and unambiguous.",
+    "levels": [
+      "malformed_or_vague",
+      "partially_specific",
+      "specific_and_well_typed"
+    ]
+  }
+]

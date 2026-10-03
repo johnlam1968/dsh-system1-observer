@@ -1,0 +1,75 @@
+[
+  {
+    "id": "session_request_served",
+    "type": "score",
+    "instructions": "By the end of SESSION TRANSCRIPT, how far was the operator's opening request actually served?",
+    "levels": [
+      "no: the request is not served; the outcome is something else",
+      "partly: some of it is served, and the rest is left or lost",
+      "yes: the request is served, and the transcript shows it"
+    ]
+  },
+  {
+    "id": "session_operator_had_to_repeat",
+    "type": "noul",
+    "instructions": "Does the operator have to restate the request or correct the agent at any point?"
+  },
+  {
+    "id": "session_failed_tool_recovery",
+    "type": "choice",
+    "instructions": "If a lookup in TOOL CALLS returned nothing usable, what did the agent do next?",
+    "options": [
+      {
+        "label": "retried_differently",
+        "criterion": "a later call uses a different query, target or approach"
+      },
+      {
+        "label": "retried_the_same",
+        "criterion": "the only later attempt repeats the query or a trivial rewording of it"
+      },
+      {
+        "label": "answered_anyway",
+        "criterion": "no later attempt appears; the agent answered without the evidence"
+      },
+      {
+        "label": "no_empty_result",
+        "criterion": "no lookup in TOOL CALLS returned nothing usable"
+      },
+      {
+        "label": "cannot_tell",
+        "criterion": "the transcript (or message) does not show enough to answer",
+        "abstain": true
+      }
+    ]
+  },
+  {
+    "id": "session_claim_unsupported_by_tools",
+    "type": "noul",
+    "instructions": "Does the final answer assert anything that the tool results in the transcript do not support?"
+  },
+  {
+    "id": "session_work_left_to_the_operator",
+    "type": "noul",
+    "instructions": "Does the transcript end by handing work back to the operator that the agent could have done itself?"
+  },
+  {
+    "id": "session_scope_expanded",
+    "type": "noul",
+    "instructions": "Does the agent do work beyond what was asked, that the operator did not request?"
+  },
+  {
+    "id": "session_context_dropped",
+    "type": "noul",
+    "instructions": "Does the transcript drop context the operator supplied earlier, so a later turn forgets or contradicts it?"
+  },
+  {
+    "id": "session_outcome_reusable",
+    "type": "score",
+    "instructions": "Could a reader act on the final outcome without redoing any of the work?",
+    "levels": [
+      "no: the outcome cannot be used as it stands",
+      "with effort: usable, but a reader must reconstruct or verify something first",
+      "yes: the outcome can be used as it stands"
+    ]
+  }
+]

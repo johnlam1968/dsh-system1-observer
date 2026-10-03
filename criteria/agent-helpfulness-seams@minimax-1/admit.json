@@ -1,0 +1,21 @@
+[
+  {
+    "id": "admit_request_understood",
+    "type": "score",
+    "instructions": "Rate whether the operator's message clearly states what is being asked, with enough specificity that the next step is identifiable. Higher = clearer and more specific.",
+    "levels": [
+      "vague_or_unclear",
+      "partially_specific",
+      "clear_and_specific"
+    ]
+  },
+  {
+    "id": "admit_request_in_scope",
+    "type": "noul",
+    "instructions": "Is the operator's message a substantive request that an agent could act on, as opposed to a greeting, an acknowledgement, or a test ping?",
+    "criteria": {
+      "true": "states a concrete task or question to address",
+      "false": "is a greeting, ack, or empty"
+    }
+  }
+]

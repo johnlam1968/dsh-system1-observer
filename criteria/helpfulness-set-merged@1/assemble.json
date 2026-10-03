@@ -1,0 +1,26 @@
+[
+  {
+    "id": "prompt_role",
+    "type": "choice",
+    "instructions": "Does this part of the system prompt tell the model how to behave, or only give it information?",
+    "options": [
+      {
+        "label": "tells_it_how_to_behave",
+        "criterion": "an instruction about what the model should do or how it should answer"
+      },
+      {
+        "label": "only_information",
+        "criterion": "facts, context or a record, with no instruction about behaviour"
+      },
+      {
+        "label": "both",
+        "criterion": "a behavioural instruction and information in the same text"
+      },
+      {
+        "label": "unclear",
+        "criterion": "none of these fits the text",
+        "abstain": true
+      }
+    ]
+  }
+]
