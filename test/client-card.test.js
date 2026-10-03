@@ -612,6 +612,42 @@ test('EVERY volatile setting has a control, and the panels that group them all e
   }
 })
 
+test('EVERY card fallback equals the SCHEMA default -- one home per number, checked', async () => {
+  // The card cannot import `lib/`, and the host does not project a schema default, so a fallback IS a literal in this
+  // file. This is what keeps a literal honest. It is the check that O14's fix produced, and the moment it ran it found
+  // three settings whose reset buttons restored values the running row never uses -- 2000/50/20 against the schema's
+  // 4000/200/4 -- which is the SAME defect the card's own comment records for `maxFieldChars` ("this constant said
+  // 4096, so the reset button silently restored a value the host never uses").
+  const { readFileSync } = await import('node:fs')
+  // THE SCHEMA, IMPORTED HERE: this file deliberately does not import the plugin at the top, because the card is a
+  // browser half and the test drives it through a stubbed module table. `Config` comes in where it is used.
+  const { Config } = await import('../index.js')
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  // ENTRIES ARE SPLIT ON THE TABLE'S OWN DELIMITER, not matched with a regex that spans them: a `[\s\S]{0,300}?`
+  // pattern reached into the NEXT entry and reported `model` (a text field with no fallback) as a mismatch.
+  const chunks = source.split("{ panel: '").slice(1)
+  const entries = chunks.map((chunk) => ({
+    field: /field: '([a-zA-Z]+)'/.exec(chunk)?.[1],
+    fallback: /fallback: ([^,}\n]+)/.exec(chunk)?.[1],
+  })).filter((entry) => entry.field !== undefined)
+  assert.ok(entries.length >= 20, 'the table was found: ' + entries.length + ' entries')
+  const withFallback = entries.filter((entry) => entry.fallback !== undefined)
+  assert.ok(withFallback.length >= 10, 'entries with a fallback: ' + withFallback.length)
+  const wrong = []
+  for (const { field, fallback } of withFallback) {
+    const expected = Config.dict[field]?.meta?.default
+    if (expected === undefined) {
+      wrong.push(field + ' has a card fallback while the schema declares no default')
+      continue
+    }
+    const shown = fallback.trim().replace(/^'|'$/g, '')
+    if (String(shown) !== String(expected)) {
+      wrong.push(field + ': the card resets to ' + fallback.trim() + ' while the schema says ' + JSON.stringify(expected))
+    }
+  }
+  assert.deepEqual(wrong, [], 'the card and the schema disagree about a default: ' + wrong.join(' | '))
+})
+
 test('a setting in the Numbers panel renders and saves as a NUMBER, fractional rates included', async () => {
   // The fractional case is not decoration: the first version of the table demanded a whole number from every numeric
   // field, so the price (0.042) failed validation and the card refused to save ANYTHING -- including fields beside

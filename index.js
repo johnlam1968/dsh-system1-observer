@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
+import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { FIREABLE_HOOKS, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
@@ -93,7 +94,9 @@ const Config = Schema.object({
     .volatile(),
   provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row.').volatile(),
   model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row.').volatile(),
-  timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
+  // THE DECLARED DEFAULT, which the field never had: the row fell back to `?? 8000` and the model layer
+  // defaulted to 5000, so an unset field meant one thing to the schema and another to the call.
+  timeoutMs: Schema.number().min(0).default(DEFAULT_TIMEOUT_MS).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND, AND NOT FOR STYLE. This text IS the instrument's identity (`probeFingerprint` hashes it) and the
   // hash is written on the MOUNT line, so a value that changed mid-run would leave calls scored under one question
@@ -231,7 +234,10 @@ const Config = Schema.object({
   // wrong judgement is diagnosable -- and 56% of its call lines carry a path. The record is minimised; the model
   // still receives the raw text.
   pathMode: Schema.union(['full', 'basename', 'omit']).default('full').volatile().description('How much of an absolute path the TRACE keeps: `full`, `basename`, or `omit` (replaced with [PATH]). It never touches what the model is asked. Default `full`, because this trace is local evidence and a path is often the diagnosis; set `basename` or `omit` if you share the file.'),
-  redactSessionTelemetry: Schema.boolean().volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
+  // THE DEFAULT IS DECLARED BECAUSE THE CODE HAS ONE: `index.js` reads this as `=== true`, so absent means off.
+  // A field whose effective default lives only in a reader is a field whose schema is not the whole truth -- which is
+  // what the card/schema check found, one step after O14.
+  redactSessionTelemetry: Schema.boolean().default(false).volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
   maxQuestionChars: Schema.number().default(4000).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to 4000.'),
   pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
   // HOW MANY RUNS A COMPARISON MAY SHOW. A reading decision, not a rendering detail: the comparison places runs
@@ -308,7 +314,7 @@ async function apply(ctx, config) {
   const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
   const wire = () => createModel({
     baseUrl: readConfigValue(liveConfig().wireUrl) || 'http://127.0.0.1:8766',
-    timeoutMs: readConfigValue(liveConfig().timeoutMs) ?? 8000,
+    timeoutMs: readConfigValue(liveConfig().timeoutMs) ?? DEFAULT_TIMEOUT_MS,
   })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
   // site working across the two transports; assigning the client itself to `decide` made every call throw
