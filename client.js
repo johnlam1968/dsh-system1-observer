@@ -54,6 +54,9 @@ window.__ModuleLoader__.load({
     // THE WIRE TOOL NAME, restated because the browser half cannot import `lib/tool.js`. A mismatch is silent:
     // the seat renders the generic row and nothing says why.
     const TRACE_TOOL_NAME = 'system1_trace'
+    // THE WHOLE-CONVERSATION TOOL'S NAME, restated for the same reason: the seat key must match `lib/evaluate-tool.js`
+    // exactly, and a typo never renders. `test/client-card.test.js` pins both names to their modules.
+    const EVALUATE_TOOL_NAME = 'system1_evaluate'
 
     // ---------------------------------------------------------------------------------------------
     // THE SETTINGS THE CARD OWNS, IN ONE TABLE.
@@ -1700,6 +1703,75 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // THE EVALUATION CARD, in the conversation. Same seat, same contract, same fallback: a keyed
+    // `tool.call.toolview` entry REPLACES the generic row, so a component that throws takes the row with
+    // it -- which is why the body is wrapped exactly as the trace card's is.
+    // ---------------------------------------------------------------------------------------------
+    function evaluateCardBody(props) {
+      const { phase, block } = props
+      if (phase !== 'result') {
+        return h('div', { style: styles.card }, h('span', { style: styles.dim }, 'Evaluating the conversation\u2026'))
+      }
+      const data = block !== null && block !== undefined && block.meta !== null && typeof block.meta === 'object'
+        ? block.meta
+        : null
+      if (data === null) {
+        // NO STRUCTURED PROJECTION FROM THIS HOST: the text the model saw is the same judgement, shown as it is.
+        const content = Array.isArray(block?.content) ? block.content : []
+        const text = content.filter(part => part?.type === 'text' && typeof part.text === 'string')
+          .map(part => part.text).join('\n')
+        return h('div', { style: styles.card },
+          h('span', { style: styles.dim }, 'The conversation evaluation (no structured projection from this host):'),
+          h('pre', { style: Object.assign({}, styles.mono, { margin: 0, whiteSpace: 'pre-wrap', maxHeight: '420px', overflow: 'auto' }) }, text),
+        )
+      }
+      const subject = data.subject ?? {}
+      const judged = subject.source === 'live'
+        ? 'the live session'
+        : `stored ${subject.sessionId === '' ? '(none selected)' : subject.sessionId}`
+      const slice = `${subject.messages ?? 0} of ${subject.total ?? 0} message(s)`
+        + (Array.isArray(subject.kinds) && subject.kinds.length > 0 ? ' \u00b7 ' + subject.kinds.join(', ') : '')
+        + (subject.lastMessages > 0 ? ' \u00b7 newest ' + subject.lastMessages : '')
+      const answers = Object.entries(data.answers ?? {}).map(([id, answer]) => {
+        const record = answer !== null && typeof answer === 'object' ? answer : {}
+        const label = record.label ?? record.level ?? '(no label)'
+        const confidence = typeof record.confidence === 'number' ? ' ' + record.confidence : ''
+        return h('span', { key: id, style: styles.chip }, `${id}: ${String(label)}${confidence}`)
+      })
+      return h('div', { style: styles.card },
+        h('div', { style: styles.cardHead },
+          h('h4', { style: styles.cardTitle }, 'System One \u00b7 conversation evaluation'),
+          data.failure === undefined
+            ? h('span', { style: styles.chip }, 'answered')
+            : h('span', { style: styles.chipOff }, 'no answer'),
+        ),
+        h('div', { style: styles.strip },
+          h('span', null, h('strong', null, 'subject: '), judged),
+          h('span', { style: styles.dim }, slice),
+        ),
+        h('div', { style: styles.strip },
+          h('span', { style: styles.dim }, `state ${data.stateChars ?? 0} chars${data.truncated === true ? ' (truncated)' : ''} [${data.stateHash ?? '?'}]`),
+          data.executed === undefined ? null : h('span', { style: styles.dim }, 'answered by ' + JSON.stringify(data.executed)),
+        ),
+        data.failure === undefined ? null : h('p', { style: styles.note }, 'could not answer: ' + String(data.failure.reason ?? 'unknown reason')),
+        answers.length === 0 ? null : h('div', { style: styles.chips }, answers),
+      )
+    }
+
+    /** The same guard as the trace card's, and for the same reason: a throw here loses the whole row. */
+    function EvaluateCard(props) {
+      try {
+        return evaluateCardBody(props)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return h('div', { style: styles.card },
+          h('span', { style: styles.chipOff }, 'System One evaluate card failed: ' + message),
+          h('span', { style: styles.dim }, 'The tool call itself succeeded \u2014 this is the card, not the judge.'),
+        )
+      }
+    }
+
     /**
      * THE SEAT'S CONTRACT WITH THE PAGE IS ALL-OR-NOTHING: a keyed `tool.call.toolview` entry REPLACES the
      * generic card, and its `fallback` is used only when NO entry claims the key. So a component that throws
@@ -1813,6 +1885,11 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
           { name: 'tool.call.toolview', key: TRACE_TOOL_NAME },
           TraceCard,
+        )))
+        // THE FIFTH SEAT: the conversation evaluation's own card, keyed by its tool name.
+        ctx.effect(() => ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
+          { name: 'tool.call.toolview', key: EVALUATE_TOOL_NAME },
+          EvaluateCard,
         )))
       },
     }

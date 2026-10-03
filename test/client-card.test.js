@@ -392,10 +392,10 @@ function renderTree(node) {
   return walkNodes(node).text
 }
 
-test('it registers all FOUR seats: the two config pages, the session menu, and the tool card', async () => {
+test('it registers all FIVE seats: the two config pages, the session menu, and the two tool cards', async () => {
   const { spec, registered } = await mount()
   assert.equal(spec.id, 'dsh-system1-observer')
-  assert.equal(registered.length, 4, 'two config seats, the session menu row, and the trace card')
+  assert.equal(registered.length, 5, 'two config seats, the session menu row, and the two tool cards')
   const seats = registered.map((entry) => ({ ownerKey: entry.ownerKey, target: entry.target }))
   // The BUNDLE page dispatches on the PACKAGE NAME. The settings namespace (`system1-observer` /
   // `include:system1-observer`) is a different id space and registering under it is silent: no card.
@@ -412,7 +412,79 @@ test('it registers all FOUR seats: the two config pages, the session menu, and t
     // this package registered is allowed -- and a mismatch is silent: the generic row renders and nothing
     // says why. `system1_trace` is therefore spelled identically here and in `lib/tool.js`.
     { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_trace' } },
+    // AND THE EVALUATION CARD, for the whole-conversation tool. Same seat, same open key domain, same silence on a
+    // mismatch -- so the name is spelled identically here and in `lib/evaluate-tool.js`.
+    { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_evaluate' } },
   ])
+})
+
+/** Every string in a rendered tree, recursively: enough to assert what a card says without a DOM. */
+function textOf(node) {
+  if (node === null || node === undefined || node === false) return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join(' ')
+  if (typeof node === 'object' && node.props !== undefined) {
+    return textOf(node.props.children) + ' ' + Object.values(node.props).filter((v) => typeof v === 'string').join(' ')
+  }
+  return ''
+}
+
+test('the tool-name literals in the card match their modules, because a mismatch is silent', async () => {
+  // The seat's key domain is open and "a typo never renders": the generic row appears and nothing says why. Both names
+  // are therefore pinned to the modules that declare them.
+  const { readFileSync } = await import('node:fs')
+  const { TRACE_TOOL_NAME } = await import('../lib/tool.js')
+  const { EVALUATE_TOOL_NAME } = await import('../lib/evaluate-tool.js')
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.ok(source.includes("const TRACE_TOOL_NAME = '" + TRACE_TOOL_NAME + "'"), 'the trace tool name')
+  assert.ok(source.includes("const EVALUATE_TOOL_NAME = '" + EVALUATE_TOOL_NAME + "'"), 'the evaluate tool name')
+})
+
+test('the evaluation card renders the subject, the slice and the answers from the projection', async () => {
+  const { registered } = await mount()
+  const seat = registered.find((entry) => entry.target?.key === 'system1_evaluate')
+  assert.notEqual(seat, undefined, 'the evaluation card claims its seat')
+  const Card = seat.dispose.component
+  const painted = Card({
+    phase: 'result',
+    block: {
+      meta: {
+        subject: { source: 'stored', sessionId: 'session-abc', kinds: ['operator', 'assistant'], lastMessages: 0, messages: 4, total: 9 },
+        stateHash: 'abcdef123456',
+        stateChars: 1200,
+        truncated: true,
+        answers: { review: { label: 'yes', confidence: 0.8 } },
+        executed: { model: 'jev-latest' },
+      },
+    },
+  })
+  const text = textOf(painted)
+  assert.match(text, /conversation evaluation/)
+  assert.match(text, /session-abc/, 'the subject is named')
+  assert.match(text, /4 of 9 message/, 'and the slice says how much of it was judged')
+  assert.match(text, /operator, assistant/)
+  assert.match(text, /abcdef123456/, 'the identity of what was sent')
+  assert.match(text, /truncated/, 'and whether the budget cut it')
+  assert.match(text, /review: yes 0\.8/, 'the answers, with their confidence')
+  assert.match(text, /jev-latest/, 'and what answered')
+  // AN UNANSWERED EVALUATION SAYS SO, rather than rendering an empty answer set as a success.
+  const failed = textOf(Card({ phase: 'result', block: { meta: { subject: { source: 'live', messages: 0, total: 0 }, stateHash: 'x', stateChars: 0, truncated: false, answers: {}, failure: { reason: 'timed out' } } } }))
+  assert.match(failed, /no answer/)
+  assert.match(failed, /could not answer: timed out/)
+})
+
+test('with no projection it shows the text the model saw, and a throwing projection does not take the row down', async () => {
+  const { registered } = await mount()
+  const Card = registered.find((entry) => entry.target?.key === 'system1_evaluate').dispose.component
+  // A HOST THAT PREDATES THE PROJECTION: the text is the same judgement, shown as it is.
+  const fallback = textOf(Card({ phase: 'result', block: { content: [{ type: 'text', text: 'system1_evaluate: stored subject' }] } }))
+  assert.match(fallback, /no structured projection from this host/)
+  assert.match(fallback, /system1_evaluate: stored subject/)
+  // THE SEAT IS ALL-OR-NOTHING, so the card catches its own errors -- here a projection whose getter throws.
+  const hostile = { meta: { get subject() { throw new Error('boom') } } }
+  const guarded = textOf(Card({ phase: 'result', block: hostile }))
+  assert.match(guarded, /evaluate card failed: boom/)
+  assert.match(guarded, /this is the card, not the judge/)
 })
 
 test('both views render, and the hook count is equal and non-zero', async () => {

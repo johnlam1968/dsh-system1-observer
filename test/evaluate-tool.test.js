@@ -122,6 +122,30 @@ test('a model failure is REPORTED, not thrown: the subject was read and the call
   assert.equal((await thrown.tool.execute({})).failure.reason, 'socket closed')
 })
 
+test('it declares PRESENTATIONMETA, which is how the conversation card gets structured data', () => {
+  // `lib/tool.js:91` says it: the projection "leaves through `presentationMeta`, which the tool contract persists on
+  // `tool/result` as `meta`". The card reads that, so it never re-parses the model-facing text.
+  const h = harness()
+  assert.equal(typeof h.tool.output.presentationMeta, 'function')
+  const meta = h.tool.output.presentationMeta({}, {
+    answers: { review: { label: 'yes' } },
+    subject: { source: 'stored', sessionId: 'S1', kinds: ['operator'], lastMessages: 0, messages: 4, total: 4 },
+    stateHash: 'abcdef123456', stateChars: 120, truncated: true,
+    executed: { model: 'jev-latest' },
+  })
+  assert.deepEqual(meta.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator'], lastMessages: 0, messages: 4, total: 4 })
+  assert.equal(meta.stateHash, 'abcdef123456')
+  assert.equal(meta.truncated, true)
+  assert.deepEqual(meta.answers, { review: { label: 'yes' } })
+  assert.deepEqual(meta.executed, { model: 'jev-latest' })
+  // A FAILURE RIDES IT TOO, and a value missing a field does not throw: the card is given what exists.
+  assert.equal(h.tool.output.presentationMeta({}, { failure: { reason: 'timed out' } }).failure.reason, 'timed out')
+  const sparse = h.tool.output.presentationMeta({}, undefined)
+  assert.equal(sparse.stateHash, '')
+  assert.equal(sparse.stateChars, 0)
+  assert.equal(sparse.truncated, false)
+})
+
 test('it declares a RENDER, which the registry requires and whose absence was register row O19', () => {
   // The registry refuses a tool declaring `output { schema }` alone: "must declare output { schema, render,
   // presentationMeta? }". A refusal in one registration takes the whole `ctx.inject(['tools'], ...)` callback down, so
