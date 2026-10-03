@@ -1735,7 +1735,15 @@ window.__ModuleLoader__.load({
         + (subject.lastMessages > 0 ? ' \u00b7 newest ' + subject.lastMessages : '')
       const answers = Object.entries(data.answers ?? {}).map(([id, answer]) => {
         const record = answer !== null && typeof answer === 'object' ? answer : {}
-        const label = record.label ?? record.level ?? '(no label)'
+        // WHAT THE TRANSPORT PRODUCES: a narrowed noul is `{ type: 'noul', probability, confidence }` and a choice
+        // is `{ type: 'choice', choice, probabilities }`. `noul` is the key the reader CONSUMES, so a card reading it
+        // showed "(no label)" for every real answer -- register row O20, found by an end-to-end run.
+        // The rule is written twice because a browser half cannot import `lib/`; the two are covered by their own
+        // behaviour tests rather than by a shared constant.
+        const probability = typeof record.probability === 'number' ? record.probability : undefined
+        const label = record.label ?? record.level ?? record.choice ?? record.score
+          ?? (probability === undefined ? undefined : 'p=' + probability)
+          ?? (record.type === 'unreadable' ? 'unreadable' : '(no label)')
         const confidence = typeof record.confidence === 'number' ? ' ' + record.confidence : ''
         return h('span', { key: id, style: styles.chip }, `${id}: ${String(label)}${confidence}`)
       })

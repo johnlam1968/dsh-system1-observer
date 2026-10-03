@@ -1,34 +1,16 @@
-// A RUNNABLE PROBE, NOT PART OF THE SUITE (`npm test` collects `test/*.test.js`).
-//
-// WHAT IT PROVES, measured on 2026-10-02 by running it: the whole path works. Through the REAL tool registry, the real
-// composer and the real trace writer, `system1_evaluate` read a stored session out of a stubbed `ctx.sessionQuery`,
-// asked a stubbed model through the real service transport, and returned
-//   {"review":{"type":"noul","probability":0.8,"confidence":0.8}}
-// -- a narrowed answer, from a real call, with the provenance intact.
-//
-// WHAT IT EXPOSED, and why it is not in the suite yet: the PRODUCED answer shape is `{ type: 'noul', probability,
-// confidence }`, while `lib/evaluate-tool.js`'s render and `client.js`'s card read `noul` -- the key `narrowAnswers`
-// CONSUMES, not the one it produces. So every real evaluation would have rendered "(no label)". That is register row
-// O20. The remaining work is: fix the two render paths to read `probability`/`choice`/`score`, correct this file's
-// later assertions to the produced shape, and move it back to `test/evaluate-live.test.js`.
-//
-// THE SERVICE ANSWER SHAPE, for whoever picks this up (`lib/model/service-answers.js:39-52` is the authority):
-//   { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } }
-// -- not the wire's `{ noul }`, and not `{ label, confidence }`. Two wrong guesses cost a round.
-
 // THE WHOLE PATH, ONCE: a stored session judged through the REAL tool registry, the REAL composer, the REAL
-// transport shim and the REAL trace writer -- with stubs only at the two boundaries this process cannot own: the
-// harness's session store and the model.
+// service-transport shim and the REAL trace writer -- with stubs only at the two boundaries this process cannot own,
+// the harness's session store and the model.
 //
-// WHY THIS TEST AND NOT ONLY THE UNIT ONES. `test/evaluate-tool.test.js` proves the tool's logic against injected
-// collaborators; this proves the WIRING: that the row registers it, that its settings are read live, that its call
-// reaches a trace FILE, and that the line it writes is invisible to the probe calibration end to end. Register row
-// O19 is the argument for it -- a tool whose schema the registry refused took the whole registration down, and no
-// unit test could see that.
+// IT IS WHAT FOUND O20. The unit tests proved the tool's logic against injected collaborators and could not see that
+// the render paths read the key `narrowAnswers` CONSUMES (`noul`) rather than the one it PRODUCES (`probability`), so
+// every real evaluation would have shown "(no label)". A live run said so in one line.
 //
-// THE STORE IS STUBBED BECAUSE THE REAL ONE IS NOT REACHABLE FROM HERE: `ctx.sessionQuery` is provided by the running
-// harness, and reading an archive directly would mean walking 10,939 concatenated zstd frames. So the boundary stub
-// returns a fixture in the harness's own event shape, and everything downstream of it is real.
+// THE THREE BOUNDARY SHAPES, all learned the hard way and recorded here:
+//   the store   : `readSession(id)` -> `{ session, events }`, events in the composer's own shape
+//   the model   : `system1.decide(...)` -> `{ answers, meta }` where the answer is
+//                 `{ status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } }` (`lib/model/service-answers.js:39`)
+//   the envelope: `reply.meta.{executed,requested,usage,durationMs}` (`lib/model/service.js:49`)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -99,7 +81,9 @@ test('a stored session is judged through the real registry, and its line stays o
     decide: async () => ({
       // `lib/model/service-answers.js:39-52` is the authority: `status: 'ok'`, `answer.type`, `answer.probabilityTrue`.
       answers: { review: { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } } },
-      envelope: { executed: { provider: 'stub', model: 'stub-1' }, usage: { inputTokens: 120 }, durationMs: 7 },
+      // THE SERVICE'S ENVELOPE IS `meta`, not `envelope` -- `lib/model/service.js:49`'s `envelopeOf` reads
+      // `reply.meta.{executed,requested,usage,durationMs,requestId}`. A third boundary shape, and the last one.
+      meta: { executed: { provider: 'stub', model: 'stub-1' }, usage: { inputTokens: 120 }, durationMs: 7 },
     }),
   })
   await ctx.plugin(ToolRuntime).await()

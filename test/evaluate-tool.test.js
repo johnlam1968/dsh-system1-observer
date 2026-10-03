@@ -160,6 +160,14 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   assert.equal(Array.isArray(text), true)
   assert.match(text[0].text, /stored subject, 4 of 4 message/)
   assert.match(text[0].text, /review: yes \(0.8\)/)
+  // AND A NOUL, the shape this plugin asks in most: a probability, not a label. Reading `noul` -- the key the READER
+  // consumes -- renders "(no label)" here, which is the bug the end-to-end run found (register row O20).
+  const noul = h.tool.output.render({
+    answers: { review: { type: 'noul', probability: 0.8 }, reading: { type: 'unreadable', reason: 'no answer' } },
+    subject: { source: 'stored', messages: 1, total: 1 }, stateHash: 'h', stateChars: 1, truncated: false,
+  })
+  assert.match(noul[0].text, /review: p=0\.8/)
+  assert.match(noul[0].text, /reading: unreadable \[unreadable: no answer\]/, 'an unreadable answer says so')
   assert.match(text[0].text, /abcdef123456/, 'the identity of what was sent is in the rendered line')
   // AND A FAILURE RENDERS AS A FAILURE rather than as an empty answer set.
   const failed = h.tool.output.render({ answers: {}, subject: { source: 'stored', messages: 0, total: 0 }, stateHash: 'x', stateChars: 0, truncated: false, failure: { reason: 'timed out' } })
