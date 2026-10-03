@@ -590,3 +590,64 @@ use-case-specific sets are the same mechanism: more compositions, differing by m
 **Today this corpus has one operator**, so per-user sets are written but unverifiable -- the mechanism is small and the
 evidence does not exist yet. `criteria/helpfulness-set-merged@1/_manifest.json` is the first one: it names the operator
 and says the model is unspecified.
+
+## 15. Where benchmark knowledge enters, and the axis the pair still lacks
+
+**Measured 2026-10-03, not assumed.** `GET https://openrouter.ai/api/v1/models` returns **466 models, 255 of them
+carrying a `benchmarks` field**, shaped:
+
+```json
+{"design_arena": [{"arena": "models", "category": "codecategories", "elo": 1059, "win_rate": 42.9, "rank": 103}, ...],
+ "artificial_analysis": {"intelligence_index": 51.8, "coding_index": null, "agentic_index": null}}
+```
+
+All four Ministral entries carry it (`ministral-8b-2512` is elo 1059 / win_rate 42.9 / rank 103 in `codecategories`),
+while their `artificial_analysis` indices are `null` -- **coverage is partial and per-category**, so anything keyed to
+it must tolerate a missing value. On HuggingFace the field exists (`model-index`, top-level) but for the model in use
+here, `mistralai/Ministral-3-3B-Instruct-2512`, it is **null**: what that card offers instead is the paper
+(`arxiv:2601.08584`). So the structured source is OpenRouter; HuggingFace gives prose.
+
+### A benchmark result is a hypothesis, not a question
+
+Benchmarks already say what a MODEL is like. Our questions judge **outputs inside a harness**, so a model-specific set
+earns its keep only when it asks something the benchmark cannot: *given this known weakness, did the
+prompting/steering/loop prevent the failure?* That is falsifiable, which is the property this repository asks of every
+question, and it is a different object from "is this 3B model good at coding" -- which the elo already answered.
+
+The home for it needs no new mechanism: a manifest is free-form beyond `appliesTo`, so a composition can carry
+
+```json
+{"appliesTo": {"model": "ministral-3-3b", "useCase": "coding"},
+ "hypotheses": [{"weakness": "long-context recall", "testedBy": "draft_restates_the_goal"}]}
+```
+
+and each question exists to try to FALSIFY one hypothesis. **The expectation to record plainly:** most of what a
+question returns about a model's output will be what the benchmarks already predicted. The measurement is worth making
+when it is about the harness, and the harness is what the next section is missing.
+
+### Refusal axes and grouping axes
+
+The pair cannot be measured until it is clear which facts about a run change what its numbers MEAN, and which only say
+who or what they are about:
+
+| axis | kind | where it goes | why |
+|---|---|---|---|
+| model | **refusal** | `instrument` (already there) | a score from LLM A and one from LLM B are answers to different questions |
+| the question set | **refusal** | `instrument` (already there) | a different set asks something else |
+| user | grouping | a hash on the line | comparing operators is the question, so refusing it would delete the answer |
+| **harness technique** | grouping | a hash on the line | the whole point of measuring -- and **missing today** |
+| use case | grouping | the manifest | same questions, a different setting |
+
+**The harness is the gap.** Prompting, steering, loop and harness techniques are the practical levers on a specific
+model, and **none of them is in `instrument`**: two runs under different system prompts or different loop policies are
+currently treated as the same instrument while being different treatments. That is a confound, and it sits under every
+pair-level claim.
+
+It must be **declared, never inferred**. The plugin sees the assembled prompt, but that text contains the operator's
+request as well as the harness, so hashing it would confound the subject with the treatment -- and the repository's
+rule for the record is already the strict one. So: an operator-declared label hashed onto the line
+(`harnessHash`), beside `userHash`, exactly as `stateHash` is recorded per session-review line today. Both are
+grouping, so **neither goes into `instrument`**.
+
+**What is not built:** the two labels and their two hashes, and the reader that groups lines by pair and prints its n.
+One operator exists today, so a pair figure would be an anecdote with a decimal point.
