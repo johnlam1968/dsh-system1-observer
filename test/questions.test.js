@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildQuestions, questionCap, configuredQuestionIds, hasSpecs, readQuestionConfig } from '../lib/questions.js'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // THE TWO MODES. Legacy is what an unconfigured row does -- and the mode is read from the CONTENT of
 // `questions`, not from whether the field exists, because schemastery materialises an unset object into
@@ -244,4 +247,36 @@ test('a question under the turn hook is reported, because code exists to ask it'
     },
   }
   assert.deepEqual(configuredQuestionIds(seamAndTurn), ['opening', 'nudged'], 'both, in list order')
+})
+
+test('a SELECTED SET is the row\u2019s questions, and one that cannot be read refuses rather than falling back', () => {
+  // THE INTEGRATION ITSELF, which is the part a settings-shaped change makes easy to leave untested: `buildQuestions`
+  // is the one place every caller goes through (the observation path, the turn trigger, both tools), so a set that is
+  // resolved here is resolved everywhere -- and a set that is NOT resolved here would be silently ignored everywhere.
+  const dir = mkdtempSync(join(tmpdir(), 'qsets-'))
+  writeFileSync(join(dir, 'house.json'), JSON.stringify({
+    admit: [{ id: 'go', type: 'noul', instructions: 'did that go well?' }],
+  }))
+  const withSet = { questionSetsDir: dir, questionSet: 'house', question: 'the inline legacy question' }
+  const built = buildQuestions(withSet, 'admit')
+  assert.deepEqual(built.problems, [], 'a readable set builds without problems: ' + JSON.stringify(built))
+  assert.deepEqual(Object.keys(built.questions), ['go'], 'the SET question is asked, not the inline one: ' + JSON.stringify(Object.keys(built.questions)))
+  // A SEAM THE SET DOES NOT NAME falls back to the probe question, exactly as a seam with no spec does today.
+  // A SEAM THE SET DOES NOT NAME ASKS NOTHING -- because ONE configured seam puts the row in PER-SEAM mode, which is
+  // the documented behaviour ("empty seams say they ask nothing"). The probe fallback belongs to the case where the
+  // whole map is empty, which the last assertion covers.
+  assert.deepEqual(buildQuestions(withSet, 'draft').questions, {}, 'per-seam mode: an unnamed seam asks nothing')
+  // A SET THAT CANNOT BE READ IS A NAMED PROBLEM AND NO QUESTION: falling back would measure something else under the
+  // name of the set, which is the failure this register keeps recording.
+  const missing = buildQuestions({ questionSetsDir: dir, questionSet: 'absent' }, 'admit')
+  assert.deepEqual(missing.questions, {}, 'no question is asked when the set is missing')
+  assert.equal(missing.problems.length, 1)
+  assert.match(missing.problems[0], /cannot read/, 'and the reason names the file')
+  // A SET SELECTED WITH NOWHERE TO LOOK is the same refusal rather than a silent return to the inline questions.
+  const nowhere = buildQuestions({ questionSet: 'house' }, 'admit')
+  assert.deepEqual(nowhere.questions, {})
+  assert.match(nowhere.problems[0], /no `questionSetsDir` is configured/)
+  // AND WITH NO SET SELECTED, THE OLD PATH IS UNTOUCHED -- the inline questions, which is what every row does today.
+  const inline = buildQuestions({ questions: { admit: [{ id: 'inline', type: 'noul', instructions: 'ok?' }] } }, 'admit')
+  assert.deepEqual(Object.keys(inline.questions), ['inline'])
 })
