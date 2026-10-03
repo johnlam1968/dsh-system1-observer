@@ -266,3 +266,83 @@ runs on is one home per fact, and `X` is composed from the same trace the observ
 deployment genuinely needs a *different* posture for outbound `X`, the act row should read the existing redaction
 settings and the design should say so, rather than shipping a second place to configure the same decision. If it
 does need its own, that is an argument to record, not a field to add quietly.
+
+## 9. Design: question sets as loadable artifacts (plan item 8)
+
+**The constraint, from the code rather than from taste.** A question spec is already a value: `lib/questions.js`
+reads `config.questions`, refuses a malformed spec into a `problem` string instead of throwing (`"NOTHING HERE
+THROWS"`, because this runs in the critical path of every turn), and builds `noul`/`choice`/`score` questions from
+it. What is missing is not expressiveness but **addressability**: a set cannot be named, reused across rows, or
+identified in the trace, so two runs under different sets are compared as though one instrument produced both -- the
+same failure `probeHash` exists to prevent for the probe.
+
+**The settings it adds.**
+
+| setting | decides | control | live? |
+|---|---|---|---|
+| `questionSets` | which set files this row may load, as paths | a list of paths (one per line) | yes |
+| `questionSet` | which of them this row uses, by name | a picker over the sets the host resolved | yes |
+
+`questionSet` empty means the inline `questions` object, exactly as today, so nothing existing changes.
+
+**The identity rule, borrowed from the probe because it already works.** A set's **content hash** belongs in
+`instrument`, beside `probeHash` (`lib/compare.js:65`). Editing a set file then makes the runs before and after
+honestly incomparable, by the same mechanism rather than by a warning in a README.
+
+**The failure mode that must not exist.** A set file that is missing, unreadable or malformed becomes a **named
+`problem`** on every line it affects and the row falls back to the built-in probe -- never a throw, and never
+silence. A row measuring something other than what it says it measures is the defect this register keeps recording;
+the mitigation is that the trace says so on the line.
+
+**What the card can and cannot do, which decides the shape.** The browser half cannot read the filesystem, so the
+**host** resolves the set list and projects `{name, hash, problems}`; the card picks a name and shows the hash and
+any problem. That is also why `questionSets` is a list of paths rather than inline JSON: the file is what can be
+hashed, versioned and shared.
+
+**Not settled.** Whether a set file holds one set or a map of them; whether a set may override a single seam or must
+carry all ten; and `criteria` by name (`ROADMAP.md` §4.2, P2), which is the part of a set that would let two
+questions be compared by construction rather than by inspection.
+
+**What makes it testable.** Parse a fixture set and assert the questions it builds; change one character of the file
+and assert the hash moves and `instrument` differs; hand it a malformed file and assert a named problem and a
+working fallback -- three tests, none needing a browser.
+
+## 10. Design: `tracePath` reopen-and-rotate (plan item 9)
+
+**Why it is mount-bound today, in the code's own words.** The writer takes the path at mount
+(`process.env[envVar] ?? defaultPath`), and rotation deliberately keeps the same name *because* "every reader --
+the trace tool, both report modules, the card -- captured `path` once, so a rotation that moved the name would leave
+all of them watching a file nobody writes to any more". The capture is the obstacle, and it is in the READERS, not
+in the writer.
+
+**What a live move must do, in order.** Write the `config` line **to the sink being left** -- the record of the move
+is the whole point of the plan's section 4 constraint; **rotate the old file aside** through the existing rotation
+path, so nothing is left half-written and the archive is named in a line; **reopen** at the new path; and write a
+**first line at the new path** naming the archive it came from, so a reader arriving there can find what preceded it.
+Those four sentences are one operation, and every one of them is observable in the file.
+
+**The settings it adds.**
+
+| setting | decides | control | live? |
+|---|---|---|---|
+| `tracePath` | where the trace is written | text | **becomes yes** -- this item's whole point |
+
+**No new policy knobs.** Rotation-on-move is not a preference: a move that left the old file open and unlabelled
+would lose the record of its own move. A setting nobody would change costs attention, which is why there is one
+setting here and not three.
+
+**The failure mode that must not exist.** A move to an unwritable path must not lose a single line: the writer keeps
+writing to the sink it still owns, records the failure as a `problem` on the line, and does **not** claim the move.
+The current code's `append` is already best-effort for the same reason ("a disk that fills at 3am must not fail a
+turn"), and that property has to survive the move.
+
+**What makes it testable.** The test that currently pins the refusal
+(`test/sink-record.test.js`, "a mount-bound setting is refused BEFORE the record") is rewritten to assert the
+opposite: the `config` line lands in the **old** file, the archive exists and is named, the new file's first line
+says where the record came from, and a reader asking for the trace afterwards reads the new path without a restart.
+The mount-bound ratchet in `test/config-tool.test.js` then stops listing `tracePath`, which is the check that the
+change is complete rather than partial.
+
+**Not settled.** Whether `system1_trace` should *follow* a move it did not make, or report that the configured path
+holds only the lines since the move -- and whether the archive should be discoverable from the new file by name
+alone (proposed) or by a hash (which would make it verifiable).
