@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { probeFingerprint } from './lib/probe-score.js'
-import { FIREABLE_HOOKS, configuredQuestionIds } from './lib/questions.js'
+import { FIREABLE_HOOKS, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -95,6 +95,14 @@ const Config = Schema.object({
   model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row.').volatile(),
   timeoutMs: Schema.number().min(0).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
   wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
+  // MOUNT-BOUND, AND NOT FOR STYLE. This text IS the instrument's identity (`probeFingerprint` hashes it) and the
+  // hash is written on the MOUNT line, so a value that changed mid-run would leave calls scored under one question
+  // and keyed under another -- the silent mixing the comparability key exists to prevent. A reworded question needs a
+  // re-mount, and then the new hash makes the runs honestly incomparable.
+  //
+  // THE ANSWER SET IS NOT CONFIGURABLE, and the code says why: only the labels decide what an answer means, so the
+  // criteria are fixed and a reworded question keeps all ten.
+  probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a
   // live change would move where evidence lands mid-run. It could be made volatile with a reopen-and-rotate story;
@@ -341,7 +349,10 @@ async function apply(ctx, config) {
         // THE INSTRUMENT'S IDENTITY. The probe's question text was authored by intuition, so a run with edited
         // instructions is a NEW MEASUREMENT and not a comparison. Without this, two runs are silently averaged
         // as though one instrument produced both.
-        probeHash: probeFingerprint(),
+        // THE HASH IS OVER THE QUESTION ACTUALLY IN FORCE, so a row that rewords the probe records a different
+        // instrument and no reader has to be told: `instrument` in `lib/compare.js` then refuses to compare its runs
+        // with a row that asked the built-in question. That is the constraint working rather than a warning.
+        probeHash: probeFingerprint(probeOf(mount).instructions),
         callsEnabled: readConfigValue(live.callsEnabled) !== false,
         // The DEVIANT set, because "nothing is off" is the common case and a list of nine booleans buries it --
         // and the two seams that carry no text are excluded, because they are not switched off, they are
@@ -415,6 +426,7 @@ async function apply(ctx, config) {
       idleGap: () => readConfigValue(liveConfig().idleGapMs),
       compareLanes: () => readConfigValue(liveConfig().maxCompareLanes),
       calibrationBins: () => readConfigValue(liveConfig().calibrationBins),
+      probe: () => probeOf(liveConfig()).instructions,
     }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads

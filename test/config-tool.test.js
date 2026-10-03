@@ -118,6 +118,22 @@ test('every schema field TYPE is one the refusals know, so a new type cannot sli
   assert.deepEqual(unhandled, [], 'these field types would bypass every refusal: ' + unhandled.join(', '))
 })
 
+test('EVERY mount-bound field is described as unwritable and REFUSES a write, naming the reason', async () => {
+  // The other half of "the tool covers every setting": a field a live save cannot reach must be READABLE and must
+  // refuse a write with the reason, or an agent is left believing it changed something. Driven from the schema, so a
+  // field that becomes mount-bound later is covered without touching this test.
+  const tool = createConfigTool({ read: () => ({}), write: async () => {}, record: () => {}, schema: () => Config.dict })
+  const out = await tool.execute({ action: 'list' })
+  const mountBound = Object.keys(Config.dict).filter((field) => Config.dict[field].meta?.volatile !== true)
+  assert.ok(mountBound.length > 0, 'a vacuous test is worse than none; found: ' + mountBound.join(', '))
+  for (const field of mountBound) {
+    assert.equal(out.schema[field].writable, false, field + ' must be described as unwritable')
+    await assert.rejects(() => tool.execute({ action: 'set', knob: field, value: 'anything' }), /mount-bound/,
+      field + ' must refuse a write, naming why')
+    assert.equal((await tool.execute({ action: 'get', knob: field })).knob, field, field + ' must still be readable')
+  }
+})
+
 test('THE DESCRIPTOR COVERS THE PLUGIN SCHEMA EXACTLY -- the ratchet for "the tool covers every setting"', async () => {
   // Digested from the real schema, so a field added there shows up in `list` with no change to this file; what this
   // asserts is that the two SETS agree, which is what "the agent tool covers all the settings" has to mean to be

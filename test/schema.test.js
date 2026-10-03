@@ -126,10 +126,14 @@ test('every declared field is either volatile or declared mount-bound, and none 
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
   ]
   const MOUNT_BOUND = [
-    // ONE LEFT, AND IT OWNS AN OPEN FILE HANDLE: the writer holds the trace open and keeps a rotation ledger, so a
-    // live change would move where evidence lands mid-run. Everything else that bounds held state turned out to be
+    // TWO, EACH FOR A MECHANICAL REASON RATHER THAN A PREFERENCE.
+    // `tracePath` owns an open file handle: the writer holds the trace open and keeps a rotation ledger, so a live
+    // change would move where evidence lands mid-run. Everything else that bounds held state turned out to be
     // resolvable per record, and is volatile.
     'tracePath',
+    // `probeQuestion` is the instrument's identity, and its hash is written on the MOUNT line: a value that changed
+    // mid-run would leave calls scored under one question and keyed under another.
+    'probeQuestion',
   ]
   const walked = Object.keys(dict)
   assert.ok(walked.length > 0, 'the schema declares no fields at all')

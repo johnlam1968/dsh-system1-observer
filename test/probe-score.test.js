@@ -16,6 +16,18 @@ function callEvent(hook, answer, { qid = 'probe', question = PROBE_QUESTION, at 
 }
 
 // --- the identity predicate, which is the whole reason this is not scored by seam or by id --------------
+test('a reworded probe is SCORED as a probe when the row says which question it asked', () => {
+  // The end-to-end half of the identity change, shape-agnostic on purpose: without the second argument a row's own
+  // calls are judged "not the probe" and every calibration over them is silently empty -- a wrong number rather than
+  // a missing one.
+  const mine = { ...PROBE_QUESTION, instructions: 'Which part of OUR loop produced this?' }
+  const event = { event: 'call', hook: 'admit', questions: { probe: mine } }
+  assert.equal(probeAnswerOf(event), null, 'against the built-in, this call is not a probe call')
+  assert.notEqual(probeAnswerOf(event, mine.instructions), null, 'against its own row it is')
+  assert.notDeepEqual(probeScore([event], { probeInstructions: mine.instructions }), probeScore([event]),
+    'and the score computed over it is not the score computed without it')
+})
+
 test('the identity follows the INSTRUCTIONS, so a reworded probe is still the probe it was asked as', () => {
   // THE ASYMMETRY IS THE CODE'S OWN, NOT A PREFERENCE: `probeFingerprint` hashes the instructions -- the instrument's
   // identity -- while `isProbeQuestion` treats the CRITERIA as fixed, on the stated ground that a reworded criterion
