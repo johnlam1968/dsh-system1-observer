@@ -158,3 +158,50 @@ panel that opens onto nothing is not worth shipping.
 
 Tests follow the panel: open by `id`, assert the knobs a panel must contain, flip one, and assert the `set` op's
 **path** — plus one test for decision 2, that a dirty panel opens itself.
+
+## 7. The act layer, designed by an independent model -- and what it corrected
+
+**Who, and how.** `minimax-cn/MiniMax-M3`, given a read-only sandbox copy of this repository and told to read only
+`docs/settings.md`, the schema in `index.js` and `ROADMAP.md` §9/P3, was asked for two things: a hard critique of the
+ten gaps in §4, and a design for the act layer's settings surface. **The middle of its reply was truncated in
+transit, and that middle is where the settings table was.** The table was re-requested under a narrower brief; it
+lands in §8 when it arrives. What follows is the rest, and every load-bearing claim in it was checked against the
+code rather than relayed.
+
+### What it corroborated, independently of this register
+
+| register row | its words | what checking found |
+|---|---|---|
+| **O12**, the mount-time provider/model | "the service `config()` reads mount-time `provider`/`model`" | **the problem is wider than O12 records**: `mount.provider`/`mount.model` appear at SEVEN sites -- `index.js:280, 320-321, 345, 414-415, 469-470` -- not only in the service's `config()` |
+| **O13**, no per-call egress summary | "no honest per-call egress summary in either row" | the same defect the mount-line summary has, reached from the other direction |
+| **O14**, three numbers for one timeout | "`timeoutMs = 5000` ... the schema declares no default and the call site uses `?? 8000`" | matches O14 exactly, including the three-way split |
+
+An independent reader arriving at three of this register's open rows, with no access to the register, is the
+strongest evidence those rows are real rather than my own framing.
+
+### What it added, and one citation it got wrong
+
+- **Item 7 is not an ordinary setting, because it changes RUN IDENTITY.** Making the probe question configurable
+  changes `instrument`, one of `KEY_PARTS = ['questions', 'hooks', 'switches', 'instrument']` (`lib/compare.js:30`),
+  so runs before and after the change are different instruments and comparison between them is refused *by design*.
+  **Correction to its citation:** it named `probeHash` as a `KEY_PARTS` member; it is not one. `probeHash` is an input
+  to `instrument` -- see the fixture `taskKeyOf(mount({ provider, model, probeHash }))` in `test/compare.test.js`.
+  The conclusion is right and the citation is one level off, and the difference decides *where* the change must be
+  documented: in `instrument`, not in the key parts.
+- **Item 3 matters most after item 8.** Per-set calibration wants a bin count per experiment, so one global value
+  will be too coarse once question sets are loadable (`calibrationBins` landed in `bcdb4e4` as a single value; this
+  is the argument for revisiting it with item 8).
+- **`criteria` are inline, not resolvable by name** -- `lib/questions.js:87` passes them straight into `noul(...)`.
+  That is the P2 work `ROADMAP.md` §4.2 names, and it is the part of the act layer's evidence that cannot be
+  reconstructed from a name.
+- **Two act-layer settings survived the truncation**: `actMinConfidence` and `actInjectionBudget`, with the
+  observation that both are "mechanically the same change" as `composeMaxChars` because the wire client is built per
+  call (`index.js:266-269`). That is true of every volatile field in this row, and it is why the plan's remaining
+  items are wiring rather than architecture.
+
+### From its list of what the code cannot do yet
+
+Of nine numbered items, only the ninth survived the truncation: **no criterion dictionary resolution by name**
+(`lib/questions.js` validates question shapes but does not resolve `criteria` by reference). It also noted, in the
+part that survived, that the *already possible* pieces are the schema fields, the Act panel from §6, the live
+`system1Observer` reads, and the `config` event on the trace -- all of which exist today.
