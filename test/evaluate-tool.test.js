@@ -122,6 +122,26 @@ test('a model failure is REPORTED, not thrown: the subject was read and the call
   assert.equal((await thrown.tool.execute({})).failure.reason, 'socket closed')
 })
 
+test('it declares a RENDER, which the registry requires and whose absence was register row O19', () => {
+  // The registry refuses a tool declaring `output { schema }` alone: "must declare output { schema, render,
+  // presentationMeta? }". A refusal in one registration takes the whole `ctx.inject(['tools'], ...)` callback down, so
+  // the symptom was a MISSING tool with no error -- which is why the fix carries a test rather than only a comment.
+  const h = harness()
+  assert.equal(typeof h.tool.output.render, 'function')
+  const text = h.tool.output.render({
+    answers: { review: { label: 'yes', confidence: 0.8 } },
+    subject: { source: 'stored', sessionId: 'S1', kinds: [], lastMessages: 0, messages: 4, total: 4 },
+    stateHash: 'abcdef123456', stateChars: 120, truncated: false,
+  })
+  assert.equal(Array.isArray(text), true)
+  assert.match(text[0].text, /stored subject, 4 of 4 message/)
+  assert.match(text[0].text, /review: yes \(0.8\)/)
+  assert.match(text[0].text, /abcdef123456/, 'the identity of what was sent is in the rendered line')
+  // AND A FAILURE RENDERS AS A FAILURE rather than as an empty answer set.
+  const failed = h.tool.output.render({ answers: {}, subject: { source: 'stored', messages: 0, total: 0 }, stateHash: 'x', stateChars: 0, truncated: false, failure: { reason: 'timed out' } })
+  assert.match(failed[0].text, /could not answer: timed out/)
+})
+
 test('the tool declares its own name and refuses a bad argument against that declaration', async () => {
   const h = harness()
   assert.equal(h.tool.name, EVALUATE_TOOL_NAME)

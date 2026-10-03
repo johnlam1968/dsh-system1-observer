@@ -16,13 +16,15 @@ import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
-import { FIREABLE_HOOKS, configuredQuestionIds, probeOf } from './lib/questions.js'
-import { SUBJECT_KINDS, listStoredSessions, subjectSettings } from './lib/session-subject.js'
+import { FIREABLE_HOOKS, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
+import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
 import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
 import { describeSubject, subjectOfAgent } from './lib/subject.js'
+import { composeTurnState } from './lib/turn-state.js'
+import { createEvaluateTool } from './lib/evaluate-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
@@ -479,6 +481,41 @@ async function apply(ctx, config) {
         evidence.trace(event, fields)
       },
     }))
+    // THE WHOLE-CONVERSATION TOOL (§11). The seams judge a turn as it happens; this judges a session -- live, or one
+    // that is already over -- whole or as a slice, and records its call under a hook that is deliberately NOT a probe
+    // site, so a whole-session opinion never enters the probe calibration.
+    tools.register(createEvaluateTool({
+      settings: () => subjectSettings(liveConfig()),
+      // READ AT CALL TIME: `sessionQuery` is captured by a `ctx.inject` callback that may run after this block.
+      stored: (options) => readStoredSubject(Object.assign({ sessionQuery: sessionQuery }, options)),
+      liveEvents: async () => {
+        const initiator = agents !== undefined && typeof agents.currentInitiator === 'function' ? agents.currentInitiator() : undefined
+        const session = initiator?.session
+        return session !== undefined && typeof session.snapshotEvents === 'function' ? session.snapshotEvents(0) : []
+      },
+      // THE ONE COMPOSER, WITH ITS SESSION SCOPE: a conversation has no reaction, so it is a transcript rather than an
+      // exchange, and it is cut keeping both ends because a transcript's newest turns are the point.
+      compose: (events) => composeTurnState({
+        events,
+        scope: 'session',
+        maxChars: readConfigValue(liveConfig().composeMaxChars),
+        toolMaxChars: readConfigValue(liveConfig().toolBlockMaxChars),
+        tailChars: readConfigValue(liveConfig().tailChars),
+      }),
+      // THE AGGREGATE QUESTION SET, through the reader the mount line uses: with nothing configured this falls back to
+      // the probe question exactly as the live path does, so a tool does not invent its own convention.
+      questions: () => buildQuestions({
+        seamEnabled: { [TURN_HOOK]: true },
+        questions: { [TURN_HOOK]: readConfigValue(liveConfig().questions)?.[TURN_HOOK] },
+      }, TURN_HOOK),
+      decide: (request, options) => decide(request, options),
+      record: (line) => {
+        const { event, ...fields } = line
+        evidence.trace(event, fields)
+      },
+      toolId: 'system1-observer',
+    }))
+
 
     // THE SETTINGS TOOL. `record` writes a config line BEFORE the change -- that ordering is the tool's contract,
     // and `evidence.trace` is the same sink every other line goes to, so a reader finds it where it looks.
