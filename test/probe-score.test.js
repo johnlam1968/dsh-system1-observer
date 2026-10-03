@@ -16,6 +16,29 @@ function callEvent(hook, answer, { qid = 'probe', question = PROBE_QUESTION, at 
 }
 
 // --- the identity predicate, which is the whole reason this is not scored by seam or by id --------------
+test('O15: a trace written under ANOTHER probe is scored by the hash ITS OWN RUN recorded', () => {
+  // The reader must not depend on the row's CURRENT question. Each call line carries the question it asked, and each
+  // run's mount line carries the fingerprint of the question in force when it started, so the two join per RUN. Before
+  // this, a row that reworded its probe and then read its own older trace found no probe calls at all: the calibration
+  // read EMPTY rather than wrong, which is the failure mode that hides.
+  const oldText = 'Which part of the OLD loop produced this?'
+  const newText = 'Which part of the NEW loop produced this?'
+  const oldQuestion = { ...PROBE_QUESTION, instructions: oldText }
+  const mount = { event: 'mount', run: 'R1', probeHash: probeFingerprint(oldText) }
+  const call = { event: 'call', run: 'R1', hook: 'admit', questions: { probe: oldQuestion } }
+  // The row is configured for the NEW text now, so by the live question alone the old line matches nothing.
+  assert.equal(probeAnswerOf(call, newText), null, 'by the live text alone, an older run\u2019s probe is invisible')
+  assert.notEqual(probeAnswerOf(call, { instructions: newText, probeHash: mount.probeHash }), null,
+    'but its own run says what it asked, and that is the identity that holds')
+  // AND THE SCORER JOINS IT ITSELF: every window that carries calls carries the mount that opened them.
+  assert.notDeepEqual(probeScore([mount, call]), probeScore([call]),
+    'the mount line must change what is scored, or the join is not happening')
+  // A run whose mount hash matches NOTHING is still not a probe, so the join cannot make every call a probe.
+  const stranger = { event: 'call', run: 'R2', hook: 'admit', questions: { probe: oldQuestion } }
+  assert.equal(probeAnswerOf(stranger, { instructions: newText, probeHash: probeFingerprint('something else') }), null,
+    'a line whose question matches neither identity is not a probe call')
+})
+
 test('a reworded probe is SCORED as a probe when the row says which question it asked', () => {
   // The end-to-end half of the identity change, shape-agnostic on purpose: without the second argument a row's own
   // calls are judged "not the probe" and every calibration over them is silently empty -- a wrong number rather than
