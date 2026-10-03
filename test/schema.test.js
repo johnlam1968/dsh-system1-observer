@@ -120,7 +120,7 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // EIGHT MORE, made volatile on request: the seam list, the judge's route, the URL and legacy question, and the
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
-    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'tailChars', 'idleGapMs',
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
     // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
     // natural rather than a rebuild.
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
@@ -143,6 +143,29 @@ test('every declared field is either volatile or declared mount-bound, and none 
 
 // EVERY DECLARED DEFAULT MATERIALISES. A `.default()` that never reaches the resolved config is a knob whose
 // documented behaviour differs from its behaviour, and only three fields were checked before -- by name.
+// A VOLATILE FIELD NOTHING READS IS A KNOB THAT DOES NOTHING. Not hypothetical: `idleGapMs` and `maxCompareLanes`
+// were declared, marked volatile and reported by the agent's config tool while NO line passed them anywhere -- so the
+// host accepted a write, the card would show "Saved", and the report used the constant. Nothing failed, because
+// nothing read them. This is the check that would have failed, and it is deliberately a SOURCE scan: the question is
+// whether a value is read anywhere, which no unit test of the reading code can answer.
+test('every volatile setting is read somewhere, or is named in the exception list with its reason', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs')
+  const files = ['index.js', ...readdirSync('lib').filter((name) => name.endsWith('.js')).map((name) => 'lib/' + name)]
+  const source = files.map((file) => readFileSync(file, 'utf8')).join('\n')
+  // THE PATTERN IS DELIBERATELY NARROW: the field name must appear INSIDE a `readConfigValue(...)` call, because the
+  // name alone appears in the schema itself and a loose scan would pass on the very definition it polices.
+  const readSomewhere = (field) => new RegExp('readConfigValue\\([^\\n]*\\.' + field + '\\b').test(source)
+  // THE EXCEPTIONS, each with the reason it needs none: these are read as objects through `plainConfig`, which
+  // unwraps every volatile accessor at once. Asserted volatile below, so the list cannot outlive its members.
+  const VIA_PLAIN_CONFIG = ['hooks', 'questions', 'seamEnabled']
+  const volatile = Object.keys(dict).filter((field) => dict[field].meta?.volatile === true)
+  const unread = volatile.filter((field) => !readSomewhere(field) && !VIA_PLAIN_CONFIG.includes(field))
+  assert.deepEqual(unread, [], 'these settings are writable and nothing reads them: ' + unread.join(', '))
+  for (const field of VIA_PLAIN_CONFIG) {
+    assert.equal(dict[field]?.meta?.volatile, true, field + ' is listed as read via plainConfig, so it must be volatile')
+  }
+})
+
 test('every declared default reaches a resolved config', async () => {
   const { readConfigValue } = await import('../lib/config-value.js')
   const resolved = Config({})

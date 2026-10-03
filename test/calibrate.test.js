@@ -20,6 +20,24 @@ const near = (got, want, epsilon = 1e-9) => assert.ok(Math.abs(got - want) < eps
 //   bin [0.3,0.4): p = 0.3 (y=1)
 //   bin [0.8,0.9): p = 0.8 (y=1), 0.85 (y=1) -> says 0.825, right 1
 // ECE = (1/4)|0.2-0| + (1/4)|0.3-1| + (2/4)|0.825-1| = 0.05 + 0.175 + 0.0875 = 0.3125
+// THE BIN COUNT IS AN INPUT, WHICH IS WHAT MAKES IT A SETTING: it decides how finely the probability scale is sliced,
+// and the number moves with it. THE FIXTURE IS THE WHOLE TEST -- my first one used 0.2 and 0.3, which land in the same
+// bin at four bins and at ten, so both counts gave 0.3125 and a test that "passed" would have proved nothing. This
+// one straddles a boundary of the ten-bin grid and not of the four-bin grid. Two samples, 0.24 (right 0) and 0.26
+// (right 1):
+//   ten bins : both in [0.2,0.3) -> meanP 0.25 against right 0.5 -> ECE = 0.25
+//   four bins: 0.24 in [0,0.25) gap 0.24, 0.26 in [0.25,0.5) gap 0.74 -> (1/2)(0.24) + (1/2)(0.74) = 0.49
+test('the bin count is a parameter, and the number moves with it', () => {
+  const samples = [{ p: 0.24, y: 0 }, { p: 0.26, y: 1 }]
+  near(ece(samples).ece, 0.25, 1e-4)
+  near(ece(samples, 4).ece, 0.49, 1e-4)
+  // AND THE BIN TABLE SAYS WHICH SLICING PRODUCED IT, which is what a reader checks the number against.
+  assert.equal(ece(samples).bins.length, 1, 'at ten bins one bin is occupied')
+  assert.equal(ece(samples, 4).bins.length, 2, 'at four, two are')
+  assert.equal(scoreScalar('x', samples, 4).bins.length, 2, 'a scalar carries the table it used')
+  assert.equal(scoreScalar('x', samples).bins.length, 1, 'with the constant as the default')
+})
+
 test('ECE is equal-width, half-open except the last bin, and weighted by the FULL sample count', () => {
   const samples = [{ p: 0.2, y: 0 }, { p: 0.3, y: 1 }, { p: 0.8, y: 1 }, { p: 0.85, y: 1 }]
   const result = ece(samples)

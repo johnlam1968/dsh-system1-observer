@@ -26,6 +26,7 @@ import { createEvidence } from './lib/evidence.js'
 // drifts from the one the cost line actually uses.
 import { IDLE_GAP_MS } from './lib/cost.js'
 import { MAX_LANES } from './lib/compare.js'
+import { BINS } from './lib/calibrate.js'
 import { createModel } from './lib/model/client.js'
 import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
@@ -214,6 +215,9 @@ const Config = Schema.object({
   pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
   // HOW MANY RUNS A COMPARISON MAY SHOW. A reading decision, not a rendering detail: the comparison places runs
   // side by side, and past a handful the columns stop being readable.
+  // HOW FINELY THE PROBABILITY SCALE IS SLICED for the calibration report. It changes the number the report shows,
+  // which is the whole test for whether something is a setting.
+  calibrationBins: Schema.number().min(2).default(BINS).volatile().description('How many equal-width bins the calibration report slices the probability scale into. Read at each report, so a save re-slices without a restart.'),
   maxCompareLanes: Schema.number().min(1).default(MAX_LANES).volatile().description('How many runs a comparison may show side by side. Read at each report, so a save reaches a running row.'),
   idleGapMs: Schema.number().min(0).default(IDLE_GAP_MS).volatile().description('Milliseconds within which two judge calls count as ONE active stretch on the cost line. It decides what `activeMs` means, and a deployment whose turns are shorter than the default would rather count them apart. Read at each report, so a save re-prices without a restart.'),
   maxTraceBytes: Schema.number().default(33554432).volatile().description('Rotate the trace when the next line would cross this many bytes. 0 disables rotation. Rotation renames the full file aside as `<name>.<run>.<n>.jsonl` and starts a fresh one at the same path, so every reader keeps following the live file; each rotation writes a `rotate` line naming both, and the count is on the mount line.'),
@@ -397,6 +401,7 @@ async function apply(ctx, config) {
       // changed no reading. test/schema.test.js now fails on any volatile field nothing reads.
       idleGap: () => readConfigValue(liveConfig().idleGapMs),
       compareLanes: () => readConfigValue(liveConfig().maxCompareLanes),
+      calibrationBins: () => readConfigValue(liveConfig().calibrationBins),
     }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
