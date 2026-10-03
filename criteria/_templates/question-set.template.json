@@ -1,0 +1,25 @@
+{
+  "REPLACE_WITH_SCOPE": [
+    {
+      "id": "REPLACE_WITH_scope_property",
+      "type": "noul",
+      "instructions": "One narrow question, answerable from what this scope's state carries, with a stated polarity."
+    },
+    {
+      "id": "REPLACE_WITH_scope_ladder",
+      "type": "score",
+      "instructions": "An ordinal judgement, worst to best.",
+      "levels": ["worst", "middle", "best"]
+    },
+    {
+      "id": "REPLACE_WITH_scope_shape",
+      "type": "choice",
+      "instructions": "A closed classification.",
+      "options": [
+        { "label": "first", "criterion": "what makes this the first case" },
+        { "label": "second", "criterion": "what makes this the second case" },
+        { "label": "cannot_tell", "criterion": "the state does not show enough to answer", "abstain": true }
+      ]
+    }
+  ]
+}

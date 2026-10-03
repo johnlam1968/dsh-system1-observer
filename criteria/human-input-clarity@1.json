@@ -1,0 +1,86 @@
+{
+  "admit": [
+    {
+      "id": "human_goal_is_stated",
+      "type": "noul",
+      "instructions": "Does this message say what the sender wants DONE, rather than only what they are looking at?"
+    },
+    {
+      "id": "human_done_is_checkable",
+      "type": "noul",
+      "instructions": "Could a reader tell from this message alone when the job is finished?"
+    },
+    {
+      "id": "human_constraints_given",
+      "type": "noul",
+      "instructions": "Does it state the limits that matter (scope, format, what must not change), rather than leaving them to be guessed?"
+    },
+    {
+      "id": "human_target_is_findable",
+      "type": "noul",
+      "instructions": "Does it identify the thing to act on specifically enough to be found (a path, a file, a symbol), rather than describing it?"
+    },
+    {
+      "id": "human_clarity",
+      "type": "score",
+      "instructions": "How clear is the request in this message?",
+      "levels": [
+        "ambiguous: a reader must decide what is being asked",
+        "attemptable: the intent is clear, at least one of target or output shape is not",
+        "unambiguous: intent, target and expected result are all identifiable"
+      ]
+    },
+    {
+      "id": "human_request_shape",
+      "type": "choice",
+      "instructions": "How many requests does this message carry?",
+      "options": [
+        {
+          "label": "one",
+          "criterion": "a single request, with any context that belongs to it"
+        },
+        {
+          "label": "several_compatible",
+          "criterion": "several requests that can be satisfied together"
+        },
+        {
+          "label": "several_conflicting",
+          "criterion": "several requests that cannot all be satisfied as written"
+        },
+        {
+          "label": "cannot_tell",
+          "criterion": "the transcript (or message) does not show enough to answer",
+          "abstain": true
+        }
+      ]
+    },
+    {
+      "id": "human_loop_hazards",
+      "type": "choice",
+      "instructions": "Which of these, if any, does this message do?",
+      "options": [
+        {
+          "label": "buried_request",
+          "criterion": "the request sits inside a narrative and must be found"
+        },
+        {
+          "label": "unverified_premise",
+          "criterion": "it states as fact something that may not be true"
+        },
+        {
+          "label": "asks_for_what_is_present",
+          "criterion": "it asks for something the visible context already contains"
+        },
+        {
+          "label": "none",
+          "criterion": "none of these"
+        },
+        {
+          "label": "cannot_tell",
+          "criterion": "the transcript (or message) does not show enough to answer",
+          "abstain": true
+        }
+      ]
+    }
+  ]
+}
