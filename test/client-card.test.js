@@ -612,6 +612,20 @@ test('EVERY volatile setting has a control, and the panels that group them all e
   }
 })
 
+test('the card\u2019s subject-kind choices ARE the adapter\u2019s map -- pinned, because a browser half cannot import it', async () => {
+  // `lib/` cannot be imported by a browser half, so the kind names are literals in the card. This is the check that
+  // keeps them honest: the adapter is the authority and the card must offer exactly its keys. A drift here would show
+  // a person a checkbox that maps to no event type -- a slice that judges less than the row asked for.
+  const { readFileSync } = await import('node:fs')
+  const { SUBJECT_KINDS } = await import('../lib/session-subject.js')
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const entry = /field: 'subjectKinds'[\s\S]{0,220}?choices: \[([^\]]*)\]/.exec(source)
+  assert.ok(entry, 'the subjectKinds entry must name its choices')
+  const choices = entry[1].split(',').map((part) => part.trim().replace(/^'|'$/g, '')).filter((part) => part !== '')
+  assert.deepEqual(choices, Object.keys(SUBJECT_KINDS), 'the card and the adapter must offer the same kinds')
+  assert.ok(Object.keys(SUBJECT_KINDS).length >= 2, 'and the map must not be empty: ' + JSON.stringify(Object.keys(SUBJECT_KINDS)))
+})
+
 test('EVERY card fallback equals the SCHEMA default -- one home per number, checked', async () => {
   // The card cannot import `lib/`, and the host does not project a schema default, so a fallback IS a literal in this
   // file. This is what keeps a literal honest. It is the check that O14's fix produced, and the moment it ran it found

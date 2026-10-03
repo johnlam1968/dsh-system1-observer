@@ -22,6 +22,10 @@ test('the service reports a LIVE provider, model and hook set -- not the mount s
   let provider = 'typesafe'
   let model = 'jev-latest'
   let hooks = ['admit']
+  let subjectSource = 'live'
+  let subjectSession = ''
+  let subjectKinds = ['operator', 'assistant']
+  let subjectLastMessages = 0
   const providers = new Map()
   const ctx = {
     handlers: new Map(),
@@ -47,6 +51,10 @@ test('the service reports a LIVE provider, model and hook set -- not the mount s
     timeoutMs: accessor(200),
     provider: accessor(() => provider),
     model: accessor(() => model),
+    subjectSource: accessor(() => subjectSource),
+    subjectSession: accessor(() => subjectSession),
+    subjectKinds: accessor(() => subjectKinds),
+    subjectLastMessages: accessor(() => subjectLastMessages),
   })
 
   const service = providers.get(OBSERVER_SERVICE)
@@ -72,4 +80,25 @@ test('the service reports a LIVE provider, model and hook set -- not the mount s
   // because a description that can take the row down is worse than a description that is briefly behind.
   hooks = ['admit', 'not-a-seam']
   assert.deepEqual(service.config().hooks, ['admit'], 'an unusable live hook set falls back to the mount')
+
+  // ---- AND THE SUBJECT SETTINGS, which are the inputs to a stored-session evaluation (§11) -------------
+  assert.deepEqual(service.subject(), { source: 'live', sessionId: '', kinds: ['operator', 'assistant'], lastMessages: 0 },
+    'a row that configured nothing judges the live session, whole')
+  subjectSource = 'stored'
+  subjectSession = 'session-abc'
+  subjectKinds = ['assistant']
+  subjectLastMessages = 5
+  assert.deepEqual(service.subject(), { source: 'stored', sessionId: 'session-abc', kinds: ['assistant'], lastMessages: 5 },
+    'and a live change reaches the reader with no re-mount')
+  // A JUNK SOURCE IS `live`, and a junk count is the whole session: the same fall-back-the-reader-means rule the
+  // nudge threshold follows, so a value nobody can use never silently becomes a narrower measurement.
+  subjectSource = 'somewhere-else'
+  subjectLastMessages = -3
+  assert.equal(service.subject().source, 'live')
+  assert.equal(service.subject().lastMessages, 0)
+  // NO SESSION STORE IN THIS MOUNT: a named problem rather than a throw, because the caller is a tool that has to
+  // explain what happened.
+  const listed = await service.storedSessions()
+  assert.match(String(listed.problem), /no session-query service/)
+  assert.deepEqual(listed.sessions, [])
 })

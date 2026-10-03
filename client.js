@@ -128,6 +128,18 @@ window.__ModuleLoader__.load({
         hint: 'How many equal-width bins the calibration report slices the probability scale into.' },
       // THE NUDGE VOCABULARY BELONGS IN NUMBERS: it decides what a number in the report MEANS. Each of the three
       // says in its hint that it changes a measurement, because that is what a person has to know before editing it.
+      // THE STORED SESSION AS SUBJECT (§11). A picker over the host's session list is the next step; today the id is
+      // typed, and `newest` is accepted so a row can be tried without looking one up.
+      { panel: 'evaluate', field: 'subjectSource', kind: 'select', choices: ['live', 'stored'], fallback: 'live', label: 'Subject source',
+        hint: 'Live is the session happening now, judged at seams and turn boundaries. Stored reads a session that is already over, whole or as a slice, on demand.' },
+      { panel: 'evaluate', field: 'subjectSession', kind: 'text', label: 'Stored session',
+        hint: 'A session id, or the word `newest`. The host resolves it through the harness session-query service; a picker over that list is the next step.' },
+      // THE KIND NAMES ARE LITERALS HERE BECAUSE A BROWSER HALF CANNOT IMPORT `lib/`, and a test pins them to the
+      // adapter's own map so the two cannot drift.
+      { panel: 'evaluate', field: 'subjectKinds', kind: 'multi', choices: ['operator', 'assistant'], label: 'Message kinds',
+        hint: 'Which messages a stored judgement sees. A kind that maps to no event type is refused by name rather than silently matching nothing.' },
+      { panel: 'evaluate', field: 'subjectLastMessages', kind: 'number', min: 0, fallback: 0, label: 'Messages to include',
+        hint: 'How many of the stored session\u2019s newest messages to judge. 0 is the whole session.' },
       { panel: 'numbers', field: 'nudgeExtraMarkers', kind: 'lines', label: 'Extra correction markers',
         hint: 'One phrase per line, matched case-insensitively. Adds to the shipped list, cannot remove from it. This changes the nudge MEASUREMENT: more turns will read as corrections.' },
       { panel: 'numbers', field: 'nudgeExtraStopwords', kind: 'lines', label: 'Extra words to ignore',
@@ -146,6 +158,9 @@ window.__ModuleLoader__.load({
       { id: 'turn', title: 'Turn' },
       { id: 'keep', title: 'Keep' },
       { id: 'numbers', title: 'Numbers' },
+      // THE STORED SUBJECT, its own panel because it is a different SOURCE rather than another setting of the live
+      // one. `Act` is still deliberately absent: designed in §8, not built.
+      { id: 'evaluate', title: 'Evaluate' },
     ]
 
     /** The draft a table entry starts from: the stored value, or the SCHEMA'S default when none is stored. */

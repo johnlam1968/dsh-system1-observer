@@ -17,6 +17,7 @@ import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { FIREABLE_HOOKS, configuredQuestionIds, probeOf } from './lib/questions.js'
+import { SUBJECT_KINDS, listStoredSessions, subjectSettings } from './lib/session-subject.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -105,6 +106,20 @@ const Config = Schema.object({
   //
   // THE ANSWER SET IS NOT CONFIGURABLE, and the code says why: only the labels decide what an answer means, so the
   // criteria are fixed and a reworded question keeps all ten.
+  // ---------------------------------------------------------------------------------------------
+  // THE SECOND SUBJECT SOURCE: a STORED SESSION (§11 of docs/settings.md).
+  //
+  // The live modes judge what is happening; these four let a row judge a conversation that is over --
+  // whole, or as a slice -- on demand. The events come from the harness's own session-query service and
+  // go into the SAME composer, with `scope: 'session'`, so there is still one answer to "what is the
+  // judge shown".
+  // ---------------------------------------------------------------------------------------------
+  subjectSource: Schema.union(['live', 'stored']).default('live').volatile().description('What the subject is: `live` is the session happening now, judged at seams and turn boundaries; `stored` is a session that is already over, read on demand, whole or as a slice.'),
+  subjectSession: Schema.string().default('').volatile().description('Which stored session to read: a session id, or the word `newest`. Empty means none is selected, which is a named problem rather than a silent fallback.'),
+  // THE DEFAULT IS ON: the effective slice of a row that configured nothing is both kinds, and a card showing nothing
+  // selected while the row judges everything would be the interface lying about the measurement.
+  subjectKinds: Schema.array(Schema.string()).default(['operator', 'assistant']).volatile().description('Which message kinds a stored judgement sees. The names map onto the event types the harness writes; a name that maps to nothing is refused by name.'),
+  subjectLastMessages: Schema.number().min(0).default(0).volatile().description('How many of the stored session’s newest messages to judge. 0 is the whole session, which is the honest default for a feature whose point is judging a conversation as a whole.'),
   probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a
@@ -424,6 +439,13 @@ async function apply(ctx, config) {
     }
   }
 
+  // THE HARNESS'S SESSION STORE, IF THIS PROFILE MOUNTS IT. Optional on purpose: a deployment without it simply has
+  // no stored sessions to read, which is a NAMED problem from the adapter rather than a mount failure.
+  let sessionQuery
+  ctx.inject(['sessionQuery'], (child) => {
+    sessionQuery = child.sessionQuery ?? (typeof child.get === 'function' ? child.get('sessionQuery') : undefined)
+  })
+
   ctx.inject(['tools'], (child) => {
     const tools = child.get('tools')
     if (tools === undefined || typeof tools.register !== 'function') return
@@ -507,6 +529,13 @@ async function apply(ctx, config) {
     read: (options) => readTraceWindow(evidence.path, options?.maxBytes),
     runs: () => runIds(readTraceWindow(evidence.path).events),
     sessions: () => ({ live: liveAgentRoutes(), configured: mount.sessions ?? null }),
+    /**
+     * THE SUBJECT SETTINGS IN FORCE, read live -- the inputs to a stored-session evaluation (§11). Read-only like
+     * everything else here: the EVALUATION is a call to a model, and that belongs to a tool rather than to a view.
+     */
+    subject: () => subjectSettings(liveConfig()),
+    /** The stored sessions a row may choose from, from the harness's own service. Named problems, never throws. */
+    storedSessions: () => listStoredSessions(sessionQuery),
     config: () => ({
       // ALL LIVE, INCLUDING THE THREE THAT WERE NOT. `hooks` came from `readHooks(mount)` and `provider`/`model`
       // straight off the snapshot, while every sibling field in this same object read the running config -- so the

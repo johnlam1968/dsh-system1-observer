@@ -41,7 +41,7 @@ test('apply provides the observer service, with its readers, the derived signals
 
   const service = ctx.provided.get(OBSERVER_SERVICE)
   assert.notEqual(service, undefined, 'the row must provide the service under its declared name')
-  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'replay', 'runs', 'sessions'])
+  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'read', 'replay', 'runs', 'sessions', 'storedSessions', 'subject'])
   assert.equal(Object.isFrozen(service), true, 'a consumer must not be handed something it can mutate')
   // The readers answer rather than throw, which is the property a consumer depends on.
   assert.equal(Array.isArray(service.read({}).events), true)
