@@ -370,6 +370,30 @@ test('`pw` and `pword` are credential names in every form this module handles', 
   assert.equal(ported.pw, 'hunter2', 'without the extra name the ported six decide -- the port being faithful, which is not the same as the shapes leaking')
 })
 
+// HOW MUCH OF THE TAIL SURVIVES A CUT. `cutHeadTail` keeps the head AND the tail; how much tail is `tailChars` now,
+// because how much of the END of a long value is evidence depends on what a deployment asks about.
+test('the tail a cut keeps is a parameter, and zero means head-only', async () => {
+  const { cutHeadTail, TAIL_CHARS } = await import('../lib/redact.js')
+  // THE BUDGET HAS TO BE BIGGER THAN THE TAIL for the tail to be kept at all -- `max <= tailChars + 1` is the
+  // head-only fallback, and my first version of this asserted the default tail against a 30-character budget, so the
+  // CODE was right and the test was wrong. Third time in this session; the fixture is derived from the constant now.
+  const long = 'A'.repeat(TAIL_CHARS + 500) + 'B'.repeat(TAIL_CHARS)
+  const budget = TAIL_CHARS + 200
+  const byDefault = cutHeadTail(long, budget)
+  assert.equal(byDefault.text.endsWith('B'.repeat(TAIL_CHARS)), true, `the default keeps ${TAIL_CHARS} characters of tail`)
+  assert.equal(byDefault.text.length, budget, 'and the whole cut is exactly the budget')
+  const tight = cutHeadTail(long, 30, 5)
+  assert.equal(tight.text.endsWith('BBBBB'), true, 'a 5-character tail keeps the last five')
+  assert.equal(tight.text.length, 30, 'and still fits the budget')
+  assert.equal(tight.text.startsWith('A'.repeat(24)), true, 'with the head taking what is left of the budget')
+  // THE CASE THAT FOUND A BUG: written as arithmetic alone, `slice(-0)` returns the WHOLE string, so a zero tail
+  // produced head + ellipsis + everything, over budget and marked as cut.
+  const none = cutHeadTail(long, 30, 0)
+  assert.equal(none.text, 'A'.repeat(30), 'a zero tail is head-only')
+  assert.equal(none.text.length, 30, 'and it is within the budget it claims')
+  assert.equal(cutHeadTail(long, 3, 100).text, 'AAA', 'a tail larger than the budget is ignored rather than guessed at')
+})
+
 // AN ABSENT MEMBER IS NOT A NULL ONE. `sanitizeJson` wrote `undefined` as `null`, so a field that was never there and
 // a field that was explicitly null read identically -- and the redaction marker is a string, so the three are
 // distinguishable only if absence is dropped rather than spelled.

@@ -19,7 +19,7 @@ import { FIREABLE_HOOKS, configuredQuestionIds } from './lib/questions.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
-import { minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
+import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
 import { describeSubject, subjectOfAgent } from './lib/subject.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
@@ -174,6 +174,9 @@ const Config = Schema.object({
   sessions: Schema.array(Schema.any()).default(['*']).volatile().description('Observe only these sessions, matched by id or id prefix. `*` means EVERY session and is the default; an EMPTY list observes nothing. The “...” menu on a session in the sidebar is the way in, and it can also narrow to one session. An entry may be a bare id string or `{ id, title }` — the title is a display cache and is never matched on. A firing in any other session records a `skip` with reason `session not observed` and its text never reaches the model or the trace.'),
   includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
   observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
+  // HOW MUCH OF THE END A CUT ALWAYS KEEPS, in characters. Beside the cap because it only means anything with one:
+  // the cap decides the budget, this decides how it is spent. Zero is head-only, and legitimate.
+  tailChars: Schema.number().min(0).default(TAIL_CHARS).volatile().description('Characters of the END that a truncated value always keeps, so the newest part of a long field survives the cut. Zero keeps the head only. Read at each cut, so a save reaches a running row.'),
   maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
   // THE SIZES THIS PLUGIN KEEPS ARE DEPLOYMENT CHOICES, NOT CONSTANTS. config.md:80-94 states the convention
   // and gives its test: can you change this in cordis.yml without editing code? These five could not, and each
