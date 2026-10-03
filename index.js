@@ -29,6 +29,7 @@ import { createEvaluateTool } from './lib/evaluate-tool.js'
 import { createResultsTool } from './lib/results-tool.js'
 import { labelHash } from './lib/label-hash.js'
 import { createQuestionsTool } from './lib/questions-tool.js'
+import { createSessionsTool } from './lib/sessions-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
@@ -518,6 +519,13 @@ async function apply(ctx, config) {
       tools.register(createQuestionsTool({
         dir: () => setSettings(liveConfig()).dir,
       }))
+      // SYSTEM1_SESSIONS: the agent-facing half of the session story. DSH gives an agent live peers and a plugin
+      // the whole corpus; nothing let an agent NAME a stored session, which is why every historical read here was a
+      // shell script. `list` finds one, `read` shows its content sliced exactly as an evaluation would slice it.
+      tools.register(createSessionsTool({
+        query: () => sessionQuery,
+        settings: () => subjectSettings(liveConfig()),
+      }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
     // it at call time. Reaching for a model here would freeze whichever transport happened to be ready first and
@@ -540,8 +548,31 @@ async function apply(ctx, config) {
     tools.register(createEvaluateTool({
       settings: () => subjectSettings(liveConfig()),
       // READ AT CALL TIME: `sessionQuery` is captured by a `ctx.inject` callback that may run after this block.
-      stored: (options) => readStoredSubject(Object.assign({ sessionQuery: sessionQuery }, options)),
+      stored: async (options) => {
+        const asked = Object.assign({ sessionQuery: sessionQuery }, options)
+        // `newest` IS RESOLVED AGAINST THE SERVICE, because this tool's own parameter description promised it and the
+        // store answered `session "newest" not found`: a tool must not advertise a value and then reject it. The
+        // newest is by `header.createdAt`, and the id handed on is the service's own logical id, not a directory name.
+        if (options !== undefined && options.sessionId === 'newest') {
+          let chosen
+          try {
+            const records = await sessionQuery.listSessions()
+            chosen = (records ?? []).slice().sort((a, b) => (b?.header?.createdAt ?? 0) - (a?.header?.createdAt ?? 0))[0]?.header?.id
+          } catch {
+            chosen = undefined
+          }
+          if (chosen === undefined) {
+            return { events: [], slice: { matched: 0, total: 0, unknownKinds: [] }, session: null, problem: 'no stored session is available to resolve `newest` against' }
+          }
+          asked.sessionId = chosen
+        }
+        return readStoredSubject(asked)
+      },
       liveEvents: async () => {
+        // `agents` IS NOT IN SCOPE HERE, measured: this closure threw a ReferenceError on the first live call and the
+        // tool reported it. The four sibling sites (316, 762, 842, 873) each resolve the service from `ctx` inside
+        // their own scope; this one assumed the name was already bound.
+        const agents = typeof ctx.get === 'function' ? ctx.get('agents') : undefined
         const initiator = agents !== undefined && typeof agents.currentInitiator === 'function' ? agents.currentInitiator() : undefined
         const session = initiator?.session
         return session !== undefined && typeof session.snapshotEvents === 'function' ? session.snapshotEvents(0) : []
