@@ -10,6 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../lib/question-sets.js'
+import { QUESTION_SCOPES, buildQuestions } from '../lib/questions.js'
 
 const dirWith = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'sets-'))
@@ -86,4 +87,29 @@ test('the settings are read live, in the volatile accessor shape a running row p
   assert.deepEqual(setSettings({ questionSetsDir: { get: () => ' /tmp/sets ' }, questionSet: { get: () => ' house ' } }), { dir: '/tmp/sets', name: 'house' })
   // A JUNK VALUE IS THE EMPTY SELECTION, not a path built from a number: the fallback is the inline questions.
   assert.deepEqual(setSettings({ questionSetsDir: 42, questionSet: null }), { dir: '', name: '' })
+})
+
+test('EVERY shipped set compiles clean for every scope it keys, and names only declared scopes', async () => {
+  // THE SETS WE SHIP ARE WHAT A ROW CAN SELECT, so a set that does not compile is a set whose selection REFUSES the
+  // call (`buildQuestions` returns the problem and no question). And a scope key the schema does not declare would be
+  // dropped by `projectForm` on the next save of any other field -- the failure the schema's own comment records for
+  // `turn`. This is the check that keeps both true for every file in `criteria/`, including the older sets that were
+  // authored before the loader existed.
+  const dir = new URL('../criteria', import.meta.url).pathname
+  const listed = listSets(dir)
+  assert.equal(listed.problem, null, 'the directory lists')
+  assert.ok(listed.sets.length >= 5, 'the shipped sets were found: ' + listed.sets.length)
+  const failures = []
+  for (const set of listed.sets) {
+    if (set.problem !== null) { failures.push(set.name + ': ' + set.problem); continue }
+    const selected = readSelectedSet(dir, set.name)
+    for (const scope of Object.keys(selected.questions ?? {})) {
+      if (!QUESTION_SCOPES.includes(scope)) {
+        failures.push(set.name + ': "' + scope + '" is not a declared scope, so projectForm would drop it')
+      }
+      const built = buildQuestions({ questions: selected.questions }, scope)
+      for (const problem of (built.problems ?? [])) failures.push(set.name + ' @ ' + scope + ': ' + problem)
+    }
+  }
+  assert.deepEqual(failures, [], 'a shipped set that does not compile is one the row refuses: ' + failures.join(' | '))
 })
