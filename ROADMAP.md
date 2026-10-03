@@ -755,14 +755,16 @@ minimum honest evidence, recorded here as the design for the missing gate:
   The set, technique, operator and backend refusals now enforce the parts they can see; a *paired* change of two axes is
   refused by arithmetic on the run table rather than by a rule of thumb.
 
+**THE BATTERY IS BUILT** (round 5): `lib/battery.js` (format, refusals, scoring -- pure), `lib/battery-tool.js` + `system1_battery` (`list` / `validate` / `run`), and a shipped battery at `criteria/agent-helpfulness-session.battery.json` -- 8 CONSTRUCTED cases covering the 8 `session` questions, hash `92823d5d3268`, whose labels are true by construction rather than by one model's opinion of another's work. A run records an `experiment` line (its own event kind), never a reading. `validate` spends nothing.
+
 **Its refusal list, triaged rather than adopted wholesale:**
 
 | proposed refusal | status |
 |---|---|
-| an anonymous rewrite (no parent hash, reason, or battery) | **not built** -- part of the gate above |
+| an anonymous rewrite (no parent hash, reason, or battery) | **STILL NOT BUILT** -- `system1_battery run` records `parent` and `reason` WHEN GIVEN and refuses a `parent` that is not a hash, but `system1_question_sets write` still accepts a new version with neither. The battery half exists now (`lib/battery.js`); the half that refuses a rewrite which cannot say what it rewrote is not written |
 | comparing two runs whose set hashes differ with no experiment line linking them | **built** as the set-axis refusal |
 | a `choice` with no abstain option, or a duplicate id | **already built** in `system1_question_sets` |
-| a rewrite that changes nothing | **not built** -- cheap, and worth adding beside the gate |
-| labelling a battery after seeing the run table | **not built** -- belongs with the battery |
+| a rewrite that changes nothing | **STILL NOT BUILT** -- cheap, and now cheap to CHECK rather than to guess: two compositions' hashes are both recorded (`<set>@N` files carry one per scope), so a no-op rewrite is a hash comparison the writer could make |
+| labelling a battery after seeing the run table | **PARTIALLY BUILT, and the limit is stated rather than papered over.** The battery's hash rides every `experiment` line, so a battery edited after a run is a DIFFERENT INSTRUMENT and the two cannot be pooled -- that is the part a hash can do. What no hash can do is prove WHEN a file was authored: a battery written after seeing the run table and then hashed is indistinguishable from one written before. That needs a timestamp or a commit, not a rule in this repository |
 | aborting the whole read when any line is unattributed | **refused**: traces recorded before these fields existed are real evidence, so the view REPORTS the gap and refuses to pool across it rather than returning nothing. Aborting would delete the history that makes the gap visible |
 | an operator hash changing inside one run | **not built** -- the run table now exposes it, which is the part that matters first |
