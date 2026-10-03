@@ -126,6 +126,14 @@ window.__ModuleLoader__.load({
         hint: 'Within this gap, two judge calls count as ONE active stretch. It decides what the report activeMs means.' },
       { panel: 'numbers', field: 'calibrationBins', kind: 'number', min: 2, fallback: 10, label: 'Calibration bins',
         hint: 'How many equal-width bins the calibration report slices the probability scale into.' },
+      // THE NUDGE VOCABULARY BELONGS IN NUMBERS: it decides what a number in the report MEANS. Each of the three
+      // says in its hint that it changes a measurement, because that is what a person has to know before editing it.
+      { panel: 'numbers', field: 'nudgeExtraMarkers', kind: 'lines', label: 'Extra correction markers',
+        hint: 'One phrase per line, matched case-insensitively. Adds to the shipped list, cannot remove from it. This changes the nudge MEASUREMENT: more turns will read as corrections.' },
+      { panel: 'numbers', field: 'nudgeExtraStopwords', kind: 'lines', label: 'Extra words to ignore',
+        hint: 'One word per line, ignored when comparing two messages. Additions only. Adding one makes the recurrence test LOOSER. This changes the nudge MEASUREMENT.' },
+      { panel: 'numbers', field: 'nudgeRecurrenceThreshold', kind: 'number', fractional: true, min: 0, max: 1, fallback: 0.5, label: 'Recurrence threshold',
+        hint: 'How much of the request must come back, in different words, before a turn counts as a nudge. Raising it makes the test stricter. This changes the nudge MEASUREMENT.' },
       { panel: 'numbers', field: 'maxCompareLanes', kind: 'number', min: 1, fallback: 5, label: 'Comparison lanes',
         hint: 'How many runs a comparison may show side by side.' },
     ]
@@ -214,8 +222,12 @@ window.__ModuleLoader__.load({
         const shapeOk = entry.fractional === true
           ? Number.isFinite(parsed)
           : Number.isInteger(parsed)
-        if (text === '' || !shapeOk || parsed < floor) {
-          out.push(entry.label + ': ' + (entry.fractional === true ? 'a number' : 'a whole number') + ', ' + floor + ' or more.')
+        const ceiling = entry.max
+        const above = typeof ceiling === 'number' && parsed > ceiling
+        if (text === '' || !shapeOk || parsed < floor || above) {
+          const shape = entry.fractional === true ? 'a number' : 'a whole number'
+          const range = typeof ceiling === 'number' ? 'between ' + floor + ' and ' + ceiling : floor + ' or more'
+          out.push(entry.label + ': ' + shape + ', ' + range + '.')
         }
       }
       return out

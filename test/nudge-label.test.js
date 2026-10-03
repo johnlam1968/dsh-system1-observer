@@ -60,6 +60,43 @@ test('tokens drop stopwords and punctuation, and recurrence counts content', () 
 // `[implementer session, dsh-system1-observer (…) via peer-bridge]`, and counting it as content made four unrelated
 // coordination messages read as operator nudges at 60-100% recurrence -- the heuristic measuring the envelope
 // instead of the message.
+// WHAT COUNTS AS A NUDGE IS THE ROW'S TO SAY, and every one of these settings changes a MEASUREMENT: the derived
+// label is the ground truth the whole calibration is checked against.
+test('an extra marker labels a nudge the shipped vocabulary would miss', () => {
+  // THE FIXTURE IS THE TEST. The two messages share no content word, so `recurrence` cannot carry the label and only
+  // the marker can -- my first probe used sentences that recursed, and both runs answered `true`, proving nothing.
+  const args = { request: 'summarise the deployment logs', next: 'scrap that and start over' }
+  assert.equal(deriveNudgeLabel(args).label, false, 'without the marker this is not a nudge')
+  assert.equal(deriveNudgeLabel({ ...args, vocabulary: { markers: ['scrap that'] } }).label, true,
+    'and with it, it is')
+  assert.equal(deriveNudgeLabel({ ...args, vocabulary: { markers: ['SCRAP THAT'] } }).label, true,
+    'matched case-insensitively, like the shipped markers')
+  assert.deepEqual(deriveNudgeLabel({ ...args, vocabulary: { markers: ['scrap that'] } }).signals.marker, 'scrap that',
+    'and the signal names which marker fired, so the reason is auditable')
+})
+
+test('an extra stopword removes a word from the content set, which loosens recurrence', () => {
+  assert.deepEqual(contentTokens('quarterly appendix', ['appendix']), ['quarterly'], 'the extra word is dropped')
+  assert.deepEqual(contentTokens('quarterly appendix'), ['quarterly', 'appendix'], 'the shipped list still applies')
+  // ARITHMETIC THAT CAN BE CHECKED BY EYE: one shared word of three is 1/3, below the 0.5 default; remove two of the
+  // three content words and the same pair shares 1/1.
+  assert.equal(recurrence('alpha beta gamma', 'alpha delta epsilon'), 1 / 3)
+  assert.equal(recurrence('alpha beta gamma', 'alpha delta epsilon', ['beta', 'gamma']), 1)
+})
+
+test('the threshold is a setting, and a junk one falls back rather than silencing the signal', () => {
+  const args = { request: 'alpha beta gamma', next: 'alpha beta delta' }
+  assert.equal(deriveNudgeLabel(args).label, true, 'two of three content words shared is above the shipped 0.5')
+  assert.equal(deriveNudgeLabel({ ...args, recurrenceThreshold: 0.99 }).label, false, 'raised, it is not a nudge')
+  // A THRESHOLD THAT IS NOT A NUMBER MUST NOT MEAN "NOTHING IS EVER A NUDGE". Every comparison would be false and
+  // every turn would be reported clean -- a measurement flattering rather than a measurement failing, which is the
+  // one direction this repository refuses.
+  for (const junk of ['soon', null, undefined, Number.NaN]) {
+    assert.equal(deriveNudgeLabel({ ...args, recurrenceThreshold: junk }).label, true,
+      'threshold ' + JSON.stringify(junk) + ' must fall back to 0.5')
+  }
+})
+
 test('a shared transport header is not recurrence', () => {
   const request = '[implementer session, dsh-system1-observer (session-a) via peer-bridge] Here is the plan for review.'
   const next = '[implementer session, dsh-system1-observer (session-a) via peer-bridge] Please review the acceptance criteria.'

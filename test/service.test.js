@@ -18,6 +18,33 @@ const readers = (path) => ({
   config: () => ({ hooks: [] }),
 })
 
+test('THE VOCABULARY AND THE THRESHOLD ARE THE ROW\u2019S, AND THEY ARE READ LIVE', () => {
+  // The behavioural half of the read-ratchet in test/schema.test.js, which can only see that a name is READ
+  // SOMEWHERE -- it passed once on a wiring that sat inside an object nothing called. This asserts the other half:
+  // that changing the row's configuration changes the label, on the next call, with no re-construction.
+  let threshold = 0.5
+  let markers = []
+  const service = createObserverService({
+    read: () => ({ events: [], truncated: false }),
+    runs: () => [],
+    sessions: () => ({ live: [], configured: null }),
+    config: () => ({}),
+    vocabulary: () => ({ markers, stopwords: [] }),
+    threshold: () => threshold,
+  })
+  const recurs = { request: 'alpha beta gamma', next: 'alpha beta delta' }
+  assert.equal(service.label(recurs).label, true, 'two of three content words shared is above the shipped 0.5')
+  threshold = 0.99
+  assert.equal(service.label(recurs).label, false, 'the LIVE threshold decides, not the one at construction')
+  threshold = 0.5
+  // AND THE VOCABULARY, on a pair that shares nothing, so only a marker can carry the label.
+  const corrects = { request: 'summarise the deployment logs', next: 'scrap that and start over' }
+  assert.equal(service.label(corrects).label, false, 'with no marker configured this is not a nudge')
+  markers = ['scrap that']
+  assert.equal(service.label(corrects).label, true, 'and the live marker makes it one')
+  assert.deepEqual(service.label(corrects).signals.marker, 'scrap that', 'the reason names the marker that fired')
+})
+
 test('the service is frozen, named, and exposes exactly the four readers', () => {
   const service = createObserverService(readers())
   assert.equal(OBSERVER_SERVICE, 'system1Observer')

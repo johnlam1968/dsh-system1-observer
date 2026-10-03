@@ -201,6 +201,16 @@ const Config = Schema.object({
   // PATTERNS, NOT KEYS: a key names a FIELD, a pattern matches TEXT, and a deployment with an in-house token format
   // has the second problem. Addition-only, so this cannot switch off a shipped rule.
   redactPatterns: Schema.array(Schema.string()).default([]).volatile().description('Extra regular expressions, as source strings, applied to the record AFTER the shipped rules. A pattern that does not compile is dropped and its reason reported, never thrown. Additions only: the built-in rules cannot be turned off.'),
+  // WHAT COUNTS AS A NUDGE. Three settings rather than none, because "the operator had to correct it" is the ground
+  // truth the whole calibration is checked against -- and a deployment whose operators correct in another language,
+  // or whose domain words are noise, has a real reason to say so.
+  //
+  // EVERY ONE OF THEM CHANGES A MEASUREMENT. Adding a marker makes more turns read as corrections; adding a stopword
+  // removes a word from the content set, which makes the recurrence test looser; raising the threshold makes it
+  // stricter. None of them can change what was already written, and all of them change what is written next.
+  nudgeExtraMarkers: Schema.array(Schema.string()).default([]).volatile().description('Extra phrases that mean the previous answer did not do the job, matched case-insensitively. Additions only: the shipped markers cannot be removed. This changes the nudge MEASUREMENT, not only its wording.'),
+  nudgeExtraStopwords: Schema.array(Schema.string()).default([]).volatile().description('Extra words to ignore when comparing two messages. Additions only. Adding one makes the recurrence test looser, because fewer words carry content. This changes the nudge MEASUREMENT.'),
+  nudgeRecurrenceThreshold: Schema.number().min(0).max(1).default(0.5).volatile().description('How much of the request must come back, in different words, before a turn counts as a nudge. 0.5 is the shipped value. Raising it makes the test stricter; this changes the nudge MEASUREMENT.'),
   redactKeys: Schema.array(Schema.string()).default([]).volatile().description('Extra field names to redact, beside the six built in (key, token, secret, password, authorization, credential). Matched by the tokenizer, so `apiKey`, `api_key` and `API-KEY` all match `key` — and `monkey`, `keyboard` and `turkey` do not, because containment is deliberately not part of the rule.'),
   // THE RATE IS CONFIGURABLE, AND NAMED, AND DATED. Four sibling plugins hard-code the same number, and the one
   // that says why puts it best: two copies of a price drift. This is the fifth copy -- one, and named.
@@ -459,6 +469,16 @@ async function apply(ctx, config) {
   // throws otherwise -- and needing no import of cordis, so it costs no dependency. Every method closes over a
   // reader and returns its result, so there is no mutator here by construction; the test asserts the freeze.
   ctx.provide(OBSERVER_SERVICE, createObserverService({
+    // THE NUDGE VOCABULARY, read live: it decides what the derived label MEANS, and the label is the ground
+    // truth every calibration in the report is measured against.
+    vocabulary: () => ({
+      markers: readConfigValue(liveConfig().nudgeExtraMarkers),
+      stopwords: readConfigValue(liveConfig().nudgeExtraStopwords),
+    }),
+    // AND THE THRESHOLD, SIBLING TO THE VOCABULARY AND NOT INSIDE IT. It was inside it for one commit, where it was
+    // dead code that the read-ratchet counted anyway -- the ratchet scans for a read, and a read in an object nobody
+    // calls still looks like one. `test/service.test.js` holds the behavioural half.
+    threshold: () => readConfigValue(liveConfig().nudgeRecurrenceThreshold),
     read: (options) => readTraceWindow(evidence.path, options?.maxBytes),
     runs: () => runIds(readTraceWindow(evidence.path).events),
     sessions: () => ({ live: liveAgentRoutes(), configured: mount.sessions ?? null }),

@@ -120,7 +120,7 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // EIGHT MORE, made volatile on request: the seam list, the judge's route, the URL and legacy question, and the
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
-    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'redactPatterns', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'nudgeExtraMarkers', 'nudgeExtraStopwords', 'nudgeRecurrenceThreshold', 'redactPatterns', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
     // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
     // natural rather than a rebuild.
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
@@ -148,6 +148,11 @@ test('every declared field is either volatile or declared mount-bound, and none 
 // host accepted a write, the card would show "Saved", and the report used the constant. Nothing failed, because
 // nothing read them. This is the check that would have failed, and it is deliberately a SOURCE scan: the question is
 // whether a value is read anywhere, which no unit test of the reading code can answer.
+//
+// WHAT IT CANNOT SEE, and the reason behaviour tests still exist: this is a SOURCE SCAN, so a read that is never
+// reached satisfies it. Measured once already -- the nudge threshold was wired INSIDE the vocabulary object, where
+// nothing called it, and this test counted the string and passed. It catches the common failure (a field nobody
+// reads at all) and not the subtle one (a read nobody reaches).
 test('every volatile setting is read somewhere, or is named in the exception list with its reason', async () => {
   const { readFileSync, readdirSync } = await import('node:fs')
   const files = ['index.js', ...readdirSync('lib').filter((name) => name.endsWith('.js')).map((name) => 'lib/' + name)]
