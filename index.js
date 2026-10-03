@@ -22,6 +22,9 @@ import { attachRedactionRule } from './lib/telemetry.js'
 import { minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
 import { describeSubject, subjectOfAgent } from './lib/subject.js'
 import { createEvidence } from './lib/evidence.js'
+// The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
+// drifts from the one the cost line actually uses.
+import { IDLE_GAP_MS } from './lib/cost.js'
 import { createModel } from './lib/model/client.js'
 import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
@@ -205,6 +208,7 @@ const Config = Schema.object({
   redactSessionTelemetry: Schema.boolean().volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
   maxQuestionChars: Schema.number().default(4000).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to 4000.'),
   pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
+  idleGapMs: Schema.number().min(0).default(IDLE_GAP_MS).volatile().description('Milliseconds within which two judge calls count as ONE active stretch on the cost line. It decides what `activeMs` means, and a deployment whose turns are shorter than the default would rather count them apart. Read at each report, so a save re-prices without a restart.'),
   maxTraceBytes: Schema.number().default(33554432).volatile().description('Rotate the trace when the next line would cross this many bytes. 0 disables rotation. Rotation renames the full file aside as `<name>.<run>.<n>.jsonl` and starts a fresh one at the same path, so every reader keeps following the live file; each rotation writes a `rotate` line naming both, and the count is on the mount line.'),
 })
 

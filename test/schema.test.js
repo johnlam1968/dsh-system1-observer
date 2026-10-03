@@ -120,7 +120,7 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // EIGHT MORE, made volatile on request: the seam list, the judge's route, the URL and legacy question, and the
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
-    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars',
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'idleGapMs',
     // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
     // natural rather than a rebuild.
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
