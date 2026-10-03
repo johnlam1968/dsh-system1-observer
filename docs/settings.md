@@ -417,6 +417,14 @@ four inputs above; the RESULT is not a setting and does not go in a panel.
 about the probe question asked at a seam, and a whole-session judgement is a different kind of answer. The call-kind
 field is what keeps them apart, and a test should assert a stored evaluation adds no probe rows.
 
+**SETTLED BY READING THE COMPOSER, and it changes (B).** `composeTurnState` composes **an exchange**: it takes the
+newest operator message carrying text as the REACTION and builds "OPERATOR REQUEST / AGENT RESPONSE / TOOL CALLS /
+OPERATOR NEXT MESSAGE" from what led to it. That is exactly right at a live seam -- every caller before this one was
+judging a turn in progress -- and it is wrong for "judge this conversation as a whole", because the newest turns fall
+outside the exchange. So the one composer needs a **scope**: `exchange` (the default, so the live path is untouched
+byte for byte) and `session` for a stored subject. Recorded as register row O16 and asserted in
+`test/session-subject.test.js` meanwhile.
+
 **Not settled.** Whether a stored evaluation is a single call over the whole composed state or one call per slice;
 whether a stored session may be evaluated on a schedule (which would make it a fourth call mode rather than an
 on-demand question); and whether the composed state's fingerprint belongs on the line so two evaluations of the same
