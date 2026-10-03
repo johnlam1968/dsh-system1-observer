@@ -166,3 +166,32 @@ test('a FLAT single-scope file still works, because a trial does not need a dire
   assert.deepEqual(listed.sets.map((set) => [set.name, set.kind]), [['one-off', 'file']])
   assert.deepEqual(Object.keys(readSelectedSet(dir, 'one-off').questions), ['turn'])
 })
+
+test('a manifest says what a composition is FOR, without changing what it asks', () => {
+  // The pair is the unit this records: which model, which use case, which person a composition was written for. It is
+  // metadata, so it is not a scope, and it does NOT enter the hash -- declaring who a set is for does not change what
+  // it asks, so two rows with the same scopes and different manifests are the same instrument.
+  const dir = mkdtempSync(join(tmpdir(), 'sets-manifest-'))
+  mkdirSync(join(dir, 'house'))
+  writeFileSync(join(dir, 'house', 'draft.json'), JSON.stringify([{ id: 'x', type: 'noul', instructions: 'y' }]))
+  assert.equal(listSets(dir).sets[0].appliesTo, null, 'no manifest is the ordinary case')
+  const bare = listSets(dir).sets[0].hash
+
+  writeFileSync(join(dir, 'house', '_manifest.json'), JSON.stringify({
+    description: 'written for a small local model',
+    appliesTo: { user: 'operator-a', model: 'ministral-3-3b', useCase: 'coding' },
+  }))
+  const declared = listSets(dir).sets[0]
+  assert.equal(declared.hash, bare, 'declaring who a set is for does not change what it asks')
+  assert.deepEqual(declared.appliesTo, { user: 'operator-a', model: 'ministral-3-3b', useCase: 'coding' })
+  assert.deepEqual(declared.seams, ['draft'], 'and the manifest is still not a scope')
+  assert.deepEqual(readSelectedSet(dir, 'house').appliesTo, declared.appliesTo, 'the selection carries it too')
+
+  // A MALFORMED MANIFEST IS A NAMED PROBLEM, not a file that is quietly ignored -- a row that thought it was selecting
+  // a set for its model should hear that the declaration is unreadable.
+  writeFileSync(join(dir, 'house', '_manifest.json'), JSON.stringify({ appliesTo: { user: '' } }))
+  assert.match(String(listSets(dir).sets[0].problem), /appliesTo\.user/)
+  assert.match(String(readSelectedSet(dir, 'house').problem), /appliesTo\.user/)
+  writeFileSync(join(dir, 'house', '_manifest.json'), '{ not json')
+  assert.match(String(listSets(dir).sets[0].problem), /not valid JSON/)
+})

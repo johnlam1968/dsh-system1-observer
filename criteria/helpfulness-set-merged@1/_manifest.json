@@ -1,0 +1,7 @@
+{
+  "description": "edited",
+  "appliesTo": {
+    "user": "operator-1",
+    "model": "ministral-3-3b"
+  }
+}

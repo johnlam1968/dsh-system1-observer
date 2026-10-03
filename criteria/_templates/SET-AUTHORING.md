@@ -23,11 +23,17 @@ things cannot be calibrated, and one that asks nothing says nothing about it.
 file is not a change of instrument, editing one character of one scope is, and an untouched scope keeps its own hash --
 which is what makes a refinement attributable one level below the run.
 
-**Deliberately NOT built, and the direction when it is:** a composition will want to say WHAT IT IS FOR -- a model
-(`ministral-3-3b` needs different questions from a frontier model), or a use case (general chat, coding, research).
-That goes in a **manifest file inside the composition** (`_manifest.json`, e.g. `{"appliesTo": {"model": "...",
-"useCase": "..."}}`), never encoded in a filename: a filename is a string to be parsed, and a parsed name is a lookup
-rule spelled in characters.
+**What a composition is FOR is declared, not encoded in a name.** `_manifest.json`:
+
+```json
+{ "description": "written for a small local model",
+  "appliesTo": { "user": "operator-a", "model": "ministral-3-3b", "useCase": "coding" } }
+```
+
+Read by the resolver, reported in the agent's listing, and **deliberately outside the composition hash**: declaring who
+a set is for does not change what it asks, so two compositions with the same scopes and different manifests are the same
+instrument. `appliesTo` is an open map of strings -- model, use case, person, and the next axis nobody has named yet --
+because a filename is a string to be parsed, and a parsed name is a lookup rule spelled in characters.
 
 A set is a JSON file in `criteria/`, selected by name (`questionSet`), and identified by the **hash of its bytes** --
 so any edit is a new instrument and the runs before and after it are honestly incomparable.

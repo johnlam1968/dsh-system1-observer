@@ -547,3 +547,46 @@ falls back, but writing them is a judgement about which qualities of a whole con
 operator's, exactly as the seam sets were. (2) A row names ONE set file, so a set carrying every scope is how one row
 covers all three -- `helpfulness-set-merged@1.json` does for the ten seams and `turn`. Naming a set per scope would
 need `questionSet` to become a map, and that is not built.
+
+## 14. It takes two: the pair (user, model)
+
+Recorded 2026-10-03 as the operator's framing. A conversation has two participants, so the object worth measuring is
+not the agent alone and not the person alone but **the pair** -- and some operators get more out of the same model than
+others. That is a claim the plugin can be made to answer, and the first thing to get right is that it contains **two
+different questions**:
+
+1. **How good is this person's input?** The `admit` scope, judged by the `human-input-clarity` compositions. A set can
+   be written FOR one operator (`appliesTo.user`), tailored to that person's characteristic failure -- the operator who
+   buries the request, the one who states an unverified premise.
+2. **Does this pair fit?** A `session`-scope set asking whether this operator's style elicited this model's weak
+   behaviour -- a person who asks for whole-feature changes against a model that does best in small steps. Answerable,
+   because `SESSION TRANSCRIPT` labels both sides.
+
+### What exists, and what the pair still needs
+
+**The model is already in the comparability key** (`lib/compare.js`: transport, provider, model, probeHash,
+questionSetHash), so LLM A and LLM B are already distinguishable and their runs already refused comparison. What is
+missing is the person:
+
+- **An operator identity on the line, as a HASH.** `userHash`, of a label the operator configures, recorded the way
+  `stateHash` is -- so lines are linkable to a pair without the trace storing who. A raw user id is a fact about a
+  person and the trace is durable; the repository already keeps the raw copy for the model and redacts the record, and
+  the same line holds here. **Not built.**
+- **A label to hash.** A volatile setting plus a card field plus a walk entry. **Not built.**
+- **Slicing, not refusing.** The user must NOT go into `instrument`. That would refuse comparison across users -- which
+  is exactly the interesting question, whether operator A does better than operator B with one model. The pair is a
+  **grouping for reading results**, not a reason to refuse them.
+
+### And the honest caveat: n
+
+One operator's handful of conversations is not a measurement of an operator, and a pair reading without its n is the
+same error as any other single-observation claim. The plugin records n; a pair figure must carry it.
+
+**Why the manifest is the right home for this rather than a filename.** `_manifest.json` inside a composition is
+metadata: it is not a scope, it does not enter the composition hash, and its `appliesTo` map is open-ended (`model`,
+`useCase`, `user`, and whatever axis is worth naming next) so adding one needs no code change. Model-specific and
+use-case-specific sets are the same mechanism: more compositions, differing by manifest and by which scopes they carry.
+
+**Today this corpus has one operator**, so per-user sets are written but unverifiable -- the mechanism is small and the
+evidence does not exist yet. `criteria/helpfulness-set-merged@1/_manifest.json` is the first one: it names the operator
+and says the model is unspecified.
