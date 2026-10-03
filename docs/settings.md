@@ -43,6 +43,28 @@ transcribed constant the cost line records a `priceSource` saying so — a setti
 
 ## 4. The plan: every remaining gap, as a code change
 
+**WHERE THIS STANDS.** Items 1-7 are built and pushed, item 8 and 9 remain designs, and item 10 is a feature rather
+than a setting. Three of the plan's own sizes were wrong, and the corrections are worth more than the schedule:
+
+| item | state | what changed on contact |
+|---|---|---|
+| 1 `idleGapMs` | **done** `98e2b05` | as planned, small |
+| 2 `tailChars` | **done** `dfac61e` | writing its test found a zero-tail bug: `slice(-0)` is the whole string |
+| 3 `calibrationBins` | **done** `bcdb4e4` | **medium, not small** -- four sites through `probeScore`, and its first test fixture proved nothing |
+| 4 `maxCompareLanes` | **done** `fd9f007` | as planned, small |
+| 5 nudge vocabulary | **done** `f2b6b0b` | three settings, not one: markers, stopwords, and the recurrence threshold. Every one changes a MEASUREMENT |
+| 6 extra redaction patterns | **done** `821c271` | addition-only, and the card needed a new `lines` kind because a regex can contain a comma |
+| 7 probe question | **done** `51e8cf7` | **not a runtime setting at all**: its hash is the instrument's identity and goes on the MOUNT line, so a live value would mix two instruments under one key. Mount-bound, with the answer set fixed |
+| 8 question sets as artifacts | design | unchanged |
+| 9 `tracePath` reopen-and-rotate | design | unchanged; the route is closed by the mount-bound refusal (`test/sink-record.test.js`) |
+| 10 the act layer | not built | designed in §8, with one duplication refused |
+
+**AND EVERY ITEM IS CARD-REACHABLE OR HONESTLY EXCLUDED.** The card carries all 34 writable settings across the six
+panels of §6, and the two mount-bound ones are readable and refused rather than hidden. The UI ratchet in
+`test/client-card.test.js` fails when a writable field has no control; the read-ratchet in `test/schema.test.js`
+fails when a field is read by nothing.
+
+
 Ordered by how much each changes what a number in the trace **means**. "Small" = one module plus its call site and
 a test; "medium" = a new field shape; "design" = a decision before code.
 
