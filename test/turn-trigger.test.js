@@ -3,7 +3,20 @@
 // operator's next message must not be asked while the turn is open.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { shouldFire, turnQuestions } from '../lib/turn-trigger.js'
+
+/** A criteria directory with the compositions these tests select, written here so no shipped corpus is edited. */
+function setsDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'turn-trigger-'))
+  mkdirSync(join(dir, 'turn-trial'), { recursive: true })
+  writeFileSync(join(dir, 'turn-trial', 'turn.json'), JSON.stringify(SPECS))
+  mkdirSync(join(dir, 'session-only'), { recursive: true })
+  writeFileSync(join(dir, 'session-only', 'session.json'), JSON.stringify(SPECS))
+  return dir
+}
 
 const SPECS = [
   { id: 'a_noul', type: 'noul', instructions: 'Is this true?' },
@@ -61,4 +74,30 @@ test('a next-message id that is not in the set is ignored, not invented', () => 
   const out = turnQuestions({ config: configured, closed: false, needsNextMessage: ['not_a_question'] })
   assert.deepEqual(out.dropped, [])
   assert.equal(Object.keys(out.questions).length, 3)
+})
+
+// REGISTER ROW O25. `turnSpecs` read `config.questions.turn` directly, so a row that SELECTED a set declaring `turn`
+// was refused with "no question set is configured under turn" -- a reason that was not true -- and the scheduled
+// measurement never ran. Measured before the fix on the shipped corpus:
+//   turnQuestions({config: {questionSetsDir: 'criteria', questionSet: 'helpfulness-set@1'}}) -> refused: true
+// although that set declares nine `turn` questions.
+test('a SELECTED SET is resolved FIRST, so the turn gate is not set-blind', () => {
+  const dir = setsDir()
+  const out = turnQuestions({ config: { questionSetsDir: dir, questionSet: 'turn-trial' }, closed: true })
+  assert.equal(out.refused, false, 'a set that declares `turn` is asked, whatever the inline map says: ' + out.reason)
+  assert.deepEqual(Object.keys(out.questions).sort(), ['a_choice', 'a_noul', 'a_score'])
+})
+
+test('a set that declares NO turn scope is refused BY NAME, not as "nothing configured"', () => {
+  // THE TWO REFUSALS ARE DIFFERENT FACTS. Telling an operator "no question set is configured under turn" when they
+  // selected one sends them to look for a missing file; the file is there and simply says nothing about turns.
+  const dir = setsDir()
+  const out = turnQuestions({ config: { questionSetsDir: dir, questionSet: 'session-only' } })
+  assert.equal(out.refused, true)
+  assert.match(out.reason, /selected set `session-only` declares no "turn" scope/, 'the set is named: ' + out.reason)
+  assert.doesNotMatch(out.reason, /no question set is configured/)
+  // AND A SELECTED SET THAT CANNOT BE READ IS ITS OWN CASE TOO, rather than the generic one above.
+  const broken = turnQuestions({ config: { questionSetsDir: dir, questionSet: 'does-not-exist' } })
+  assert.equal(broken.refused, true)
+  assert.doesNotMatch(broken.reason, /no question set is configured under/)
 })

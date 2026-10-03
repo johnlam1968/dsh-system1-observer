@@ -90,6 +90,42 @@ test('a CUT tool section reports how many calls and results it SHOWED', () => {
   assert.deepEqual(whole.shown, { calls: 40, results: 40 })
 })
 
+/** Sixty calls, each with a result far larger than the whole budget -- the shape that wasted the section. */
+const manyCalls = (count) => {
+  const events = []
+  for (let i = 1; i <= count; i += 1) {
+    events.push(envelope(i * 2, 'assistant/message', [{ type: 'tool-call', id: 'c' + i, name: 'bash', arguments: '{"command":"ls"}' }]))
+    events.push({ seq: i * 2 + 1, type: 'tool/result', data: { message: { id: 'm' + i, toolCallId: 'c' + i, content: [{ type: 'text', text: 'R'.repeat(5000) }] } } })
+  }
+  return events
+}
+
+test('a big section is CLIPPED PER ENTRY, so the budget covers many calls instead of one long result', () => {
+  // Measured on a real session: one file-dump result consumed the entire 4,000-char section and the rest of the record
+  // was never written at all -- 3 of 529 calls shown. Each entry now gets `maxChars / calls` (never below 60 chars), so
+  // the budget is spread across the record instead of being spent on whichever result happened to come first.
+  const out = assembleToolCalls(manyCalls(60), { maxChars: 2000, tailChars: 0 })
+  assert.ok(out.shown.calls > 5, 'far more than a handful fit: ' + out.shown.calls + ' of 60')
+  assert.match(out.text, /\u2026/, 'and a clipped entry is MARKED, so a short line cannot be read as a short result')
+})
+
+test('a cut tool section keeps BOTH ENDS, so the NEWEST calls survive', () => {
+  // THE POINT OF THE WHOLE FIX. A section cut from the start shows the first calls of a session; the question this
+  // repository's session set asks is what the agent did after a lookup returned nothing, and those lookups are late.
+  const out = assembleToolCalls(manyCalls(60), { maxChars: 2000, tailChars: 800 })
+  assert.equal(out.kept, 'both ends')
+  assert.equal(out.truncated, true)
+  assert.match(out.text, /call 1: /, 'the first call is still there')
+  assert.match(out.text, /call 60: /, 'AND the last one, which a head-only cut drops')
+  // THE TAIL BEGINS AT AN ENTRY BOUNDARY. A fragment of a result without its `call N:` line is the mis-attribution
+  // register row F33 records, arrived at by cutting instead of by pairing.
+  assert.match(out.text, /\n\u2026\ncall \d+:/, 'the elision is marked, and the tail resumes at a whole entry')
+  // AND ASKING FOR NO TAIL STILL GIVES THE OLD BEHAVIOUR, so a caller that wants the head alone can say so.
+  const headOnly = assembleToolCalls(manyCalls(60), { maxChars: 2000, tailChars: 0 })
+  assert.equal(headOnly.kept, 'head')
+  assert.doesNotMatch(headOnly.text, /call 60: /)
+})
+
 // MEASURED ON A REAL SESSION, and both halves were invisible while the section was empty: the harness writes each
 // call TWICE -- a `tool/call` event and a `tool-call` block in the assistant message, same id -- and the result once,
 // carrying that id. Counting both shapes gave 1,058 calls for 529 real ones, so `results[index]` attached every

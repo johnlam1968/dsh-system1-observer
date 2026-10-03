@@ -4,6 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionsTool, rowsOf, SESSIONS_TOOL_NAME, textOf } from '../lib/sessions-tool.js'
+import { composeTurnState } from '../lib/turn-state.js'
 
 const record = (id, { cwd = '/home/john/freeciv', createdAt = 1000, live = false, persisted = true } = {}) => ({ header: { id, cwd, createdAt }, live, persisted })
 
@@ -136,4 +137,66 @@ test('a THUNK query is resolved at call time -- the idiom the registration uses,
   // and a thunk that is not ready yet is still the named problem, not a throw
   const late = createSessionsTool({ query: () => undefined })
   assert.match(String((await late.execute({ action: 'list' })).problem), /no session-query service is mounted/)
+})
+
+// A SESSION LONGER THAN ANY PROMPT MUST BE READABLE A PAGE AT A TIME. Before this the only way to reach a deep part of
+// a conversation was `lastMessages` big enough to include it -- which drags every message since into the window and,
+// measured on the 611-message freeciv session, into a state capped at 8,000 characters. `offset` skips from the NEWEST
+// end, so a page composes with `lastMessages` instead of competing with it.
+test('offset pages backwards from the newest, and says which page it read', async () => {
+  const events = []
+  for (let i = 1; i <= 10; i += 1) events.push({ type: i % 2 === 0 ? 'assistant/message' : 'user/message', seq: i, time: i, data: { message: { content: [{ type: 'text', text: 'message ' + i }] } } })
+  const tool = createSessionsTool({ query: fakeQuery({ records: [record('s1')], events: { s1: events } }) })
+  const newest = await tool.execute({ action: 'read', sessionId: 's1', lastMessages: 3 })
+  assert.deepEqual(newest.messages.map((m) => m.text), ['message 8', 'message 9', 'message 10'])
+  assert.deepEqual(newest.slice.page, { offset: 0, from: 7, to: 10, of: 10 })
+  const second = await tool.execute({ action: 'read', sessionId: 's1', lastMessages: 3, offset: 3 })
+  assert.deepEqual(second.messages.map((m) => m.text), ['message 5', 'message 6', 'message 7'], 'the page BEFORE the newest one')
+  assert.equal(second.slice.page.offset, 3)
+  assert.match(tool.output.render({}, second)[0].text, /page: messages 5-7 of 10 \(the newest 3 skipped/, 'and the render says how to read further back')
+  // AN OFFSET PAST THE START IS AN EMPTY PAGE, not a throw and not a quiet re-read of the beginning.
+  const past = await tool.execute({ action: 'read', sessionId: 's1', lastMessages: 3, offset: 99 })
+  assert.deepEqual(past.messages, [])
+  assert.deepEqual(past.problems, [])
+})
+
+test('a message longer than the budget is CUT AND SAID SO, and can be read whole', async () => {
+  // 400 characters of a 9,000-character answer reads exactly like a short answer, which is the failure class this
+  // repository keeps recording. The count is reported, and `messageChars` is the caller's way to lift it.
+  const long = 'x'.repeat(9000)
+  const events = [message('user/message', 'ask'), { type: 'assistant/message', seq: 2, time: 2, data: { message: { content: [{ type: 'text', text: long }] } } }]
+  const tool = createSessionsTool({ query: fakeQuery({ records: [record('s1')], events: { s1: events } }) })
+  const clipped = await tool.execute({ action: 'read', sessionId: 's1' })
+  assert.equal(clipped.messageChars, 400, 'the budget this call used is on the record')
+  assert.equal(clipped.clipped, 1, 'and how many messages it cut')
+  const text = tool.output.render({}, clipped)[0].text
+  assert.match(text, /\(8600 more chars\)/, 'the cut is marked in the text, so a short line cannot be read as a short message')
+  assert.match(text, /1 message\(s\) are longer than `messageChars` 400/)
+  const whole = await tool.execute({ action: 'read', sessionId: 's1', messageChars: 0 })
+  assert.equal(whole.clipped, 0)
+  assert.equal(whole.messages[1].text, long, 'and `messageChars: 0` returns it entire')
+})
+
+test('a `subject` PREVIEW says when the composed state was CUT', async () => {
+  // A preview exists to show what a judgement would see. `state: 8000 chars` with no marker reads as the whole
+  // subject, and measured at the live defaults a stored judgement fits FIVE messages whole -- so a caller who cannot
+  // see the cut cannot tell a page that fits from one that does not.
+  const big = Array.from({ length: 4 }, (_, i) => ({ type: i % 2 === 0 ? 'user/message' : 'assistant/message', seq: i + 1, time: i + 1, data: { message: { content: [{ type: 'text', text: 'y'.repeat(4000) }] } } }))
+  const compose = (events) => composeTurnState({ events, scope: 'session', maxChars: 8000, toolMaxChars: 4000, tailChars: 1000 })
+  const tool = createSessionsTool({ query: fakeQuery({ records: [record('s1')], events: { s1: big } }), compose })
+  const out = await tool.execute({ action: 'read', sessionId: 's1', format: 'subject', lastMessages: 0 })
+  assert.equal(out.stateTruncated, true, 'the cut is on the record')
+  assert.match(tool.output.render({}, out)[0].text, /TRUNCATED at `composeMaxChars`/, 'and in the render, with what to do about it')
+  // AND A SUBJECT THAT FITS SAYS NOTHING, rather than claiming a cut that did not happen. The subject here is a
+  // DIFFERENT session: `format: 'subject'` composes the whole log by design, so `lastMessages` does not shrink it --
+  // which is the property the next assertion pins.
+  const short = [message('user/message', 'ask'), message('assistant/message', 'answer')]
+  const smallTool = createSessionsTool({ query: fakeQuery({ records: [record('s1')], events: { s1: short } }), compose })
+  const small = await smallTool.execute({ action: 'read', sessionId: 's1', format: 'subject' })
+  assert.equal(small.stateTruncated, false)
+  assert.doesNotMatch(smallTool.output.render({}, small)[0].text, /TRUNCATED/)
+  // THE PREVIEW COMPOSES THE WHOLE LOG, NOT THE PAGE: `lastMessages` bounds the LISTING, and a preview that shrank
+  // with it would be previewing a judgement nobody would make.
+  const paged = await tool.execute({ action: 'read', sessionId: 's1', format: 'subject', lastMessages: 1 })
+  assert.equal(paged.stateTruncated, true, 'the whole four-message subject is still cut, even though one was listed')
 })

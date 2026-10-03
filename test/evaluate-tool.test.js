@@ -51,7 +51,9 @@ test('it judges a stored session and reports WHAT it judged, with the input\u201
   const h = harness()
   const out = await h.tool.execute({})
   assert.deepEqual(out.answers, { review: { label: 'yes', confidence: 0.8 } })
-  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, messages: 4, total: 4 })
+  // `offset` RIDES BESIDE `lastMessages` ALWAYS, even at 0: the two are one paging decision, and an absent one
+  // invites "was it ignored?" -- the same reason `lastMessages: 0` is written rather than omitted.
+  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, offset: 0, messages: 4, total: 4 })
   assert.equal(typeof out.stateHash, 'string')
   assert.equal(out.stateHash.length, 12, 'a short hash, so two evaluations of the same input are recognisable as one')
   assert.equal(out.truncated, false)
@@ -90,7 +92,7 @@ test('an argument overrides the row for one call, and an override means STORED e
   const out = await h.tool.execute({ sessionId: 'session-other', kinds: ['assistant', 'operator'], lastMessages: 5 })
   assert.equal(out.subject.source, 'stored', 'asking about a named session cannot mean the live one')
   assert.equal(out.subject.sessionId, 'session-other')
-  assert.deepEqual(h.calls[0], { sessionId: 'session-other', kinds: ['assistant', 'operator'], lastMessages: 5 })
+  assert.deepEqual(h.calls[0], { sessionId: 'session-other', kinds: ['assistant', 'operator'], lastMessages: 5, offset: 0 })
   // AND THE LIVE SUBJECT IS STILL THE DEFAULT WHEN NOTHING IS CONFIGURED OR OVERRIDDEN.
   const live = harness({ settings: () => ({ source: 'live', sessionId: '', kinds: ['operator', 'assistant'], lastMessages: 0 }) })
   const liveOut = await live.tool.execute({})
@@ -133,7 +135,7 @@ test('it declares PRESENTATIONMETA, which is how the conversation card gets stru
     stateHash: 'abcdef123456', stateChars: 120, truncated: true,
     executed: { model: 'jev-latest' },
   })
-  assert.deepEqual(meta.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator'], lastMessages: 0, messages: 4, total: 4 })
+  assert.deepEqual(meta.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator'], lastMessages: 0, messages: 4, total: 4 }, 'the projection ECHOES the subject it is handed, it does not invent fields')
   assert.equal(meta.stateHash, 'abcdef123456')
   assert.equal(meta.truncated, true)
   assert.deepEqual(meta.answers, { review: { label: 'yes' } })
@@ -205,7 +207,8 @@ test('the record says how much of the TOOL record the judge was actually shown',
   assert.equal(out.subject.toolCalls.truncated, true, 'and the section was cut')
   assert.ok(out.subject.toolCalls.shown.calls > 0 && out.subject.toolCalls.shown.calls < 40, 'so the record says how many were SHOWN, not how many exist')
   const text = h.tool.output.render({}, out)[0].text
-  assert.match(text, /TOOL CALLS shown to the judge: \d+ of 40 call\(s\), \d+ of 40 result\(s\) -- CUT at `toolBlockMaxChars`/, 'the agent is told in words: ' + text.split('\n')[1])
+  assert.match(text, /TOOL CALLS shown to the judge: \d+ of 40 call\(s\) and \d+ of 40 result\(s\) -- CUT at `toolBlockMaxChars`/, 'the agent is told in words: ' + text.split('\n')[1])
+  assert.match(text, /both ends are kept, so the newest calls survive/, 'and WHICH ENDS survived, because that is what decides whether a question about a late lookup can be answered')
   // AND A SUBJECT WITH NO TOOL CALLS CARRIES NO ZERO OBJECT, so every tool-less turn does not grow a field saying nothing.
   assert.equal((await harness().tool.execute({}, {})).subject.toolCalls, undefined)
 })
