@@ -487,6 +487,17 @@ async function apply(ctx, config) {
     sessionQuery = child.sessionQuery ?? (typeof child.get === 'function' ? child.get('sessionQuery') : undefined)
   })
 
+  // ONE COMPOSER, TWO TOOLS. `system1_evaluate_session` judges a session and `system1_sessions` SHOWS what
+  // would be judged; if each built its own state the two could drift, and the tool that exists to preview a
+  // judgement would be previewing something else. Hoisted rather than duplicated for exactly that reason.
+  const composeSubject = (events) => composeTurnState({
+        events,
+        scope: 'session',
+        maxChars: readConfigValue(liveConfig().composeMaxChars),
+        toolMaxChars: readConfigValue(liveConfig().toolBlockMaxChars),
+        tailChars: readConfigValue(liveConfig().tailChars),
+      })
+
   ctx.inject(['tools'], (child) => {
     const tools = child.get('tools')
     if (tools === undefined || typeof tools.register !== 'function') return
@@ -525,6 +536,7 @@ async function apply(ctx, config) {
       tools.register(createSessionsTool({
         query: () => sessionQuery,
         settings: () => subjectSettings(liveConfig()),
+        compose: composeSubject,
       }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
@@ -579,13 +591,7 @@ async function apply(ctx, config) {
       },
       // THE ONE COMPOSER, WITH ITS SESSION SCOPE: a conversation has no reaction, so it is a transcript rather than an
       // exchange, and it is cut keeping both ends because a transcript's newest turns are the point.
-      compose: (events) => composeTurnState({
-        events,
-        scope: 'session',
-        maxChars: readConfigValue(liveConfig().composeMaxChars),
-        toolMaxChars: readConfigValue(liveConfig().toolBlockMaxChars),
-        tailChars: readConfigValue(liveConfig().tailChars),
-      }),
+      compose: composeSubject,
       // THE AGGREGATE QUESTION SET, through the reader the mount line uses: with nothing configured this falls back to
       // the probe question exactly as the live path does, so a tool does not invent its own convention.
       questions: () => {

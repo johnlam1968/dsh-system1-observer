@@ -108,3 +108,19 @@ test('the tool declares everything it emits, and names itself the way the regist
     }
   }
 })
+
+test('`format: subject` composes from the WHOLE log, and says so when no composer is wired', async () => {
+  const query = fakeQuery({ records: [record('session-a')], events: { 'session-a': [message('user/message', 'help me play freeciv'), message('assistant/message', 'here is a plan')] } })
+  const seen = []
+  const tool = createSessionsTool({ query, compose: (events) => { seen.push(events.length); return 'SESSION TRANSCRIPT\nOPERATOR: help me play freeciv\nAGENT: here is a plan' } })
+  // `lastMessages: 1` must NOT bound what the composer sees: a judgement is shown the log, not the tail the caller asked to read.
+  const out = await tool.execute({ action: 'read', sessionId: 'session-a', lastMessages: 1, format: 'subject' })
+  assert.deepEqual(seen, [2], 'the composer saw both events while `messages` was bounded to the tail')
+  assert.equal(out.messages.length, 1)
+  assert.match(out.state, /SESSION TRANSCRIPT/)
+  assert.match(tool.output.render({}, out)[0].text, /state: \d+ chars/)
+  // and with no composer it is a sentence, not an empty subject
+  const bare = await createSessionsTool({ query }).execute({ action: 'read', sessionId: 'session-a', format: 'subject' })
+  assert.match(String(bare.problems.join(' ')), /no composer is wired/)
+  assert.equal('state' in bare, false, 'and no state key at all, rather than an empty one')
+})
