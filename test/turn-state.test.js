@@ -16,6 +16,58 @@ const EXCHANGE = [
   env(5, 'user/message', [text('You should mutate and iterate the keywords and use the tool again.')]),
 ]
 
+// THE SCOPE: a stored session has no reaction, so it is composed as a TRANSCRIPT rather than an exchange.
+const scoped = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
+const SESSION_FIXTURE = [
+  scoped(1, 'user/message', 'please summarise the deployment logs'),
+  scoped(2, 'assistant/message', 'here is the summary'),
+  scoped(3, 'user/message', 'now shorten it'),
+  scoped(4, 'assistant/message', 'shorter'),
+]
+
+test('scope: the default is the EXCHANGE, so the live path is opt-out rather than changed', () => {
+  const out = composeTurnState({ events: SESSION_FIXTURE })
+  assert.deepEqual(Object.keys(out.sections), ['OPERATOR REQUEST', 'AGENT RESPONSE', 'TOOL CALLS', 'OPERATOR NEXT MESSAGE'])
+  assert.equal(out.sections['OPERATOR NEXT MESSAGE'], 'now shorten it', 'the newest operator message is the reaction')
+  assert.doesNotMatch(out.state, /shorter/, 'and the turn after it is outside the exchange -- unchanged behaviour')
+})
+
+test('scope: a SESSION is a transcript with labels of its own, and it includes the newest turn', () => {
+  // The labels are a contract rather than decoration: a question's criteria name them, which is why a stored
+  // judgement needs its own questions rather than the seam's.
+  const out = composeTurnState({ events: SESSION_FIXTURE, scope: 'session' })
+  assert.deepEqual(Object.keys(out.sections), ['SESSION TRANSCRIPT', 'TOOL CALLS'])
+  assert.equal(out.refused, false)
+  assert.match(out.sections['SESSION TRANSCRIPT'], /OPERATOR: please summarise the deployment logs/)
+  assert.match(out.sections['SESSION TRANSCRIPT'], /AGENT: here is the summary/)
+  assert.match(out.sections['SESSION TRANSCRIPT'], /AGENT: shorter/, 'the newest turn is IN it, which is the point')
+  const order = ['please summarise', 'here is the summary', 'now shorten it', 'shorter'].map((part) => out.state.indexOf(part))
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'and the messages are in conversation order')
+  assert.deepEqual(order.every((at) => at !== -1), true, 'all four are present')
+})
+
+test('scope: a session cut keeps BOTH ends, because the newest turns are what a transcript is for', () => {
+  const long = [
+    scoped(1, 'user/message', 'A'.repeat(400)),
+    scoped(2, 'assistant/message', 'MIDDLE-MARKER'),
+    scoped(3, 'user/message', 'Z'.repeat(400)),
+  ]
+  const out = composeTurnState({ events: long, scope: 'session', maxChars: 300, tailChars: 100 })
+  assert.equal(out.truncated, true)
+  assert.equal(out.state.length, 300, 'the budget is exact')
+  assert.match(out.state, /SESSION TRANSCRIPT/, 'the head keeps the labels')
+  assert.match(out.state, /Z{10}/, 'and the tail keeps the newest turn')
+  assert.doesNotMatch(out.state, /MIDDLE-MARKER/, 'the middle is what gives way')
+})
+
+test('scope: an empty session refuses in its own words, not the exchange\u2019s', () => {
+  const out = composeTurnState({ events: [], scope: 'session' })
+  assert.equal(out.refused, true)
+  assert.match(out.reason, /no conversation to judge/)
+  const exchange = composeTurnState({ events: [] })
+  assert.match(exchange.reason, /no operator message in the window/, 'and the exchange keeps its own refusal')
+})
+
 test('the exchange is reconstructed from the event order, with the reaction in the target', () => {
   const out = composeTurnState({ events: EXCHANGE })
   assert.equal(out.refused, false)

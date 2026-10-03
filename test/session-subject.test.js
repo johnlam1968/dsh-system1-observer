@@ -82,16 +82,15 @@ test('a stored subject is read, and every failure is a sentence rather than a th
 
 test('the events go into the ONE composer, which composes THE EXCHANGE -- and that gap is register row O16', async () => {
   const read = await readStoredSubject({ sessionQuery: queryWith(), sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0 })
-  const state = composeTurnState({ events: read.events })
+  // WITH THE SCOPE O16 ASKED FOR: a stored subject is a conversation, not a turn in progress.
+  const state = composeTurnState({ events: read.events, scope: 'session' })
   const text = String(state.state ?? '')
-  assert.match(text, /OPERATOR REQUEST:\nplease summarise the deployment logs/, 'the request is in the state')
-  assert.match(text, /AGENT RESPONSE:\nhere is the summary/, 'and the response to it')
-  assert.match(text, /OPERATOR NEXT MESSAGE:\nnow shorten it/, 'and the newest OPERATOR message is the reaction')
-  // AND THE NEWEST MESSAGE IS NOT: the composer's semantics are "the exchange up to the reaction", because every
-  // caller before this one was a live seam judging a turn in progress. That is right there and NOT yet what a
-  // whole-session judgement needs, so it is asserted rather than quietly tolerated. The fix is a `scope` on this one
-  // composer (default `exchange`, so the live path is untouched) -- register row O16.
-  assert.doesNotMatch(text, /shorter/, 'the newest turn is outside the exchange the composer builds')
+  assert.match(text, /SESSION TRANSCRIPT:\nOPERATOR: please summarise the deployment logs/, 'the conversation opens the state')
+  assert.match(text, /AGENT: here is the summary/, 'with the response to it')
+  assert.match(text, /OPERATOR: now shorten it/, 'and the next request')
+  // O16 WAS THIS ASSERTION'S OPPOSITE: as an exchange, the composer dropped the newest turn, and its test said so in
+  // as many words. With the scope it is included, which is the whole point of a stored judgement.
+  assert.match(text, /AGENT: shorter/, 'and the newest turn, which the exchange scope excluded')
 })
 
 test('the row\u2019s settings are read live, with the defaults a row that configured nothing should get', () => {
