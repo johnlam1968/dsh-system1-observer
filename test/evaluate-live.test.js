@@ -14,7 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -134,6 +134,83 @@ test('a stored session is judged through the real registry, and its line stays o
   const sliced = await tool.execute({ lastMessages: 2 }, {})
   assert.notEqual(sliced.stateHash, out.stateHash, 'a two-message slice is not the same input as the whole session')
   assert.equal(sliced.subject.messages, 2)
+
+  await fiber.dispose()
+})
+
+// THE SELECTED SET IS WHAT GETS ASKED, AND THE AGENT SEES THE RESULT -- the two things a live call got wrong while
+// every unit test stayed green, and each is a different mistake:
+//
+//   1. `render` WAS CALLED WITH ONE ARGUMENT HERE AND DECLARED ONE PARAMETER. The host calls
+//      `tool.output.render(exec.arguments, value)` (`dsh-tools/lib/index.js:3548`), so a single-parameter render is
+//      handed the ARGUMENTS. Measured live: a call whose trace line recorded `"messages":611` displayed
+//      `? subject, 0 of 0 message(s), state 0 chars [?]` -- the subject was read, the model answered and was paid,
+//      and the agent saw none of it. The assertions below call render the way the host does.
+//   2. THE ROW'S `questionSet` WAS INVISIBLE AT THIS CALL SITE. The tool's `questions` closure built
+//      `{questions: {session: <inline specs>}}` by hand instead of handing `buildQuestions` the config that NAMES the
+//      set, so a row selecting a session set was asked the PROBE question. Measured live: the trace line read
+//      `"questionIds":["probe"]` while the row had `agent-helpfulness-session@1` selected.
+test('a stored session is asked the SELECTED SET\'s questions, and the render the host calls shows what was judged', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'evaluate-set-'))
+  const tracePath = join(dir, 'trace.jsonl')
+  // A COMPOSITION, WRITTEN HERE RATHER THAN BORROWED FROM `criteria/`: a test that reads the shipped corpus breaks
+  // when somebody edits a question, which is exactly what the corpus is for. One directory per composition, one file
+  // per scope, named for the scope (`lib/question-sets.js:198`, `:243`).
+  const setsDir = join(dir, 'sets')
+  mkdirSync(join(setsDir, 'session-trial'), { recursive: true })
+  writeFileSync(join(setsDir, 'session-trial', 'session.json'), JSON.stringify([
+    { id: 'went_well', type: 'noul', instructions: 'Did the conversation go well?' },
+    { id: 'served', type: 'score', instructions: 'How far was the opening request served?', levels: ['no', 'partly', 'yes'] },
+  ], null, 2))
+
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+  ctx.provide('systemPrompt', { tools: () => {}, section: () => {}, getSectionOrder: () => 0 })
+  ctx.provide('sessionQuery', {
+    listSessions: async () => [{ header: { id: 'S1', cwd: '/tmp/x' }, live: false, persisted: true }],
+    readSession: async () => ({ session: { id: 'S1', cwd: '/tmp/x' }, events: STORED }),
+  })
+  ctx.provide('system1', {
+    // ONE ANSWER PER QUESTION THE SET ASKS. A stub that answered only `review` would leave this test unable to tell
+    // "the set was asked" from "some answer came back".
+    decide: async () => ({
+      answers: {
+        went_well: { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.7 } },
+        served: { status: 'ok', answer: { type: 'score', value: 2, levels: ['no', 'partly', 'yes'], probabilities: [0, 0, 1] } },
+      },
+      meta: { executed: { provider: 'stub', model: 'stub-1' }, durationMs: 5 },
+    }),
+  })
+  await ctx.plugin(ToolRuntime).await()
+
+  const fiber = ctx.plugin(plugin, {
+    hooks: [], sessions: ['*'], turnEveryNTurns: 0, tracePath,
+    subjectSource: 'stored', subjectSession: 'S1', subjectKinds: ['operator', 'assistant'], subjectLastMessages: 0,
+    questionSetsDir: setsDir,
+    questionSet: 'session-trial',
+  })
+  await fiber.await()
+
+  const tool = ctx.get('tools').get(EVALUATE_TOOL_NAME)
+  assert.ok(tool, 'the row registers ' + EVALUATE_TOOL_NAME + ' against the real registry')
+  const out = await tool.execute({}, {})
+
+  // (1) THE SET'S QUESTIONS, NOT THE PROBE'S. `probe` is the fallback an unconfigured row gets and is exactly what
+  // this call asked before the fix -- so its absence is the assertion.
+  assert.deepEqual(Object.keys(out.answers).sort(), ['served', 'went_well'], 'the selected set is what was asked: ' + JSON.stringify(out.answers))
+  assert.equal(out.answers.went_well.probability, 0.7)
+  assert.equal(out.answers.served.level, 2)
+  const record = readLines(tracePath).find((line) => line.event === 'call' && line.hook === REVIEW_HOOK)
+  assert.deepEqual(record.questionIds.sort(), ['served', 'went_well'], 'the line names the questions the set asked, so a reader can attribute the reading')
+
+  // (2) THE RENDER, CALLED THE WAY THE HOST CALLS IT. `(args, value)` -- and an `args` object that looks nothing like a
+  // value, so an implementation reading the first parameter renders the `? subject, 0 of 0` this exists to prevent.
+  const args = { sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0 }
+  const blocks = tool.output.render(args, out)
+  assert.equal(Array.isArray(blocks), true)
+  assert.match(blocks[0].text, /stored subject, 4 of 4 message/, 'the render is handed the VALUE, so it can say what was judged: ' + blocks[0].text)
+  assert.match(blocks[0].text, /went_well: p=0\.7/, 'and what the model answered')
+  assert.match(blocks[0].text, /served: /)
 
   await fiber.dispose()
 })

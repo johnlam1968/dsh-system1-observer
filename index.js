@@ -595,15 +595,31 @@ async function apply(ctx, config) {
       // THE AGGREGATE QUESTION SET, through the reader the mount line uses: with nothing configured this falls back to
       // the probe question exactly as the live path does, so a tool does not invent its own convention.
       questions: () => {
-        const configured = readConfigValue(liveConfig().questions) ?? {}
+        // THE ROW'S OWN CONFIG, NOT A HAND-BUILT ONE. `buildQuestions` is where a selected set REPLACES the row's
+        // questions (lib/questions.js:152-157), and it can only do that if it is handed the config that NAMES the
+        // set. What stood here passed `{seamEnabled, questions:{session: specs}}` built from the inline map alone,
+        // so `questionSet` was invisible at this call site and the tool asked the probe question instead -- measured
+        // on a live call whose trace line reads `"questionIds":["probe"]` while the row selected
+        // `agent-helpfulness-session@1`, whose whole point is the three `session` questions it declares.
+        const config = liveConfig()
         // A SESSION HAS ITS OWN SCOPE. Before this it asked the TURN questions, which is the gap the three-scope
         // taxonomy exposed: a conversation judged with questions written about one exchange.
-        //
-        // THE FALLBACK IS DELIBERATE AND PRESERVES BEHAVIOUR: a row with no session questions -- every row today,
-        // since no set in `criteria/` carries a `session` key -- keeps asking the aggregate set it already asked.
-        const session = configured[SESSION_HOOK]
-        const specs = Array.isArray(session) && session.length > 0 ? session : configured[TURN_HOOK]
-        return buildQuestions({ seamEnabled: { [SESSION_HOOK]: true }, questions: { [SESSION_HOOK]: specs } }, SESSION_HOOK)
+        const atSession = buildQuestions(Object.assign({}, config, { seamEnabled: { [SESSION_HOOK]: true } }), SESSION_HOOK)
+        if ((atSession.problems ?? []).length > 0) return atSession
+        if (Object.keys(atSession.questions ?? {}).length > 0) return atSession
+        // THE FALLBACK IS DELIBERATE AND PRESERVES BEHAVIOUR -- and it is applied to the EFFECTIVE questions rather
+        // than to the inline map, so a row with no session questions keeps asking the aggregate set it already
+        // asked, whether those turn questions were written inline or come from a selected set.
+        const atTurn = buildQuestions(Object.assign({}, config, { seamEnabled: { [TURN_HOOK]: true } }), TURN_HOOK)
+        if ((atTurn.problems ?? []).length > 0) return atTurn
+        if (Object.keys(atTurn.questions ?? {}).length > 0) return atTurn
+        // ASKING NOTHING IS NOT AN ANSWER. An empty map would send the model a whole conversation with no question
+        // attached, and the call would be paid for and record nothing. A set that declares neither scope says
+        // nothing about sessions, so the refusal travels as the problem the tool already throws on.
+        return {
+          questions: {},
+          problems: ['the questions in force ask nothing at the `session` scope and nothing at `turn`, so a session judgement would have nothing to answer -- select a set that declares `session`, or write session specs'],
+        }
       },
       decide: (request, options) => decide(request, options),
       record: (line) => {

@@ -152,7 +152,14 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   // the symptom was a MISSING tool with no error -- which is why the fix carries a test rather than only a comment.
   const h = harness()
   assert.equal(typeof h.tool.output.render, 'function')
-  const text = h.tool.output.render({
+  // THE ARGUMENT ORDER IS THE HOST'S, AND THIS TEST USED TO GET IT WRONG IN THE SAME DIRECTION AS THE TOOL.
+  // `dsh-tools/lib/index.js:3548` invokes `tool.output.render(exec.arguments, value)`. The tool declared
+  // `render: (value)` and every assertion here called `render(value)`, so both agreed on the wrong convention and a
+  // live call rendered `? subject, 0 of 0 message(s)` for a trace line that said `messages: 611`. The assertions
+  // below now pass BOTH arguments, which is what the host does.
+  assert.ok(h.tool.output.render.length >= 2, 'render declares (args, value), the order the host calls it in')
+  const args = { sessionId: 'S1' }
+  const text = h.tool.output.render(args, {
     answers: { review: { label: 'yes', confidence: 0.8 } },
     subject: { source: 'stored', sessionId: 'S1', kinds: [], lastMessages: 0, messages: 4, total: 4 },
     stateHash: 'abcdef123456', stateChars: 120, truncated: false,
@@ -162,7 +169,7 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   assert.match(text[0].text, /review: yes \(0.8\)/)
   // AND A NOUL, the shape this plugin asks in most: a probability, not a label. Reading `noul` -- the key the READER
   // consumes -- renders "(no label)" here, which is the bug the end-to-end run found (register row O20).
-  const noul = h.tool.output.render({
+  const noul = h.tool.output.render(args, {
     answers: { review: { type: 'noul', probability: 0.8 }, reading: { type: 'unreadable', reason: 'no answer' } },
     subject: { source: 'stored', messages: 1, total: 1 }, stateHash: 'h', stateChars: 1, truncated: false,
   })
@@ -170,7 +177,7 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   assert.match(noul[0].text, /reading: unreadable \[unreadable: no answer\]/, 'an unreadable answer says so')
   assert.match(text[0].text, /abcdef123456/, 'the identity of what was sent is in the rendered line')
   // AND A FAILURE RENDERS AS A FAILURE rather than as an empty answer set.
-  const failed = h.tool.output.render({ answers: {}, subject: { source: 'stored', messages: 0, total: 0 }, stateHash: 'x', stateChars: 0, truncated: false, failure: { reason: 'timed out' } })
+  const failed = h.tool.output.render(args, { answers: {}, subject: { source: 'stored', messages: 0, total: 0 }, stateHash: 'x', stateChars: 0, truncated: false, failure: { reason: 'timed out' } })
   assert.match(failed[0].text, /could not answer: timed out/)
 })
 

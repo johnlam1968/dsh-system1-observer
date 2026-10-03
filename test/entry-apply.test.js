@@ -295,6 +295,19 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   // the symptom was a missing tool rather than a bad one.
   assert.deepEqual([...names].sort(), ['system1_decide', 'system1_evaluate_session', 'system1_measurements', 'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'], 'every tool, and nothing else')
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
+
+  // EVERY RENDER TAKES (args, value), WHICH IS THE ORDER THE HOST CALLS IT IN -- and the one parameter is not a
+  // style question. `dsh-tools/lib/index.js:3548` is the invocation: `tool.output.render(exec.arguments, value)`.
+  // `system1_evaluate_session` declared `render: (value)`, so it was handed the ARGUMENTS and rendered
+  // `? subject, 0 of 0 message(s), state 0 chars [?]` for a live call whose trace line recorded `messages: 611` --
+  // the subject was read, the model answered, and the agent saw nothing. Its own test called `render(value)`, so
+  // the two mistakes agreed with each other and every gate stayed green. This is the check that disagrees.
+  for (const definition of registered) {
+    assert.ok(
+      definition.output.render.length >= 2,
+      definition.name + ': `render` must declare (args, value) -- the host passes the arguments first',
+    )
+  }
   const tool = registered.find((definition) => definition.name === 'system1_trace')
   assert.match(tool.description, /System One observer trace/, 'the description is the hint the agent reads')
   assert.match(tool.description, /session ids/, 'including where to find what a session-scoped observer targets')
