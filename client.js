@@ -88,6 +88,14 @@ window.__ModuleLoader__.load({
         hint: 'The endpoint the HTTP transport posts to. Only used when the wire transport is the one mounted.' },
       // FOUND BY THE UI RATCHET, not by reading: this field had no control anywhere in the card, so the fallback
       // question was writable from YAML and from the agent's config tool and from nowhere a person would look.
+      // QUESTION SETS AS FILES (§12). Both live, so both need a control here -- the UI ratchet in
+      // `test/client-card.test.js` fails on any writable setting without one. A PICKER over the sets is the piece
+      // still missing: the browser half cannot read a filesystem, so the host would have to project the list, and the
+      // agent's config tool and the `system1Observer` service already expose it to the two callers that can read it.
+      { panel: 'send', field: 'questionSetsDir', kind: 'text', label: 'Question sets directory',
+        hint: 'Where the set files live. Only `.json` files are sets; each is a questions map keyed by seam, and its name is the file stem. A directory that cannot be read is a named problem, not an empty list.' },
+      { panel: 'send', field: 'questionSet', kind: 'text', label: 'Question set',
+        hint: 'Which set in that directory this row asks, by name. Empty means the inline questions below. A set that cannot be read REFUSES the call rather than quietly asking something else.' },
       { panel: 'send', field: 'question', kind: 'longtext', label: 'Probe question',
         hint: 'The question asked at a seam that has no question of its own, and the text a new question starts from. Write it as a sentence, and say in it what each answer would mean.' },
       { panel: 'send', field: 'maxQuestionChars', kind: 'number', min: 1, fallback: 4000, label: 'Max question characters',

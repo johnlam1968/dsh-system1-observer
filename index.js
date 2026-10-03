@@ -126,14 +126,15 @@ const Config = Schema.object({
   // ---------------------------------------------------------------------------------------------
   // QUESTION SETS AS FILES (§12): a questions map in a `.json` file, selected by name (the file's stem).
   //
-  // MOUNT-BOUND, FOR THE REASON `probeQuestion` IS. A set decides WHICH QUESTIONS ARE ASKED, so it is part of the
-  // instrument: its content hash is written on the MOUNT line and enters `instrument` in `lib/compare.js`, so runs
-  // under different sets are refused comparison by the key rather than by a warning in a document. A value that
-  // changed mid-run would leave calls asked under one set and keyed under another -- the silent mixing the key exists
-  // to prevent. Editing a set therefore needs a re-mount, and then the new hash makes the runs honestly incomparable.
+  // VOLATILE, BY THE OPERATOR'S DECISION, and the cost is stated rather than hidden. A set decides WHICH QUESTIONS ARE
+  // ASKED, so it is part of the instrument; the hash of the set IN FORCE AT MOUNT is on the mount line and in
+  // `instrument`, so runs that mounted different sets are refused comparison. A save that swaps the set on a RUNNING
+  // row therefore changes what is asked without changing that key -- which is exactly the behaviour `hooks` and
+  // `seamEnabled` already have, both volatile and both part of the key from the mount snapshot. The honest reading is
+  // that the mount line records what the run STARTED with, not that the run never changed.
   // ---------------------------------------------------------------------------------------------
-  questionSetsDir: Schema.string().description('Directory of question-set files: one `.json` per set, each a questions map keyed by seam. YAML only, because a set is part of the instrument -- the mount line records a hash of the set in force.'),
-  questionSet: Schema.string().description('Which set in `questionSetsDir` this row asks, by name (the file\u2019s stem). Empty means the inline `questions` object, which is what every row did before sets existed. YAML only, for the same reason as the directory.'),
+  questionSetsDir: Schema.string().default('').volatile().description('Directory of question-set files: one `.json` per set, each a questions map keyed by seam. Read at each call, so a save reaches a running row -- and the mount line records the hash of the set that was in force when the row mounted.'),
+  questionSet: Schema.string().default('').volatile().description('Which set in `questionSetsDir` this row asks, by name (the file\u2019s stem). Empty means the inline `questions` object, which is what every row did before sets existed. Read at each call, so a set can be swapped on a running row.'),
   probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
   question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a

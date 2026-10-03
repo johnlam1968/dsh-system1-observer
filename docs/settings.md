@@ -475,3 +475,39 @@ by construction.
 **Not settled.** Whether a set file holds one set or a map of them; whether a set must carry all ten seams or may
 override one; whether the directory is watched or read per call; and `criteria` by name (`ROADMAP.md` §4.2), which is
 what would let two questions be compared by construction rather than by inspection.
+
+### The implementation contradicted this design, and the operator caught it
+
+**Recorded 2026-10-03.** The table above says both settings are live, because a set is a *choice about what to ask* and a
+row should be able to swap one without a restart. The FIRST implementation made them mount-bound instead, on the
+argument that a set's content hash goes on the mount line and enters `instrument` -- so a mid-run change would leave
+calls asked under one set and keyed under another.
+
+That argument is real but it proves too much, and the code already says so: **`hooks` and `seamEnabled` are volatile,
+and both are read into the comparability key from the MOUNT snapshot** (`lib/compare.js` takes them from the mount
+line). A live `hooks` change has exactly the property I objected to, and this repository has lived with it. The honest
+reading is that a mount line records what the run **started** with, not that the run never changed -- so making the set
+settings an exception was my error, not a stricter standard.
+
+Both are now volatile and read at the point of use. What remains true, and is stated in each field's description: the
+mount line's `questionSetHash` is a snapshot of the set in force **at mount**, so a row that swaps sets mid-run has
+calls under two sets inside one instrument key. The fix, if it is wanted, is a `questionSetHash` on each CALL line --
+the same shape as `instrument`'s other parts, one level finer -- and it is not built.
+
+**And the profile stores a default set rather than the questions.** `~/.dsh/profiles/docdrift/cordis.patch.yml` held a
+ten-seam set of 19 questions inline (203 lines; one question each at assemble, admit, draft, pre_execute, execute,
+post_execute and result, none at the two textless seams, and 12 at `turn`). That is now frozen verbatim as
+`criteria/helpfulness-set-merged@1.json` (hash `124f6059e769`) and the profile carries two lines instead:
+
+```yaml
+questionSetsDir: /home/CodingProjects/dsh-system1-observer/criteria
+questionSet: helpfulness-set-merged@1
+```
+
+The freeze is behaviour-preserving by construction -- the same questions, in the same order, under the same seam keys --
+and the backup of the original block is `cordis.patch.yml.bak-20261003-122941` beside the patch.
+
+**Still missing, and named rather than faked:** a PICKER. The browser half cannot read a filesystem, so a picker needs
+the host to project the set list to the card, exactly as the stored-session picker does. Until then both are text
+fields, and the two callers that can read the list -- the agent's config tool and the `system1Observer` service --
+already expose it.

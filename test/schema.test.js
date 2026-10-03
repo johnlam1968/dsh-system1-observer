@@ -120,7 +120,7 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // EIGHT MORE, made volatile on request: the seam list, the judge's route, the URL and legacy question, and the
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
-    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'subjectSource', 'subjectSession', 'subjectKinds', 'subjectLastMessages', 'nudgeExtraMarkers', 'nudgeExtraStopwords', 'nudgeRecurrenceThreshold', 'redactPatterns', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
+    'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars', 'questionSet', 'questionSetsDir', 'subjectSource', 'subjectSession', 'subjectKinds', 'subjectLastMessages', 'nudgeExtraMarkers', 'nudgeExtraStopwords', 'nudgeRecurrenceThreshold', 'redactPatterns', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
     // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
     // natural rather than a rebuild.
     'feedMaxPerSession', 'fsJournalMaxPaths', 'fsJournalMaxPerPath',
@@ -134,9 +134,6 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // `probeQuestion` is the instrument's identity, and its hash is written on the MOUNT line: a value that changed
     // mid-run would leave calls scored under one question and keyed under another.
     'probeQuestion',
-    // AND THE QUESTION SET, for exactly the same reason: a set decides which questions are asked, and its hash goes on
-    // the mount line into `instrument`.
-    'questionSet', 'questionSetsDir',
   ]
   const walked = Object.keys(dict)
   assert.ok(walked.length > 0, 'the schema declares no fields at all')
