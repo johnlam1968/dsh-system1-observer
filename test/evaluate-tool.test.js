@@ -181,6 +181,35 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   assert.match(failed[0].text, /could not answer: timed out/)
 })
 
+test('the record says how much of the TOOL record the judge was actually shown', async () => {
+  // THE SECOND CAP, and it is not `composeMaxChars`. Measured live: a 4,000-char `toolBlockMaxChars` held the FIRST 3
+  // of 529 calls and their results, so the tool record reached the judge and the LATER calls -- the ones a question
+  // about a failed lookup asks about -- did not. The agent's render and the trace line both say so now.
+  const window = [message(1, 'user/message', 'go'), message(2, 'assistant/message', 'ok')]
+  for (let i = 1; i <= 40; i += 1) {
+    window.push({ seq: i * 10, type: 'tool/call', data: { callId: 'c' + i, name: 'bash', arguments: '{"command":"echo ' + 'x'.repeat(200) + '"}' } })
+    window.push({ seq: i * 10 + 1, type: 'tool/result', data: { message: { id: 'm' + i, toolCallId: 'c' + i, content: [{ type: 'text', text: 'y'.repeat(200) }] } } })
+  }
+  const h = harness({
+    stored: async () => ({
+      events: window, messages: window.filter((event) => event.type.endsWith('/message')),
+      slice: { matched: 2, total: window.length },
+      coverage: { events: window.length, messages: 2, chars: 10, toolEvents: 80 },
+      session: { id: 'S1' }, problem: null,
+    }),
+    compose: (events) => composeTurnState({ events, scope: 'session', maxChars: 8000, toolMaxChars: 400 }),
+  })
+  const out = await h.tool.execute({}, {})
+  assert.equal(out.subject.toolCalls.calls, 40, 'every call was collected')
+  assert.equal(out.subject.toolCalls.results, 40)
+  assert.equal(out.subject.toolCalls.truncated, true, 'and the section was cut')
+  assert.ok(out.subject.toolCalls.shown.calls > 0 && out.subject.toolCalls.shown.calls < 40, 'so the record says how many were SHOWN, not how many exist')
+  const text = h.tool.output.render({}, out)[0].text
+  assert.match(text, /TOOL CALLS shown to the judge: \d+ of 40 call\(s\), \d+ of 40 result\(s\) -- CUT at `toolBlockMaxChars`/, 'the agent is told in words: ' + text.split('\n')[1])
+  // AND A SUBJECT WITH NO TOOL CALLS CARRIES NO ZERO OBJECT, so every tool-less turn does not grow a field saying nothing.
+  assert.equal((await harness().tool.execute({}, {})).subject.toolCalls, undefined)
+})
+
 test('the tool declares its own name and refuses a bad argument against that declaration', async () => {
   const h = harness()
   assert.equal(h.tool.name, EVALUATE_TOOL_NAME)

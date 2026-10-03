@@ -69,6 +69,27 @@ test('junk in the events does not throw, and is not counted as evidence', () => 
   assert.deepEqual(assembleToolCalls().text, '')
 })
 
+test('a CUT tool section reports how many calls and results it SHOWED', () => {
+  // Measured on a real session at the default `toolBlockMaxChars` of 4000: the section held the FIRST 3 of 529 calls
+  // and their results, while the lookup a question asked about was much later. A section cut like that and silent
+  // about it reads as the whole trajectory -- so the count is the fix, and it comes from the CAPPED text.
+  const events = []
+  for (let i = 1; i <= 40; i += 1) {
+    events.push(envelope(i * 2, 'assistant/message', [{ type: 'tool-call', id: 'c' + i, name: 'bash', arguments: '{"command":"echo ' + 'x'.repeat(120) + '"}' }]))
+    events.push({ seq: i * 2 + 1, type: 'tool/result', data: { message: { id: 'msg' + i, toolCallId: 'c' + i, content: [{ type: 'text', text: 'y'.repeat(200) }] } } })
+  }
+  const out = assembleToolCalls(events, { maxChars: 1000 })
+  assert.equal(out.calls.length, 40, 'all forty calls were collected')
+  assert.equal(out.truncated, true, 'and the section was cut')
+  assert.ok(out.shown.calls > 0 && out.shown.calls < 40, 'so only some were shown: ' + out.shown.calls + ' of 40')
+  assert.equal((out.text.match(/^call \d+:/gm) ?? []).length, out.shown.calls, 'the number is what the TEXT contains, not what was collected')
+  assert.equal((out.text.match(/^ {2}-> /gm) ?? []).length, out.shown.results)
+  // AND AN UNCUT SECTION SAYS 40 OF 40, so a reader never has to infer the difference from an absence.
+  const whole = assembleToolCalls(events, { maxChars: 1000000 })
+  assert.equal(whole.truncated, false)
+  assert.deepEqual(whole.shown, { calls: 40, results: 40 })
+})
+
 // MEASURED ON A REAL SESSION, and both halves were invisible while the section was empty: the harness writes each
 // call TWICE -- a `tool/call` event and a `tool-call` block in the assistant message, same id -- and the result once,
 // carrying that id. Counting both shapes gave 1,058 calls for 529 real ones, so `results[index]` attached every
