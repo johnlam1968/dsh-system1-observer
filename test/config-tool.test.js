@@ -86,6 +86,38 @@ test('a mount-bound setting can be READ and refuses to be written, with the reas
   assert.deepEqual(h.order, [], 'a refused write records nothing: the line would measure a change that did not happen')
 })
 
+// AN INDEPENDENT REVIEW OF THIS TOOL FOUND THREE HOLES, and each has a test here because each was a case where the
+// tool accepted something the schema rejects -- one round trip later than it needed to.
+test('a union reports its CHOICES, and a value outside them is refused', async () => {
+  // `set pathMode: "absolute"` was accepted (it is a string, and the type check stopped there) and refused by the
+  // editor. The choices come from Schemastery's const nodes, so this test also pins that extraction: if it stops
+  // working, the failure is here rather than in a tool that quietly stops checking.
+  const tool = createConfigTool({ read: () => ({}), write: async () => {}, record: () => {}, schema: () => Config.dict })
+  const out = await tool.execute({ action: 'list' })
+  assert.deepEqual(out.schema.pathMode.choices, ['full', 'basename', 'omit'], 'the union names its choices')
+  await assert.rejects(() => tool.execute({ action: 'set', knob: 'pathMode', value: 'absolute' }),
+    /is one of "full", "basename", "omit"/)
+  assert.equal((await tool.execute({ action: 'set', knob: 'pathMode', value: 'basename' })).value, 'basename')
+})
+
+test('a list checks its ITEMS, not only that it is a list', async () => {
+  // `set hooks: ["admit", 42]` was accepted while the item schema would have refused 42. `sessions` declares `any`
+  // items on purpose, so an `any` item type stays unchecked -- the check is skipped, not loosened.
+  const h = described()
+  await assert.rejects(() => h.tool.execute({ action: 'set', knob: 'hooks', value: ['admit', 42] }),
+    /is a list of string; got 42/)
+  assert.deepEqual(h.order, [], 'and a refused write records nothing')
+})
+
+test('every schema field TYPE is one the refusals know, so a new type cannot slip through unchecked', async () => {
+  // The coverage ratchet polices which FIELDS the descriptor sees. This polices the other half, which the review
+  // named: a field whose type has no branch in `refuseValue` would be described, then accepted whatever it was given.
+  const HANDLED = ['boolean', 'number', 'string', 'array', 'object', 'union', 'any']
+  const types = [...new Set(Object.values(Config.dict).map((field) => field.type))]
+  const unhandled = types.filter((type) => !HANDLED.includes(type))
+  assert.deepEqual(unhandled, [], 'these field types would bypass every refusal: ' + unhandled.join(', '))
+})
+
 test('THE DESCRIPTOR COVERS THE PLUGIN SCHEMA EXACTLY -- the ratchet for "the tool covers every setting"', async () => {
   // Digested from the real schema, so a field added there shows up in `list` with no change to this file; what this
   // asserts is that the two SETS agree, which is what "the agent tool covers all the settings" has to mean to be

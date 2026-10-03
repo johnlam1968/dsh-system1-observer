@@ -25,6 +25,7 @@ import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
 import { IDLE_GAP_MS } from './lib/cost.js'
+import { MAX_LANES } from './lib/compare.js'
 import { createModel } from './lib/model/client.js'
 import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
@@ -211,6 +212,9 @@ const Config = Schema.object({
   redactSessionTelemetry: Schema.boolean().volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
   maxQuestionChars: Schema.number().default(4000).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to 4000.'),
   pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
+  // HOW MANY RUNS A COMPARISON MAY SHOW. A reading decision, not a rendering detail: the comparison places runs
+  // side by side, and past a handful the columns stop being readable.
+  maxCompareLanes: Schema.number().min(1).default(MAX_LANES).volatile().description('How many runs a comparison may show side by side. Read at each report, so a save reaches a running row.'),
   idleGapMs: Schema.number().min(0).default(IDLE_GAP_MS).volatile().description('Milliseconds within which two judge calls count as ONE active stretch on the cost line. It decides what `activeMs` means, and a deployment whose turns are shorter than the default would rather count them apart. Read at each report, so a save re-prices without a restart.'),
   maxTraceBytes: Schema.number().default(33554432).volatile().description('Rotate the trace when the next line would cross this many bytes. 0 disables rotation. Rotation renames the full file aside as `<name>.<run>.<n>.jsonl` and starts a fresh one at the same path, so every reader keeps following the live file; each rotation writes a `rotate` line naming both, and the count is on the mount line.'),
 })
@@ -387,6 +391,12 @@ async function apply(ctx, config) {
       runId: evidence.runId(),
       liveAgents: liveAgentRoutes,
       price: () => readConfigValue(liveConfig().pricePerMTokInput),
+      // THE IDLE GAP AND THE LANE LIMIT, read live for the same reason the rate is: each decides what a number in
+      // the report MEANS. Both were, until these lines existed, DECLARED AND UNREAD: in the schema, marked
+      // volatile, reported by the agent config tool, and passed by nothing -- so the host accepted a write that
+      // changed no reading. test/schema.test.js now fails on any volatile field nothing reads.
+      idleGap: () => readConfigValue(liveConfig().idleGapMs),
+      compareLanes: () => readConfigValue(liveConfig().maxCompareLanes),
     }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
     // `decide` is assigned by the transports below, which may arrive after this callback runs, so the tool reads
