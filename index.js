@@ -285,6 +285,13 @@ async function apply(ctx, config) {
     return content.map((block) => (typeof block?.text === 'string' ? block.text : '')).join('\u0000')
   }
   const hooks = readHooks(mount)                        // a typo refuses the mount, naming the seam
+
+  // AND THE LIVE READ OF THE SAME THING, for the service's `config()`. `readHooks` THROWS on an unknown seam -- which
+  // is right at mount, where a typo must refuse the row, and wrong here, where a consumer reading a description must
+  // not take the row down. The mount's own hooks are the honest fallback.
+  const hooksNow = () => {
+    try { return readHooks(liveConfig()) } catch { return hooks }
+  }
   // THE POLICY IS A GETTER because it is live config, read per line; the path is captured because the test suite
   // depends on that ordering. See `lib/evidence.js`.
   const liveConfig = () => plainConfig(config)
@@ -495,14 +502,22 @@ async function apply(ctx, config) {
     runs: () => runIds(readTraceWindow(evidence.path).events),
     sessions: () => ({ live: liveAgentRoutes(), configured: mount.sessions ?? null }),
     config: () => ({
-      hooks,
+      // ALL LIVE, INCLUDING THE THREE THAT WERE NOT. `hooks` came from `readHooks(mount)` and `provider`/`model`
+      // straight off the snapshot, while every sibling field in this same object read the running config -- so the
+      // one view a consumer uses to describe the row told it what the row mounted with, forever. A settings save
+      // changed the calls and not the description of them, which is the failure this whole register is about.
+      //
+      // THE MOUNT SNAPSHOT IS STILL THE HISTORICAL RECORD, and it is not lost: it is written on the mount line, which
+      // is where "what did this run mount with" belongs. `config()` answers the other question -- what is it doing
+      // NOW -- which is why it must not borrow from it.
+      hooks: hooksNow(),
       // WHICH QUESTIONS, WHICH IS WHAT `config()` IS FOR. The first version reported hooks, provider and model and
       // left this out, so a consumer could see that calls were recorded but not WHAT was asked -- and a count of
       // answers is not interpretable without the questions they answer. Read through the same reader the mount line
       // uses, so the two cannot disagree about what the row is configured to ask.
       questionIds: configuredQuestionIds(liveConfig()),
-      provider: mount.provider ?? null,
-      model: mount.model ?? null,
+      provider: readConfigValue(liveConfig().provider) ?? null,
+      model: readConfigValue(liveConfig().model) ?? null,
       turnEveryNTurns: readConfigValue(liveConfig().turnEveryNTurns) ?? 0,
       pricePerMTokInput: readConfigValue(liveConfig().pricePerMTokInput) ?? null,
     }),
