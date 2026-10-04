@@ -434,16 +434,16 @@ also the quickest way to see whether `Agent.options` is populated in your harnes
 Recording is best-effort throughout: a throwing trace cannot fail a turn, and neither can a model outage, a
 timeout or a malformed body.
 
-## Depth of measurement, and what L0–L4 mean
+## Depth of measurement, and what G0–G4 mean
 
-`docs/measurement-depth.md` is the lookup file for the shorthand this repository uses about how much of a session a
-measurement is given:
+`docs/measurement-depth.md` is the lookup file for the shorthand this repository uses about WHICH EVIDENCE a
+measurement is given. **They are groups, not levels** — disjoint categories the question selects from:
 
-* **L0 — the exchange**: what the human asked and what came back.
-* **L1 — the working record**: the narration, the tool calls, the tool results.
-* **L2 — the harness's own acts**: injections, tool-list changes, stop reasons, conditions.
-* **L3 — the pacing**: stream timing and token usage.
-* **L4 — the measurer's own record**: `stateChars`, truncation, segments, refusals.
+* **G0 — the exchange**: what the human asked and what came back.
+* **G1 — the working record**: the narration, the tool calls, the tool results.
+* **G2 — the harness's own acts**: injections, tool-list changes, stop reasons, conditions.
+* **G3 — the pacing**: stream timing and token usage.
+* **G4 — the measurer's own record**: `stateChars`, truncation, segments, refusals.
 
 It states what each level can and cannot answer, what each **costs** in a real session, and the rule the pricing
 forces: **a whole shallow layer measures that layer, while a cut of a deep layer measures nothing in particular.**
