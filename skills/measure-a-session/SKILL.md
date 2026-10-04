@@ -104,6 +104,34 @@ only thing that distinguishes a BETTER question from a different one. Two things
   fault was six wrong expectations in the battery, not the question. Inspect the misses before rewriting a question.
 - **Eight cases carry about a case of run-to-run noise.** Detect large improvements; do not read a small difference.
 
+## The report format, and getting it without asking for it
+
+**DO NOT RETELL THE NUMBERS IN PROSE.** Retyping a median from a tool result into a sentence is a number living in two
+places, and it drifts. Get the format from the tool instead:
+
+```
+system1_measurements { action: 'skeleton', run: 'current', tables: [
+  { title: 'The model',    questions: ['session_request_served', 'session_operator_had_to_repeat', 'session_failed_tool_recovery', 'session_claim_unsupported_by_tools', 'session_work_left_to_the_operator', 'session_scope_expanded', 'session_context_dropped', 'session_outcome_reusable'] },
+  { title: 'The operator', questions: ['operator_request_clear', 'operator_supplied_context', 'operator_corrections_timely', 'operator_kept_one_goal', 'operator_did_their_part', 'operator_feedback_specific', 'operator_recognised_errors', 'operator_left_agent_blocked'] }
+] }
+```
+
+It returns a three-column table per instrument, with **every number already filled from `readings.json`** and the
+reading column blank. You fill the reading column -- that is the only part of the report that is not reproducible --
+and attach the whole thing with `interpret`. A question that is not in the window renders `NOT IN THIS WINDOW` rather
+than a blank cell, the `NOT SEPARATING` flag rides the number it qualifies, and the refusals travel with the format.
+
+**NAME ONE TABLE PER INSTRUMENT, and report BOTH.** A session's outcome is half the agent's and half the operator's:
+`agent-helpfulness-session@1` and `human-conduct-session@1`. The tool cannot split them for you -- which questions
+belong to which set is a fact about the sets, not about the numbers -- and a report of one instrument is a report of
+half the session. Switch sets with `system1_settings { action: 'set', knob: 'questionSet', value: '<name>' }` (live),
+run each, and restore the setting afterwards.
+
+**AND SAY WHICH PACKAGE THESE NUMBERS CAME FROM.** A `run` window is a window over a PROCESS's lifetime, not over a
+measurement, so two measurements taken in one process land in one window and its run table names ONE question set for
+both (register row F59). If you are reporting two instruments from one window, say so, and say that the split is yours
+rather than the tool's.
+
 ## Reading the answers
 
 - `confidence` is how peaked the distribution was, **not** the probability that the answer is right.

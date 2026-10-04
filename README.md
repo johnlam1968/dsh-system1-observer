@@ -449,6 +449,10 @@ The third call is the agent's, because prose cannot be derived from numbers -- a
 `report.md`, `readings.json` and `trace.jsonl` are REPRODUCIBLE from the trace slice the package carries, while
 `interpretation.md` is merely WRITTEN, attributed and anchored to the sha256 of the readings it discusses.
 
+The report FORMAT is not a convention in the skill: `system1_measurements { action: 'skeleton', tables: [...] }`
+emits it with every number already read from `readings.json` and the reading column blank, so a report cannot mistype a
+median. The agent fills the reading column and attaches it with `interpret`.
+
 **SHIPPING IT IS NOT MOUNTING IT.** A skill is discovered from a skills ROOT, and the only thing in this harness that
 mounts a bundled root is `dsh-skill-filesystem`'s `bundledSkillDir` (or `$DSH_BUNDLED_SKILL_DIR`) -- which this
 plugin cannot set from inside itself. So a profile that wants the skill adds one line to its composition:

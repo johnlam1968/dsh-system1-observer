@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { attachInterpretation, buildPackage, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
+import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
 import { createResultsTool, summarise } from '../lib/results-tool.js'
 import { packageVersion } from '../index.js'
 
@@ -188,4 +188,40 @@ test('the tool resolves its default through that rule, so both actions agree', a
   assert.equal(typeof defaultPackageDir({ DSH_PROFILE_DIR: root }), 'string')
   seen.push(1)
   assert.equal(seen.length, 1)
+})
+
+test('the skeleton fills every number from the summary, and NEVER depends on a type these lines do not record', () => {
+  // THE FIRST VERSION KEYED OFF `q.type`, which the tool/evaluate call lines do not record (F53) -- and FOUR of eight
+  // questions rendered an EMPTY cell while a score rendered as "modal 1.67 1.67=2 0.9=2 ...". A missing number is worse
+  // than a mistyped one, because nothing about the report looks wrong.
+  const summary = {
+    window: { run: 'r1', groupBy: 'hook' },
+    counts: { call: 32, skip: 266 },
+    mount: { model: 'jev-latest', provider: 'typesafe', probeHash: 'abc123' },
+    runs: [{ questionSetHash: 'db06d2a49ed6' }],
+    refusals: ['2 configuration change(s) fall inside this window'],
+    groups: [{ key: 'session-review\u0000turn', questions: [
+      { id: 'a_noul', read: 16, values: [], probabilities: { n: 16, min: 0.22, max: 0.86, median: 0.415, atOrAboveHalf: 6 } },
+      { id: 'a_score', read: 16, values: [{ value: '1.67', n: 2 }, { value: '1.31', n: 2 }, { value: '0.9', n: 1 }] },
+      { id: 'a_choice', read: 16, values: [{ value: 'unprompted', n: 13 }, { value: 'never_provided', n: 1 }] },
+      { id: 'a_flat', read: 16, values: [], separates: false, probabilities: { n: 16, min: 0.53, max: 0.87, median: 0.81, atOrAboveHalf: 16 } },
+      { id: 'a_float', read: 16, values: [], probabilities: { n: 16, min: 0.06, max: 0.84, median: 0.11499999999999999, atOrAboveHalf: 2 } },
+    ] }],
+  }
+  const text = buildSkeleton({ summary, at: 'T', tables: [
+    { title: 'The model', questions: ['a_noul', 'a_score', 'a_choice', 'a_flat', 'a_float', 'nobody_asked_this'] },
+  ] })
+  const cell = (id) => text.split('\n').find((line) => line.startsWith('| `' + id + '`')) ?? ''
+  assert.match(cell('a_noul'), /median 0\.415, range 0\.22\.\.0\.86, 6\/16 at or above half/, 'a noul is a probability block, with its side')
+  assert.match(cell('a_score'), /median 1\.31 over 5 reading\(s\), range 0\.9\.\.1\.67/, 'a score is graded, not a frequency list')
+  assert.match(cell('a_choice'), /modal unprompted: unprompted=13 never_provided=1/, 'a choice is a distribution of labels')
+  assert.match(cell('a_flat'), /NOT SEPARATING/, 'and the flag rides the number it qualifies')
+  assert.match(cell('a_float'), /median 0\.115,/, 'float noise is rounded away')
+  assert.match(cell('nobody_asked_this'), /NOT IN THIS WINDOW/, 'an absent question is NAMED, not left blank')
+  // AND NO CELL IS EMPTY, which is the failure the first version shipped.
+  for (const line of text.split('\n').filter((l) => l.startsWith('| `'))) {
+    assert.doesNotMatch(line, /\|\s*\| _ \|/, 'a blank numbers cell: ' + line)
+  }
+  assert.match(text, /What may NOT be read from this window/, 'and the refusals travel with the format')
+  assert.match(text, /question set \| `db06d2a49ed6`/)
 })
