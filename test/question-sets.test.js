@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../lib/question-sets.js'
+import { bundledSetsDir, SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../lib/question-sets.js'
 import { QUESTION_SCOPES, buildQuestions } from '../lib/questions.js'
 
 const dirWith = (files) => {
@@ -88,10 +88,13 @@ test('a directory that is missing or is not a directory is a named problem', () 
 })
 
 test('the settings are read live, in the volatile accessor shape a running row passes', () => {
-  assert.deepEqual(setSettings({}), { dir: '', name: '' })
+  // NO ROW DIRECTORY IS NO LONGER AN ERROR: the bundled `criteria/` answers, so measuring a session does not depend
+  // on the row naming a directory (and a row that names one still wins -- asserted on the next line).
+  assert.deepEqual(setSettings({}), { dir: bundledSetsDir(), name: '' })
+  assert.equal(setSettings({}).dir.endsWith('/criteria'), true)
   assert.deepEqual(setSettings({ questionSetsDir: { get: () => ' /tmp/sets ' }, questionSet: { get: () => ' house ' } }), { dir: '/tmp/sets', name: 'house' })
   // A JUNK VALUE IS THE EMPTY SELECTION, not a path built from a number: the fallback is the inline questions.
-  assert.deepEqual(setSettings({ questionSetsDir: 42, questionSet: null }), { dir: '', name: '' })
+  assert.deepEqual(setSettings({ questionSetsDir: 42, questionSet: null }), { dir: bundledSetsDir(), name: '' })
 })
 
 test('EVERY shipped set compiles clean for every scope it keys, and names only declared scopes', async () => {

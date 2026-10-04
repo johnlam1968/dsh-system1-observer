@@ -105,7 +105,7 @@ window.__ModuleLoader__.load({
         hint: 'Which set in that directory this row asks, by name. Empty means the inline questions below. A set that cannot be read REFUSES the call rather than quietly asking something else.' },
       { panel: 'send', field: 'question', kind: 'longtext', label: 'Probe question',
         hint: 'The question asked at a seam that has no question of its own, and the text a new question starts from. Write it as a sentence, and say in it what each answer would mean.' },
-      { panel: 'send', field: 'maxQuestionChars', kind: 'number', min: 1, fallback: 4000, label: 'Max question characters',
+      { panel: 'send', field: 'maxQuestionChars', kind: 'number', min: 1, fallback: 8000, label: 'Max question characters',
         hint: 'The ceiling on one composed question before it is sent. A question over the cap is refused and said so on the line, never silently trimmed.' },
       { panel: 'see', field: 'composeMaxChars', kind: 'number', min: 1, fallback: 8000, label: 'Composed state (chars)',
         hint: 'How much of the held state the judge is shown.' },

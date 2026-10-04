@@ -17,9 +17,9 @@ import Schema from '@deepseek-ai/schemastery'
 import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
-import { QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
+import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
-import { listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
+import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
@@ -308,7 +308,7 @@ const Config = Schema.object({
   // A field whose effective default lives only in a reader is a field whose schema is not the whole truth -- which is
   // what the card/schema check found, one step after O14.
   redactSessionTelemetry: Schema.boolean().default(false).volatile().description('Scrub the harness’s own outbound session-telemetry records, which otherwise leave the process unredacted. Unrelated to this plugin’s own JSONL trace, which is local and redacts its copy. Off by default: a plugin whose contract is “it decides nothing” must not silently rewrite a user’s telemetry the moment it mounts.'),
-  maxQuestionChars: Schema.number().default(4000).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to 4000.'),
+  maxQuestionChars: Schema.number().default(MAX_QUESTION_CHARS_DEFAULT).volatile().description('Longest the configured question text may serialize to, at one firing. Over it, the seam asks NOTHING and records the reason as a `problem` — refused rather than truncated, because the answer map is keyed by question and a shortened question returns answers that cannot be matched to what was asked. Defaults to ' + MAX_QUESTION_CHARS_DEFAULT + ', which is room for both the agent and the operator dimensions in one set.'),
   pricePerMTokInput: Schema.number().default(0.042).volatile().description('USD per million input tokens for the COST OF THE JUDGEMENT only. The subject model’s tokens are never captured, so a session cost is not computable from this trace. Output tokens are free on this model; the input term is the whole cost. Defaults to the rate transcribed 2026-09-28.'),
   // HOW MANY RUNS A COMPARISON MAY SHOW. A reading decision, not a rendering detail: the comparison places runs
   // side by side, and past a handful the columns stop being readable.
@@ -689,9 +689,18 @@ async function apply(ctx, config) {
         // ASKING NOTHING IS NOT AN ANSWER. An empty map would send the model a whole conversation with no question
         // attached, and the call would be paid for and record nothing. A set that declares neither scope says
         // nothing about sessions, so the refusal travels as the problem the tool already throws on.
+        // AND THE LAST RESORT IS THE PLUGIN'S OWN DEFAULT, so a row that names nothing at all still measures -- and
+        // measures BOTH dimensions. The two rungs above are unchanged and deliberate: a row's session questions, then
+        // the aggregate set it already asked. This rung is what removes the row from the list of things a measurement
+        // NEEDS. Three rungs, in order: the caller's `set`, the row's config, the plugin's `session@1`.
+        const bundled = buildQuestions(Object.assign({}, config, { questionSet: DEFAULT_SESSION_SET, seamEnabled: { [SESSION_HOOK]: true } }), SESSION_HOOK)
+        if ((bundled.problems ?? []).length === 0 && Object.keys(bundled.questions ?? {}).length > 0) return bundled
         return {
           questions: {},
-          problems: ['the questions in force ask nothing at the `session` scope and nothing at `turn`, so a session judgement would have nothing to answer -- select a set that declares `session`, or write session specs'],
+          problems: [
+            ...(bundled.problems ?? []),
+            'the questions in force ask nothing at the `session` scope and nothing at `turn`, and the plugin\'s own default set `' + DEFAULT_SESSION_SET + '` could not be read either, so a session judgement would have nothing to answer',
+          ],
         }
       },
       decide: (request, options) => decide(request, options),

@@ -215,14 +215,16 @@ test('under the cap, and with no cap configured, the question is asked unchanged
   const uncapped = buildQuestions(config, 'draft')
   assert.equal(Object.keys(uncapped.questions).length, 1)
   assert.equal(uncapped.problems.length, 0)
-  assert.equal(questionCap(config), 4000, 'the default matches the sibling plugin’s hard cap')
+  // 8000 since the agent and operator dimensions were MERGED into one default set: sixteen questions serialize to
+  // 5,835 characters, and rewriting validated questions to fit a cap would have invalidated their battery scores.
+  assert.equal(questionCap(config), 8000, 'the default leaves room for both dimensions in one set')
 
   const generous = buildQuestions({ ...config, maxQuestionChars: 100000 }, 'draft')
   assert.equal(Object.keys(generous.questions).length, 1)
 
   // A cap of zero would refuse every question silently, so it is treated as unset rather than as a cap.
-  assert.equal(questionCap({ maxQuestionChars: 0 }), 4000)
-  assert.equal(questionCap({ maxQuestionChars: -5 }), 4000)
+  assert.equal(questionCap({ maxQuestionChars: 0 }), 8000)
+  assert.equal(questionCap({ maxQuestionChars: -5 }), 8000)
 })
 
 // The cap has to cover the LEGACY path too: the global `question` string is a question text like any other.
@@ -275,7 +277,9 @@ test('a SELECTED SET is the row\u2019s questions, and one that cannot be read re
   // A SET SELECTED WITH NOWHERE TO LOOK is the same refusal rather than a silent return to the inline questions.
   const nowhere = buildQuestions({ questionSet: 'house' }, 'admit')
   assert.deepEqual(nowhere.questions, {})
-  assert.match(nowhere.problems[0], /no `questionSetsDir` is configured/)
+  // AND A SET WITH NO ROW DIRECTORY IS LOOKED FOR IN THE BUNDLED ONE, so the refusal names the file it could not read
+  // rather than reporting a missing directory. The refusal is the point; where it looked is now a default, not a row.
+  assert.match(nowhere.problems[0], /cannot read/)
   // AND WITH NO SET SELECTED, THE OLD PATH IS UNTOUCHED -- the inline questions, which is what every row does today.
   const inline = buildQuestions({ questions: { admit: [{ id: 'inline', type: 'noul', instructions: 'ok?' }] } }, 'admit')
   assert.deepEqual(Object.keys(inline.questions), ['inline'])
