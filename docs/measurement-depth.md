@@ -263,6 +263,12 @@ Deeper than G2 you stop buying depth and start buying something else. These are 
 
 ---
 
+## Related
+
+* **`docs/question-suitability.md`** — which question may be asked of which group, and at what scope. The group a
+  measurement takes is only half the decision; a question whose subject is not in that group is unanswerable, and the
+  tool used to answer it anyway.
+
 ## Related register rows
 
 * **F32 / F34 / F35** — the composer cut tool evidence and the report did not say so; the origin of the `truncated`

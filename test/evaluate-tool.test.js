@@ -141,6 +141,26 @@ test('a single-call measurement composes at the BUDGET, not at the row\'s legacy
   assert.equal(seen.slice(1).every((m) => m === stateBudgetChars), true, 'every segment too: ' + JSON.stringify([...new Set(seen.slice(1))]))
 })
 
+// A SCORE IS A POSITION ON A SCALE, and a bare `1.85` is not a reading anybody can act on. The tool now carries the
+// top level so the render prints `1.85 of 2` -- asked for by the operator after a reading was reported without it.
+test('a score renders WITH its scale, and a noul does not pretend to have one', async () => {
+  const h = harness({
+    questions: () => ({ questions: {
+      graded: { id: 'graded', type: 'score', levels: ['no', 'partly', 'yes'], instructions: 'how well?' },
+      yesno: { id: 'yesno', type: 'noul', instructions: 'did it?' },
+    }, problems: [] }),
+    decide: async () => ({ answers: { graded: { type: 'score', level: 1.85, confidence: 0.77 }, yesno: { type: 'noul', probability: 0.83, confidence: 0.83 } } }),
+  })
+  const out = await h.tool.execute({}, {})
+  assert.deepEqual(out.scales, { graded: 2 }, 'the top level, from the levels the question declared')
+  const text = h.tool.output.render({}, out)[0].text
+  assert.match(text, /graded: 1\.85 of 2 \(0\.77\)/)
+  assert.match(text, /yesno: p=0\.83 \(0\.83\)/, 'and a noul is not given a scale it does not have')
+  // AND A SET WITH NO SCORE CARRIES NO `scales` AT ALL, rather than an empty object every reader must test.
+  const plain = harness()
+  assert.equal(Object.hasOwn(await plain.tool.execute({}, {}), 'scales'), false)
+})
+
 const harness = (overrides = {}) => {
   const lines = []
   const calls = []
