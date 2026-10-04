@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { checkCompatibility } from '../lib/compat.js'
+import { checkCompatibility, dshCandidates, findInstalledDsh } from '../lib/compat.js'
 
 const MANIFEST = {
   engines: { node: '^22.19.0 || >=24.0.0' },
@@ -49,4 +49,38 @@ test('an incomplete declaration cannot pass by being empty', () => {
   const { problems } = checkCompatibility(partial, { node: '25.3.0', dsh: 'x' })
   assert.equal(problems.length, 4, 'two blank versions, a blank note, and an unstated engines range')
   assert.ok(problems.some(problem => /engines\.node is not declared/.test(problem)))
+})
+
+// THE GATE WAS GREEN WITHOUT CHECKING ANYTHING. `require.resolve` from this package sees neither a global install nor
+// a profile install, so `npm run ci` printed "note: could not check the DSH line" and exited zero -- a successful
+// verification of nothing, which is what this file's own header warns about. The resolution is now a tested function
+// rather than a single call in a script.
+test('the candidates are ordered so the copy that MATTERS is asked first', () => {
+  const candidates = dshCandidates({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => ['docdrift', 'web'] })
+  assert.equal(candidates[0], '/repo/node_modules/@deepseek-ai/dsh/package.json', 'a local install is the narrowest claim')
+  assert.deepEqual(candidates.slice(1, 3), [
+    '/home/u/.dsh/profiles/docdrift/node_modules/@deepseek-ai/dsh/package.json',
+    '/home/u/.dsh/profiles/web/node_modules/@deepseek-ai/dsh/package.json',
+  ], 'then every PROFILE, which is what this plugin mounts into')
+  assert.equal(candidates[3], '/node/lib/node_modules/@deepseek-ai/dsh/package.json', 'and the Node global root LAST, as a fallback')
+  // A MACHINE WITH NO PROFILES IS NOT AN ERROR: the global fallback is still offered.
+  const bare = dshCandidates({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => { throw new Error('ENOENT') } })
+  assert.equal(bare.length, 2)
+})
+
+test('the version is read from the FIRST candidate that parses, and a PROFILE beats the global', () => {
+  const read = (path) => {
+    if (path.includes('/profiles/docdrift/')) return JSON.stringify({ version: '9.9.9-from-the-profile' })
+    if (path.includes('/node/lib/')) return JSON.stringify({ version: '1.1.1-from-the-global' })
+    throw new Error('ENOENT ' + path)
+  }
+  const found = findInstalledDsh({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => ['docdrift'], readFile: read })
+  assert.equal(found.version, '9.9.9-from-the-profile', 'the profile copy is the one the mount ran against')
+  assert.match(found.from, /profiles\/docdrift/)
+  // AND NOTHING FOUND IS REPORTED AS NOTHING, with a null source -- so `checkCompatibility` can say it did not check.
+  const none = findInstalledDsh({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => [], readFile: () => { throw new Error('ENOENT') } })
+  assert.deepEqual(none, { version: undefined, from: null })
+  // A CANDIDATE THAT EXISTS BUT IS NOT JSON IS SKIPPED, not a crash: a half-written install must not stop the gate.
+  const junk = findInstalledDsh({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => [], readFile: () => 'not json' })
+  assert.equal(junk.version, undefined)
 })
