@@ -6,10 +6,10 @@
 // Everything else here -- the ids, the manifest hashes, the refusal to overwrite -- is machinery in service of that.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildPackage, hashOf, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
+import { attachInterpretation, buildPackage, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
 import { createResultsTool, summarise } from '../lib/results-tool.js'
 import { packageVersion } from '../index.js'
 
@@ -106,4 +106,61 @@ test('the package records the BUILD that wrote it, and a missing import cannot h
   // its own try/catch turned the ReferenceError into `null` -- so every package said `version: null` and nothing
   // anywhere said why. Asserting a SEMVER is what makes the difference visible: null is a failure, not a fallback.
   assert.match(packageVersion(), /^\d+\.\d+\.\d+/, 'the version is read from the manifest, not defaulted away')
+})
+
+test('AN INTERPRETATION IS ATTACHED, ATTRIBUTED AND ANCHORED -- never merged into the re-derivable report', () => {
+  const root = mkdtempSync(join(tmpdir(), 'report-interp-'))
+  const dir = join(root, 'P1')
+  writePackage(dir, buildPackage({ id: 'P1', at: 'T', report: 'the numbers\n', summary: { window: {}, counts: {}, refusals: [] }, lines: LINES }))
+
+  const attached = attachInterpretation(dir, { text: 'The model served the request but over-claimed.', by: 'dsh session abc', at: '2026-01-01T00:00:00.000Z' })
+  assert.equal(attached.problem, null)
+  assert.equal(attached.anchor, hashOf(readFileSync(join(dir, 'readings.json'), 'utf8')), 'the anchor is the readings ON DISK')
+
+  const body = readFileSync(join(dir, INTERPRETATION_FILE), 'utf8')
+  assert.match(body, /AN INTERPRETATION, NOT A MEASUREMENT/)
+  assert.match(body, /\| written by \| dsh session abc \|/, 'attributed')
+  assert.equal(body.includes('anchored to `readings.json` | `sha256:' + attached.anchor + '`'), true, 'anchored to the readings as they are on disk')
+  assert.match(body, /The model served the request but over-claimed\./)
+
+  // THE REPORT IS UNTOUCHED: the re-derivable part stays re-derivable, and the manifest keeps the two apart.
+  assert.equal(readFileSync(join(dir, 'report.md'), 'utf8'), 'the numbers\n')
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
+  assert.deepEqual(manifest.reproducible, ['report.md', 'readings.json', 'trace.jsonl'])
+  assert.equal(manifest.interpretation.by, 'dsh session abc')
+  assert.equal(manifest.interpretation.readingsSha256, attached.anchor)
+  assert.equal(manifest.files.some((file) => file.name === INTERPRETATION_FILE), true)
+  // AND THE AMENDED PACKAGE STILL VERIFIES: the manifest changed, so its sibling hash was recomputed.
+  assert.equal(readFileSync(join(dir, 'manifest.sha256'), 'utf8').trim(), hashOf(readFileSync(join(dir, 'manifest.json'), 'utf8')) + '  manifest.json')
+
+  // ONE INTERPRETATION PER PACKAGE, because two readings of one measurement is ambiguity, not more evidence.
+  const twice = attachInterpretation(dir, { text: 'a second opinion' })
+  assert.match(twice.problem, /already carries an interpretation by dsh session abc/)
+  // A PACKAGE BUILT BEFORE `reproducible` EXISTED IS COMPLETED BY THE AMENDMENT, not left half-described.
+  const legacy = join(root, 'LEGACY')
+  const legacyPackage = buildPackage({ id: 'L', at: 'T', report: 'n\n', summary: { window: {}, counts: {}, refusals: [] }, lines: LINES })
+  writePackage(legacy, legacyPackage)
+  const legacyManifest = JSON.parse(readFileSync(join(legacy, 'manifest.json'), 'utf8'))
+  delete legacyManifest.reproducible
+  writeFileSync(join(legacy, 'manifest.json'), JSON.stringify(legacyManifest, null, 2) + '\n')
+  attachInterpretation(legacy, { text: 'a reading', by: 'x' })
+  assert.deepEqual(JSON.parse(readFileSync(join(legacy, 'manifest.json'), 'utf8')).reproducible, ['report.md', 'readings.json', 'trace.jsonl'])
+
+  // AND NOTHING IS ATTACHED TO SOMETHING THAT IS NOT A PACKAGE.
+  assert.match(attachInterpretation(join(root, 'nope'), { text: 'x' }).problem, /is not a package/)
+  assert.match(attachInterpretation(dir, { text: '   ' }).problem, /no text is not an interpretation/)
+})
+
+test('the tool attaches one through its own action, and reports the anchor', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'report-tool-interp-'))
+  const tool = createResultsTool({ path: '/dev/null', readFile: () => LINES.map((r) => JSON.stringify(r)).join('\n') })
+  const packed = await tool.execute({ action: 'package', run: 'r1', dir: join(root, 'm') })
+  const out = await tool.execute({ action: 'interpret', dir: join(root, 'm'), package: packed.package.id, text: 'A reading.', by: 'operator' })
+  assert.equal(out.interpretation.problem, undefined)
+  assert.equal(out.interpretation.file, INTERPRETATION_FILE)
+  assert.match(tool.output.render({}, out)[0].text, /INTERPRETATION attached as interpretation\.md, anchored to readings\.json sha256:[0-9a-f]{64}/)
+  // A PACKAGE THAT IS NOT THERE IS A PROBLEM, NOT A THROW.
+  const missing = await tool.execute({ action: 'interpret', dir: join(root, 'm'), package: 'nope', text: 'x' })
+  assert.match(missing.interpretation.problem, /is not a package/)
+  assert.match(tool.output.render({}, missing)[0].text, /INTERPRETATION NOT attached/)
 })
