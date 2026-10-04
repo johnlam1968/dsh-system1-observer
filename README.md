@@ -434,6 +434,35 @@ also the quickest way to see whether `Agent.options` is populated in your harnes
 Recording is best-effort throughout: a throwing trace cannot fail a turn, and neither can a model outage, a
 timeout or a malformed body.
 
+## The skill: measuring a session
+
+`skills/measure-a-session/SKILL.md` is the plugin's own workflow, for an agent asked to report on a session -- "I want
+a report on XYZ session". It is three calls, and the middle one does everything mechanical:
+
+```
+system1_sessions { action: 'list', search: 'XYZ' }
+system1_evaluate_session { sessionId, segmentChars: 57600, package: true }   # read, segment, judge, package
+system1_measurements { action: 'interpret', package: '<dir>', text: '...', by: '...' }
+```
+
+The third call is the agent's, because prose cannot be derived from numbers -- and the package keeps the two apart:
+`report.md`, `readings.json` and `trace.jsonl` are REPRODUCIBLE from the trace slice the package carries, while
+`interpretation.md` is merely WRITTEN, attributed and anchored to the sha256 of the readings it discusses.
+
+**SHIPPING IT IS NOT MOUNTING IT.** A skill is discovered from a skills ROOT, and the only thing in this harness that
+mounts a bundled root is `dsh-skill-filesystem`'s `bundledSkillDir` (or `$DSH_BUNDLED_SKILL_DIR`) -- which this
+plugin cannot set from inside itself. So a profile that wants the skill adds one line to its composition:
+
+```yaml
+- id: skill-filesystem
+  config:
+    bundledSkillDir: /path/to/dsh-system1-observer/skills
+```
+
+Note that the `docdrift` profile DISABLES `skill-filesystem` on purpose (its own comment explains: the catalogue
+arrives as a user message costing about 350 tokens of instruction on a small model). On such a profile the skill is
+still perfectly usable by reading the file, and nothing about this plugin's tools depends on it being discovered.
+
 ## Mounting
 
 `cordis.patch.yml` inserts one host row, `system1-observer`, with `provider: typesafe`, `model: jev-latest`

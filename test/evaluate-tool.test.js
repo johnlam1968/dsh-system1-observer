@@ -219,3 +219,37 @@ test('the tool declares its own name and refuses a bad argument against that dec
   assert.throws(() => createEvaluateTool({}), /`settings` must be a function/)
   await assert.rejects(() => h.tool.execute({ lastMessages: 'many' }), /lastMessages/)
 })
+
+test('`package: true` writes a package in the SAME call, and says where', async () => {
+  // THE WHOLE MECHANICAL WORKFLOW IN ONE CALL. The interpretation is deliberately NOT written here -- prose cannot be
+  // derived from numbers -- so this is evaluate+package, and the agent attaches its reading afterwards.
+  let asked = 0
+  const h = harness({ packageRun: async () => { asked += 1; return { dir: 'data/measurements/ID', files: ['manifest.json', 'report.md', 'readings.json', 'trace.jsonl', 'manifest.sha256'], bytes: 1234 } } })
+  const out = await h.tool.execute({ package: true }, {})
+  assert.equal(asked, 1, 'the writer ran once')
+  assert.equal(out.package.dir, 'data/measurements/ID')
+  const text = h.tool.output.render({}, out)[0].text
+  assert.match(text, /PACKAGE written to data\/measurements\/ID \(manifest\.json, report\.md/)
+  assert.match(text, /attach a reading with system1_measurements \{ action: 'interpret' \}/, 'and it names the next step')
+  // WITHOUT THE FLAG, NOTHING IS WRITTEN AND NOTHING IS CLAIMED.
+  const plain = harness({ packageRun: async () => { asked += 1; return {} } })
+  const bare = await plain.tool.execute({}, {})
+  assert.equal(Object.hasOwn(bare, 'package'), false)
+  assert.equal(asked, 1, 'the writer was not even called')
+  // A WRITER THAT THROWS IS A NAMED PROBLEM, not a lost reading: the evaluation already happened and is still returned.
+  const broken = harness({ packageRun: async () => { throw new Error('disk full') } })
+  const failed = await broken.tool.execute({ package: true }, {})
+  assert.match(failed.package.problem, /packaging failed: disk full/)
+  assert.equal(failed.subject.messages, 4, 'and the reading survives the packaging failure')
+  assert.match(broken.tool.output.render({}, failed)[0].text, /PACKAGE NOT written: packaging failed/)
+  // AND A ROW WITH NO WRITER SAYS SO rather than promising a package it cannot produce.
+  const h2 = harness()
+  assert.match((await h2.tool.execute({ package: true }, {})).package.problem, /no package writer is wired/)
+  // A SEGMENTED RUN PACKAGES TOO, which is the workflow that matters for a large session.
+  const big = harness({ packageRun: async () => ({ dir: 'D', files: ['manifest.json'] }) })
+  // 20 characters, because THIS fixture's messages are about thirty each -- 250 would hold all four in one segment,
+  // and a one-segment "segmented" run proves nothing about the path.
+  const wide = await big.tool.execute({ segmentChars: 20, package: true }, {})
+  assert.equal(wide.package.dir, 'D', 'the segmented path finishes through the same place')
+  assert.equal(wide.subject.segmented.segments >= 2, true, 'and it really was split: ' + wide.subject.segmented.segments)
+})

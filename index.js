@@ -611,6 +611,12 @@ async function apply(ctx, config) {
     // site, so a whole-session opinion never enters the probe calibration.
     tools.register(createEvaluateTool({
       settings: () => subjectSettings(liveConfig()),
+      // THE PACKAGE WRITER, over the SAME helpers the measurements tool registers -- one home for what a package is,
+      // reached from two tools. `run: 'current'` because the evaluation that just happened IS this run's latest
+      // reading, and the trace has already been written by the time this runs.
+      packageRun: () => createResultsTool({ path: evidence.path, runId: evidence.runId(), version: packageVersion(), meta: { dsh: DSH_VERSION } })
+        .execute({ action: 'package', run: 'current' })
+        .then((value) => (value.package === undefined ? { problem: 'the package writer returned nothing' } : value.package)),
       // READ AT CALL TIME: `sessionQuery` is captured by a `ctx.inject` callback that may run after this block.
       stored: async (options) => {
         const asked = Object.assign({ sessionQuery: sessionQuery }, options)

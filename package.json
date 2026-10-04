@@ -50,6 +50,7 @@
     "install.sh",
     "index.js",
     "client.js",
+    "skills/**",
     "lib/**/*.js",
     "scripts/**/*.mjs",
     "cordis.patch.yml",
