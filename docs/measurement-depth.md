@@ -96,6 +96,41 @@ ask is the ones whose `source.kind` is `user`, and **a missing source is not an 
 injection mechanism as well — `agent/inbox/spliced`, 84 of them in that session — which never appears on the human's
 channel at all.
 
+## What each group IS, in the harness's own terms
+
+**We invented the group NAMES; we did not invent the evidence.** Every group is a SELECTION over mechanisms the
+harness defines and documents, and this table states each selection as a citation rather than a description — because
+a private vocabulary that merely renames someone else's concepts drifts, and the drift is invisible.
+
+Citations are to the harness checkout (`~/deepseek-harness`), file and line, so each one can be re-checked.
+
+| group | composed of | documented at | whose concept |
+|---|---|---|---|
+| **G0** the asks and the answers | `user/message` whose `source` marks a **direct human prompt**, plus the turn's last `assistant/message` | `packages/core/session/src/types.ts:309` — *"a direct human prompt …, a synthetic `agent.inject()` context …, or an entered goal continuation round. All three project their `content` verbatim; `source` tells them apart."* | **theirs** (the three kinds); **ours** (selecting only the first kind, and only the turn's last word) |
+| **G1** the working record | the turn's `assistant/message` narration, `tool/call`, `tool/result` — and their `stream` | `types.ts:341` (`stream`, `usage`, `interrupted?`), `:296` (*"step … one model call plus the tool executions it requested"*) | **theirs** — and this is what the Web Trajectory view renders per turn: `packages/client/ui-trajectory/src/client/TrajectoryTable.tsx:601,650` |
+| **G2** the harness's own acts | `user/message` with a non-human `source` (the `agent.inject()` and goal-round kinds), `developer/message`, `turn/end.reason`, `request/header`/`request/context`, and the permission/sandbox/approval records | `types.ts:309` (the injected kinds), `:288` (`turn/end` reason), `request/*` in the same map | **entirely theirs** — we merely collect them into one selectable set |
+| **G3** the pacing | `assistant/message.stream` (deltas with `time`/`time0`), `usage`, `assistant/attempt.stream` | `types.ts:341`, `:352` — *"one model attempt that committed no surface message … a failed, retried, cancelled, or stream-error attempt"* | **entirely theirs**, and we currently ignore `assistant/attempt` |
+| **G4** the measurer's own record | `stateChars`, truncation, segment rows, the state hash, the refusals | — | **ENTIRELY OURS.** No harness equivalent exists, because it describes the measurement rather than the session. It is also the group that must always be attached |
+
+### So are the groups redundant?
+
+**No, but they are not primitives either.** The harness offers *per-turn rendering* and a *current surface*
+(`SessionEventSurface = 'current' | 'shadowed' | 'log-only'`, `packages/session-query/session-query/lib/types/types.d.ts:12`)
+— it does not offer "the asks and the final answers only" nor "the harness's own acts as a separate set". Those
+selections are what G0 and G2 add, and they are selections **over** documented events, not a new model of the log.
+
+Two consequences to keep:
+
+* **A group's definition is its citation.** If the format version moves, the table is stale and the groups are
+  undefined until it is re-checked. `SESSION_FORMAT_VERSION = 4` (`types.ts:89`) while the released format is 3
+  (`docs/session-format-status.md`) — so we are pinned to the checkout writer, and a version bump is a review trigger
+  in the same spirit as the compatibility gate.
+* **Where we have a vocabulary, ask whether the harness already has one.** `ask`, `turn`, `exchange` and `ask-group`
+  above survive that test — `turn` and `step` are theirs, the other three are ours and are defined by the events they
+  select. The Trajectory view's own fold (`collapsedSummaryKind: 'turn' | 'assistant'`,
+  `packages/client/ui-trajectory/src/client/trajectory-virtual-rows.ts:13`) is a third, and it is why the view's rows
+  are turns rather than asks.
+
 ## Two axes, and only ONE of them is the group
 
 A selection is always **(groups × scope)**, and conflating the two is what makes "G0" sound ambiguous:
@@ -151,6 +186,8 @@ hierarchy — which is the other reason these are groups and not levels.
 
 ## G0 — the exchange
 
+*Defined as a selection over the harness mechanisms cited in "What each group IS" above.*
+
 **What the human typed, and what the human read.** Nothing between. One exchange at `exchange` scope, or every
 exchange at `session` scope — the same group, and a different subject.
 
@@ -166,6 +203,8 @@ exchange at `session` scope — the same group, and a different subject.
 "A shallow measurement" is not the same claim as "a cheap one".
 
 ## G1 — the working record
+
+*Defined as a selection over the harness mechanisms cited in "What each group IS" above.*
 
 **Everything done between the ask and the answer** — what the UI shows when you unfold `Took 6m 08s`.
 
@@ -184,6 +223,8 @@ exchange at `session` scope — the same group, and a different subject.
 
 ## G2 — the harness's own acts
 
+*Defined as a selection over the harness mechanisms cited in "What each group IS" above.*
+
 **What was done to the agent rather than by it.** The layer that makes attribution possible at all.
 
 | | |
@@ -196,6 +237,8 @@ exchange at `session` scope — the same group, and a different subject.
 are ~10 KB, and they are the difference between *"the LLM expanded scope"* and *"the harness told it to"*.
 
 ## G3 — the pacing
+
+*Defined as a selection over the harness mechanisms cited in "What each group IS" above.*
 
 **How the work was distributed in time.** Not text — derived numbers.
 
@@ -211,6 +254,8 @@ Reasoning *effort* is configurable (the `subagent` tool exposes it) while reason
 stored — so two runs differing only in reasoning effort are indistinguishable in the file.
 
 ## G4 — the measurer's own record
+
+*Defined as a selection over the harness mechanisms cited in "What each group IS" above.*
 
 **What the measurement did to the session.** Metadata, not content.
 
