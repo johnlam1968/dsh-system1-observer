@@ -614,8 +614,8 @@ async function apply(ctx, config) {
       // THE PACKAGE WRITER, over the SAME helpers the measurements tool registers -- one home for what a package is,
       // reached from two tools. `run: 'current'` because the evaluation that just happened IS this run's latest
       // reading, and the trace has already been written by the time this runs.
-      packageRun: () => createResultsTool({ path: evidence.path, runId: evidence.runId(), version: packageVersion(), meta: { dsh: DSH_VERSION } })
-        .execute({ action: 'package', run: 'current' })
+      packageRun: (asked = {}) => createResultsTool({ path: evidence.path, runId: evidence.runId(), version: packageVersion(), meta: { dsh: DSH_VERSION } })
+        .execute(Object.assign({ action: 'package', run: 'current' }, typeof asked.sessionId === 'string' && asked.sessionId !== '' ? { subject: asked.sessionId } : {}))
         .then((value) => (value.package === undefined ? { problem: 'the package writer returned nothing' } : value.package)),
       // READ AT CALL TIME: `sessionQuery` is captured by a `ctx.inject` callback that may run after this block.
       stored: async (options) => {

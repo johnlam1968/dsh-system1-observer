@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../lib/results-tool.js'
 // THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
-import { answerOf, readTraceLines, writerOf } from '../lib/trace-read.js'
+import { answerOf, readTraceLines, windowOf, writerOf } from '../lib/trace-read.js'
 
 const call = (over = {}) => ({
   event: 'call',
@@ -257,4 +257,22 @@ test('a unanimous DIRECTION and an identical VALUE are reported as different fin
   // AND A NOUL THAT STRADDLES 0.5 DOES SEPARATE, so the flag is still doing its job.
   const both = [0.2, 0.8, 0.4].map((p, i) => call({ at: 'T' + i, questions: { q: { id: 'q', type: 'noul' } }, answer: { answers: { q: { type: 'noul', probability: p } } } }))
   assert.equal(summariseQuestions(both).find((entry) => entry.id === 'q').separates, true)
+})
+
+// A RUN IS A WINDOW OVER A PROCESS'S LIFETIME, so two measurements of two DIFFERENT sessions share one and the package
+// pooled them: measured live, `n=3` from 1 call about `session-75a4205f` and 2 about `session-fb6a24b1`, with nothing
+// in the artifact to say the count was about two conversations. The subject is now a selector, and the package rows
+// re-filter from the summary's own window -- so a subject the summary forgot would silently restore the defect.
+test('a package window can be narrowed to ONE session, and the summary carries that narrowing', () => {
+  const one = call({ at: 'T1', hook: 'session-review', subject: { sessionId: 'session-one', messages: 2 }, answer: { kind: 'answers', answers: { q: { type: 'noul', probability: 0.2 } } } })
+  const two = call({ at: 'T2', hook: 'session-review', subject: { sessionId: 'session-one', messages: 2 }, answer: { kind: 'answers', answers: { q: { type: 'noul', probability: 0.8 } } } })
+  const other = call({ at: 'T3', hook: 'session-review', subject: { sessionId: 'session-two', messages: 2 }, answer: { kind: 'answers', answers: { q: { type: 'noul', probability: 0.9 } } } })
+  const lines = [one, two, other]
+  assert.equal(summarise(lines, { run: 'r1' }).counts.call, 3, 'without a subject, everything in the run is in view')
+  const narrowed = summarise(lines, { run: 'r1', subject: 'session-one' })
+  assert.equal(narrowed.counts.call, 2, 'and with one, only that conversation')
+  assert.equal(narrowed.window.subject, 'session-one', 'the summary CARRIES it, because the package rows filter from here')
+  assert.deepEqual(windowOf(lines, { subject: 'session-two' }).map((l) => l.at), ['T3'])
+  // A LINE WITH NO SUBJECT IS NOT A MATCH, rather than a line that slips through every filter.
+  assert.equal(summarise([call({ at: 'T4', hook: 'session-review' })], { run: 'r1', subject: 'session-one' }).counts.call, 0)
 })
