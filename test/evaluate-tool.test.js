@@ -54,6 +54,39 @@ test('a confidence is not printed as a float artefact', async () => {
   assert.doesNotMatch(text, /0\.5900000000000001/)
 })
 
+// THE SILENT ONE: without `segmentChars` a whole session was composed down to the row's cap and answered anyway, so a
+// report about 8,000 characters read like a session-level judgement. Measured on this repository's own sessions --
+// 855,812 characters of conversation composed to 8,000 -- which is why the default now segments itself.
+test('a subject over the estimate SEGMENTS ITSELF, and says so', async () => {
+  const short = harness()
+  const small = await short.tool.execute({}, {})
+  assert.equal(Object.hasOwn(small, 'autoSegmented') ? small.autoSegmented : false, false, 'a small subject is one call')
+  assert.equal(Object.hasOwn(small, 'subject') && Object.hasOwn(small.subject, 'segmented'), false)
+
+  // A WINDOW OVER THE BUDGET, WITH NO `segmentChars` AT ALL.
+  // THE REAL EVENT SHAPE, built with the fixture's own helper -- `textOf` reads `data.message.content`, and a subject
+  // the harness did not supply is a subject the tool never sees.
+  const longEvents = Array.from({ length: 10 }, (_, k) => EVENTS.map((e, i) => message(k * 10 + i + 1, e.type, 'x'.repeat(5000)))).flat()
+  const long = harness({
+    stored: async () => ({
+      events: longEvents, messages: longEvents, slice: { matched: longEvents.length, total: longEvents.length },
+      coverage: { events: longEvents.length, messages: longEvents.length, chars: 200000, toolEvents: 0 },
+      session: { id: 'S1' }, problem: null,
+    }),
+  })
+  const out = await long.tool.execute({}, {})
+  assert.equal(out.autoSegmented, true, 'it segments itself rather than judging 8,000 of 200,000 characters')
+  assert.equal(out.windowChars, 200000, 'and reports the window it measured')
+  assert.equal(out.subject.segmented.segments >= 2, true)
+  const text = long.tool.output.render({}, out)[0].text
+  assert.match(text, /AUTO-SEGMENTED: 200000 characters of conversation is over the \d+-character estimate/)
+  assert.match(text, /Pass `segmentChars` to choose the size yourself/)
+  // AND AN EXPLICIT `segmentChars` IS NOT "AUTO", so a caller who chose reads no advice about choosing.
+  const chosen = await long.tool.execute({ segmentChars: 40000 }, {})
+  assert.equal(chosen.autoSegmented, false)
+  assert.doesNotMatch(long.tool.output.render({}, chosen)[0].text, /AUTO-SEGMENTED/)
+})
+
 const harness = (overrides = {}) => {
   const lines = []
   const calls = []
