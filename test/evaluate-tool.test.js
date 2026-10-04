@@ -12,6 +12,7 @@ import { probeFingerprint, probeScore } from '../lib/probe-score.js'
 import { PROBE_QUESTION } from '../lib/seams.js'
 import { noul } from '../lib/model/questions.js'
 import { stateBudgetChars } from '../lib/model/limits.js'
+import { checkAgainst } from '../lib/tool-args.js'
 
 const message = (seq, type, text) => ({
   seq,
@@ -159,6 +160,25 @@ test('a score renders WITH its scale, and a noul does not pretend to have one', 
   // AND A SET WITH NO SCORE CARRIES NO `scales` AT ALL, rather than an empty object every reader must test.
   const plain = harness()
   assert.equal(Object.hasOwn(await plain.tool.execute({}, {}), 'scales'), false)
+})
+
+// THE OUTPUT MUST SATISFY THE TOOL'S OWN SCHEMA, and the session-scope path did not: `turn: null` was emitted where
+// the schema declares a number. It went unnoticed because every call this feature had been given until then NAMED a
+// turn, so the null branch had never run. The register's rule is to OMIT an absent field, and this test holds the
+// whole family to it -- no turn, one turn, several turns, groups absent or present.
+test('every selection shape satisfies the output schema, including the ones with no turn', async () => {
+  const human = (seq, text) => ({ seq, type: 'user/message', data: { content: [{ type: 'text', text }], source: { kind: 'user' } } })
+  const said = (seq, turn, text) => ({ seq, type: 'assistant/message', data: { turn, message: { content: [{ type: 'text', text }] } } })
+  const events = [human(1, 'ask 36'), said(2, 36, 'answer 36'), human(3, 'ask 37'), said(4, 37, 'answer 37')]
+  const h = harness({ stored: async () => ({ events, messages: events, slice: { matched: 4, total: 4 }, coverage: { events: 4, messages: 4, chars: 60, toolEvents: 0 }, session: { id: 'S1' }, problem: null }) })
+  const shapes = [{ groups: ['G0'] }, { groups: ['G0'], turn: 37 }, { groups: ['G0'], turns: [36, 37] }, { groups: ['G0', 'G1'], turn: 37 }, {}]
+  for (const args of shapes) {
+    const out = await h.tool.execute(args, {})
+    checkAgainst(h.tool.output.schema, out, 'system1_evaluate_session')   // THROWS on a violation
+    assert.equal(out.turn === null, false, 'a null turn is what broke it: ' + JSON.stringify(args))
+    assert.equal(Object.hasOwn(out, 'turn'), args.turn !== undefined, 'present exactly when named: ' + JSON.stringify(args))
+    assert.equal(Object.hasOwn(out, 'turns'), Array.isArray(args.turns), 'and the list likewise: ' + JSON.stringify(args))
+  }
 })
 
 const harness = (overrides = {}) => {
