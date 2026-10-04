@@ -144,7 +144,19 @@ prize: it is *whole*, which is the property the current default lacks.
 
 ---
 
-## Strategies, ordered
+## Strategies, ordered by PREFERENCE, not by size
+
+**The first row is not the largest selection; it is the one that buys the most per character.** Size orders nothing
+here, except through one rule:
+
+> **Take the largest COMPLETE selection that the question actually reads and that fits.**
+
+If every category is relevant, that selection is **L0 + L1 + L2** — everything, whole. If only attribution is
+relevant, it is **L0 + L2**, and adding L1 is not generosity: it is the vendor's documented failure mode, a large
+state full of detail the question does not use. Fitting the budget is *necessary, not sufficient*.
+
+(L3 and L4 do not compete for this budget. L4 is metadata and should always be attached; L3 is derived numbers, not
+text. The contest is between L0, L1 and L2.)
 
 **Which selection answers which question.** The choices are combinations, not rungs — pick by what the question reads:
 
