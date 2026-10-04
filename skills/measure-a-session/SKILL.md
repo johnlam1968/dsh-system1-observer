@@ -78,6 +78,7 @@ Two session-scoped sets ship with this repository:
 
 **Read both.** Half of a session's outcome is the operator's, and a reading that says "the request was partly served"
 is not actionable until it is separated from "the opening message did not say what was wanted".
+
 **NAME THE SET IN THE CALL**, one call per instrument:
 
 `system1_evaluate_session { sessionId, set: 'human-conduct-session@1', segmentChars: 57600, package: true }`
