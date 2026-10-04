@@ -190,38 +190,71 @@ test('the tool resolves its default through that rule, so both actions agree', a
   assert.equal(seen.length, 1)
 })
 
-test('the skeleton fills every number from the summary, and NEVER depends on a type these lines do not record', () => {
-  // THE FIRST VERSION KEYED OFF `q.type`, which the tool/evaluate call lines do not record (F53) -- and FOUR of eight
-  // questions rendered an EMPTY cell while a score rendered as "modal 1.67 1.67=2 0.9=2 ...". A missing number is worse
-  // than a mistyped one, because nothing about the report looks wrong.
+test('the skeleton emits the SHAPE the operator asked for, and never depends on a type these lines do not record', () => {
+  // THE SHAPE IS THE OPERATOR'S, taken from the interpretation they said they liked: a basis line, one section per
+  // instrument HEADED WITH THE SET, a table of short labels, the prose in a READING line BELOW -- and a comparison
+  // column. The first version keyed off `q.type`, which these call lines do not record (F53), and rendered FOUR of
+  // eight questions as an EMPTY cell while a score came out as "modal 1.67 1.67=2 0.9=2 ...".
   const summary = {
-    window: { run: 'r1', groupBy: 'hook' },
-    counts: { call: 32, skip: 266 },
+    window: { run: 'r1' },
+    counts: { call: 32, skip: 5 },
     mount: { model: 'jev-latest', provider: 'typesafe', probeHash: 'abc123' },
-    runs: [{ questionSetHash: 'db06d2a49ed6' }],
+    runs: [{ questionSetHash: 'thewindowhash' }],
     refusals: ['2 configuration change(s) fall inside this window'],
     groups: [{ key: 'session-review\u0000turn', questions: [
-      { id: 'a_noul', read: 16, values: [], probabilities: { n: 16, min: 0.22, max: 0.86, median: 0.415, atOrAboveHalf: 6 } },
-      { id: 'a_score', read: 16, values: [{ value: '1.67', n: 2 }, { value: '1.31', n: 2 }, { value: '0.9', n: 1 }] },
-      { id: 'a_choice', read: 16, values: [{ value: 'unprompted', n: 13 }, { value: 'never_provided', n: 1 }] },
-      { id: 'a_flat', read: 16, values: [], separates: false, probabilities: { n: 16, min: 0.53, max: 0.87, median: 0.81, atOrAboveHalf: 16 } },
-      { id: 'a_float', read: 16, values: [], probabilities: { n: 16, min: 0.06, max: 0.84, median: 0.11499999999999999, atOrAboveHalf: 2 } },
+      { id: 'session_failed_tool_recovery', read: 15, unreadable: 1, values: [{ value: 'no_empty_result', n: 7 }, { value: 'retried_differently', n: 8 }] },
+      { id: 'session_operator_had_to_repeat', read: 16, values: [], probabilities: { n: 16, min: 0.22, max: 0.86, median: 0.415, atOrAboveHalf: 6 } },
+      { id: 'session_request_served', read: 16, values: [{ value: '1.67', n: 2 }, { value: '0.9', n: 1 }] },
+      { id: 'session_scope_expanded', read: 16, values: [], separates: false, probabilities: { n: 16, min: 0.53, max: 0.87, median: 0.81, atOrAboveHalf: 16 } },
     ] }],
   }
-  const text = buildSkeleton({ summary, at: 'T', tables: [
-    { title: 'The model', questions: ['a_noul', 'a_score', 'a_choice', 'a_flat', 'a_float', 'nobody_asked_this'] },
+  const text = buildSkeleton({ summary, at: '2026-10-04', tables: [
+    { title: 'The model', set: 'agent-helpfulness-session@1', setHash: 'db06d2a49ed6', questions: ['session_failed_tool_recovery', 'session_operator_had_to_repeat', 'session_request_served', 'session_scope_expanded', 'nobody_asked_this'] },
   ] })
-  const cell = (id) => text.split('\n').find((line) => line.startsWith('| `' + id + '`')) ?? ''
-  assert.match(cell('a_noul'), /median 0\.415, range 0\.22\.\.0\.86, 6\/16 at or above half/, 'a noul is a probability block, with its side')
-  assert.match(cell('a_score'), /median 1\.31 over 5 reading\(s\), range 0\.9\.\.1\.67/, 'a score is graded, not a frequency list')
-  assert.match(cell('a_choice'), /modal unprompted: unprompted=13 never_provided=1/, 'a choice is a distribution of labels')
-  assert.match(cell('a_flat'), /NOT SEPARATING/, 'and the flag rides the number it qualifies')
-  assert.match(cell('a_float'), /median 0\.115,/, 'float noise is rounded away')
-  assert.match(cell('nobody_asked_this'), /NOT IN THIS WINDOW/, 'an absent question is NAMED, not left blank')
-  // AND NO CELL IS EMPTY, which is the failure the first version shipped.
-  for (const line of text.split('\n').filter((l) => l.startsWith('| `'))) {
-    assert.doesNotMatch(line, /\|\s*\| _ \|/, 'a blank numbers cell: ' + line)
+  const cell = (label) => text.split('\n').find((line) => line.startsWith('| ' + label)) ?? ''
+  // THE MODE IS THE MODE, NOT THE FIRST VALUE ENCOUNTERED: the counts arrive in a Map's insertion order, so bolding
+  // `no_empty_result 7/15` made the report's most prominent fact a coin toss.
+  assert.match(cell('failed tool recovery'), /\*\*retried_differently 8\/15 \(53%\)\*\* no_empty_result=7/, 'the modal label is bolded')
+  assert.match(cell('operator had to repeat'), /median 0\.415, range 0\.22-0\.86, \*\*true in 6\/16 \(38%\)\*\*/, 'a noul carries the share that decides it')
+  assert.match(cell('request served'), /median 1\.67, range 0\.9-1\.67/, 'a score is graded, with no meaningless share')
+  assert.doesNotMatch(cell('request served'), /true in/, 'a score has no side of 0.5 to be on')
+  assert.match(cell('scope expanded'), /NOT SEPARATING/, 'and the flag rides the number it qualifies')
+  assert.match(cell('nobody asked this'), /NOT IN THIS WINDOW/, 'an absent question is NAMED, not left blank')
+  // THE SET AND ITS HASH HEAD THE SECTION when the caller names them.
+  assert.match(text, /## The model, in this session \(set `agent-helpfulness-session@1`, hash db06d2a49ed6\)/)
+  assert.match(text, /MEASUREMENT taken 2026-10-04 from run `r1`/)
+  assert.match(text, /READING: _/, 'the prose goes BELOW the table')
+  assert.match(text, /What this reading does NOT establish/)
+  assert.match(text, /What may NOT be read from this window/)
+  // NO COMPARISON MEANS NO THIRD COLUMN -- never an empty one under a header that says nothing.
+  assert.match(text, /\| question \| reading over 16 segment\(s\) \|/, 'two columns')
+  assert.match(text, /_No comparison was given\. Pass `against`/)
+  for (const line of text.split('\n').filter((l) => l.startsWith('| ') && l.includes('(') && !l.startsWith('| question'))) {
+    assert.doesNotMatch(line, /\|\s*\|/, 'a blank cell in: ' + line)
   }
-  assert.match(text, /What may NOT be read from this window/, 'and the refusals travel with the format')
-  assert.match(text, /question set \| `db06d2a49ed6`/)
+})
+
+test('a SECOND instrument does not borrow the first one\'s set hash, and a comparison gets its own column', () => {
+  // THE WINDOW RECORDS ONE SET HASH ON THE MOUNT LINE (F59): borrowing it for a second instrument made the operator's
+  // table claim the model's question set.
+  const summary = {
+    window: { run: 'r1' }, counts: { call: 32 }, mount: { model: 'm', provider: 'p', probeHash: 'h' },
+    runs: [{ questionSetHash: 'thewindowhash' }], refusals: [],
+    groups: [{ key: 'g', questions: [{ id: 'operator_request_clear', read: 5, values: [{ value: '1.5', n: 1 }, { value: '0.5', n: 1 }] }] }],
+  }
+  const alone = buildSkeleton({ summary, tables: [{ title: 'The operator', set: 'human-conduct-session@1', questions: ['operator_request_clear'] }] })
+  assert.match(alone, /hash thewindowhash/, 'ONE instrument may borrow the window\'s hash, because it is the only one it can be')
+  const two = buildSkeleton({ summary, tables: [
+    { title: 'The model', set: 'a', questions: ['operator_request_clear'] },
+    { title: 'The operator', set: 'b', questions: ['operator_request_clear'] },
+  ] })
+  assert.doesNotMatch(two, /thewindowhash/, 'TWO instruments may not: the hash belongs to neither table in particular')
+  assert.match(two, /\(set `a`\)/)
+  // AND THE COMPARISON IS A COLUMN WITH A NAME, filled from the other package's readings.
+  const compared = buildSkeleton({ summary, against: { title: 'the 40,000-char single call', questions: { operator_request_clear: { read: 1, values: [{ value: '1.2', n: 1 }] } } },
+    tables: [{ title: 'The operator', set: 'human-conduct-session@1', questions: ['operator_request_clear', 'missing_from_the_other'] }] })
+  assert.match(compared, /\| question \| reading over 5 segment\(s\) \| the 40,000-char single call \|/)
+  assert.match(compared, /\| request clear \(score\) \| median 1, range 0\.5-1\.5 \| median 1\.2, range 1\.2-1\.2 \|/)
+  assert.match(compared, /\| missing from the other \(\?\) \| \*\*NOT IN THIS WINDOW\*\* \| -- \|/, 'and a question the comparison does not have is a dash, not a blank')
+  assert.doesNotMatch(compared, /_No comparison was given/)
 })

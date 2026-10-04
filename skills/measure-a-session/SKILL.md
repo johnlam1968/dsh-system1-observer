@@ -116,16 +116,28 @@ system1_measurements { action: 'skeleton', run: 'current', tables: [
 ] }
 ```
 
-It returns a three-column table per instrument, with **every number already filled from `readings.json`** and the
-reading column blank. You fill the reading column -- that is the only part of the report that is not reproducible --
-and attach the whole thing with `interpret`. A question that is not in the window renders `NOT IN THIS WINDOW` rather
-than a blank cell, the `NOT SEPARATING` flag rides the number it qualifies, and the refusals travel with the format.
+It returns the report with **every number already filled from `readings.json`** and the prose left blank, in the
+shape the operator asked for:
+
+* a **basis line** -- what was measured, when, from which run;
+* one section per instrument, headed `## The model, in this session (set \`agent-helpfulness-session@1\`, hash ...)`;
+* a table of **short labels** with the primitive marked (`request served (score)`), the numbers, and -- when you pass
+  `against` with another package directory -- a **third column** comparing against it;
+* a **`READING:` line below each table**, which is yours;
+* `## What this reading does NOT establish` and `## What the package itself caught`, which are also yours;
+* `## What may NOT be read from this window`, which the tool fills from the window's refusals.
+
+`against` is what makes it a report rather than a table: give it the directory of an earlier package and the same
+questions appear side by side, which is how a reader sees that a truncated measurement said something different.
 
 **NAME ONE TABLE PER INSTRUMENT, and report BOTH.** A session's outcome is half the agent's and half the operator's:
 `agent-helpfulness-session@1` and `human-conduct-session@1`. The tool cannot split them for you -- which questions
 belong to which set is a fact about the sets, not about the numbers -- and a report of one instrument is a report of
 half the session. Switch sets with `system1_settings { action: 'set', knob: 'questionSet', value: '<name>' }` (live),
 run each, and restore the setting afterwards.
+
+**SAY WHICH SET EACH TABLE IS**, with `set` and `setHash`, because the window records ONE set hash for every call in it
+(register row F59) -- and the tool refuses to copy one instrument's hash onto another's table rather than guessing.
 
 **AND SAY WHICH PACKAGE THESE NUMBERS CAME FROM.** A `run` window is a window over a PROCESS's lifetime, not over a
 measurement, so two measurements taken in one process land in one window and its run table names ONE question set for
