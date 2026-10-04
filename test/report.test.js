@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
 import { createResultsTool, summarise } from '../lib/results-tool.js'
@@ -169,12 +170,17 @@ test('a package goes to the PROFILE, not to whatever cwd the caller happens to h
   // FOUND BY LETTING ANOTHER AGENT RUN THE WORKFLOW. `data/measurements` was a relative default, so the same
   // measurement landed in the repository for me and in `~/.dsh/profiles` for a subagent -- an agent's cwd is not the
   // session's, and neither is the profile's.
-  assert.equal(defaultPackageDir({ DSH_PROFILE_DIR: '/home/x/.dsh/profiles/docdrift' }), '/home/x/.dsh/profiles/docdrift/data/measurements')
+  assert.equal(defaultPackageDir({ env: { DSH_PROFILE_DIR: '/home/x/.dsh/profiles/docdrift' } }), '/home/x/.dsh/profiles/docdrift/data/measurements')
   // A DEPLOYMENT THAT WANTS TO SAY WINS, so an operator can place packages without editing the profile.
-  assert.equal(defaultPackageDir({ SYSTEM1_OBSERVER_DATA: '/mnt/measurements', DSH_PROFILE_DIR: '/p' }), '/mnt/measurements')
+  assert.equal(defaultPackageDir({ env: { SYSTEM1_OBSERVER_DATA: '/mnt/measurements', DSH_PROFILE_DIR: '/p' } }), '/mnt/measurements')
   // AND A BARE ENVIRONMENT STILL WRITES SOMEWHERE, which is the only reason the relative guess survives at all.
-  assert.equal(defaultPackageDir({}), 'data/measurements')
-  assert.equal(defaultPackageDir({ DSH_PROFILE_DIR: '   ' }), 'data/measurements', 'blank is not an answer')
+  // THE PLUGIN PROCESS ITSELF HAS NO `DSH_PROFILE_DIR` -- measured, and the reason a live package landed in
+  // `~/.dsh/profiles/data/measurements`. Its command line names the profile and its cwd is the profiles root.
+  assert.equal(defaultPackageDir({ env: {}, argv: ['node', '/x/dsh', 'docdrift'], cwd: '/home/j/.dsh/profiles' }), '/home/j/.dsh/profiles/docdrift/data/measurements')
+  // AND WITH NOTHING TO GO ON THE ANSWER IS ABSOLUTE, never a relative path that lands wherever the caller stood.
+  assert.equal(defaultPackageDir({ env: {}, argv: ['node', '/x/dsh'], cwd: '/tmp' }), join(homedir(), '.dsh', 'measurements'))
+  assert.equal(defaultPackageDir({ env: { DSH_HOME: '/dsh' }, argv: [], cwd: '/tmp' }), '/dsh/measurements')
+  assert.equal(defaultPackageDir({ env: { DSH_PROFILE_DIR: '   ' }, argv: [], cwd: '/tmp' }), join(homedir(), '.dsh', 'measurements'), 'blank is not an answer, and the answer is ABSOLUTE')
 })
 
 test('the tool resolves its default through that rule, so both actions agree', async () => {
