@@ -25,6 +25,23 @@ const EVENTS = [
   message(4, 'assistant/message', 'shorter'),
 ]
 
+// F65: AN AGENT ASKED TO MEASURE WITH A PARTICULAR INSTRUMENT MUST BE ABLE TO SAY SO IN THE CALL. On a live session it
+// had to discover `system1_settings`, change the row, run, and change it back -- four operations and a side effect on
+// somebody else's configuration for what should be a parameter.
+test('a question set can be NAMED IN THE CALL, so measuring with a second instrument is not a settings change', async () => {
+  const asked = []
+  const h = harness({ questions: (given) => { asked.push(given); return { questions: { q: { id: 'q', type: 'noul', instructions: 'x' } }, problems: [] } } })
+  await h.tool.execute({ set: 'human-conduct-session@1' }, {})
+  assert.deepEqual(asked[0], { set: 'human-conduct-session@1', scope: undefined }, 'the name reaches the resolver')
+  await h.tool.execute({ set: 's@1', scope: 'turn' }, {})
+  assert.deepEqual(asked[1], { set: 's@1', scope: 'turn' }, 'and so does the scope')
+  await h.tool.execute({}, {})
+  assert.deepEqual(asked[2], { set: undefined, scope: undefined }, 'WITHOUT IT the row\'s own set applies, unchanged')
+  // A REFUSAL FROM THE RESOLVER IS THE ANSWER: a set that declares no session scope must not silently ask nothing.
+  const refuses = harness({ questions: () => ({ questions: {}, problems: ['the set "x" declares no "session" scope'] }) })
+  await assert.rejects(() => refuses.tool.execute({ set: 'x' }, {}), /declares no "session" scope/)
+})
+
 const harness = (overrides = {}) => {
   const lines = []
   const calls = []

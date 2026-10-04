@@ -652,7 +652,22 @@ async function apply(ctx, config) {
       compose: composeSubject,
       // THE AGGREGATE QUESTION SET, through the reader the mount line uses: with nothing configured this falls back to
       // the probe question exactly as the live path does, so a tool does not invent its own convention.
-      questions: () => {
+      questions: (asked = {}) => {
+        // A SET NAMED IN THE CALL WINS, and it is REUSED through `buildQuestions` rather than re-loaded here: that is
+        // where a selected set replaces the row's questions and where a malformed spec is refused, so a second path
+        // through the loader would be a second set of rules for what a question is.
+        //
+        // WHY IT EXISTS AT ALL: measured on a live session whose agent was asked to measure with the OPERATOR set. It
+        // had to read the settings, change the live row, run, and change the row back -- because the tool could only
+        // ever ask whatever set the row happened to name, and `questions()` took no arguments (register row F65).
+        const named = typeof asked.set === 'string' && asked.set.trim() !== '' ? asked.set.trim() : null
+        if (named !== null) {
+          const scope = typeof asked.scope === 'string' && asked.scope.trim() !== '' ? asked.scope.trim() : SESSION_HOOK
+          const built = buildQuestions(Object.assign({}, liveConfig(), { questionSet: named, seamEnabled: { [scope]: true } }), scope)
+          if ((built.problems ?? []).length > 0) return built
+          if (Object.keys(built.questions ?? {}).length > 0) return built
+          return { questions: {}, problems: ['the set "' + named + '" declares no "' + scope + '" scope, so a judgement at it would have nothing to answer -- it declares: ' + 'none' ] }
+        }
         // THE ROW'S OWN CONFIG, NOT A HAND-BUILT ONE. `buildQuestions` is where a selected set REPLACES the row's
         // questions (lib/questions.js:152-157), and it can only do that if it is handed the config that NAMES the
         // set. What stood here passed `{seamEnabled, questions:{session: specs}}` built from the inline map alone,
