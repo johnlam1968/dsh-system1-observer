@@ -87,6 +87,42 @@ test('a subject over the estimate SEGMENTS ITSELF, and says so', async () => {
   assert.doesNotMatch(long.tool.output.render({}, chosen)[0].text, /AUTO-SEGMENTED/)
 })
 
+// G0 AT THE TOOL: the composed state is the EXCHANGE, and the working record is not in it. This is the assertion that
+// matters -- the module can be right while the tool still hands the judge the machinery.
+test('groups: [G0] gives the judge the exchange and NOT the working record', async () => {
+  const human = (seq, text) => ({ seq, type: 'user/message', data: { content: [{ type: 'text', text }], source: { kind: 'user' } } })
+  const said = (seq, turn, text) => ({ seq, type: 'assistant/message', data: { turn, message: { content: [{ type: 'text', text }] } } })
+  const events = [
+    { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: 'APPROVAL NOTICE' }], source: { kind: 'user-approval' } } },
+    human(2, 'REVIEW MY CITIES'),
+    said(3, 36, 'NARRATION BETWEEN TOOL CALLS'),
+    { seq: 4, type: 'tool/call', data: { turn: 36, name: 'bash', arguments: '{"command":"ls"}' } },
+    { seq: 5, type: 'tool/result', data: { turn: 36, message: { content: [{ type: 'text', text: 'SAVE PARSED OK' }] } } },
+    said(6, 36, 'FOUND IT'),
+  ]
+  const composed = []
+  const h = harness({
+    compose: (list, maxChars) => { composed.push(list); return composeTurnState({ events: list, scope: 'session', maxChars: maxChars ?? 8000 }) },
+    stored: async () => ({ events, messages: events, slice: { matched: events.length, total: events.length }, coverage: { events: events.length, messages: events.length, chars: 100, toolEvents: 2 }, session: { id: 'S1' }, problem: null }),
+  })
+  const out = await h.tool.execute({ groups: ['G0'] }, {})
+  assert.deepEqual(composed[0].map((e) => e.seq), [2, 6], 'the ask and the turn\'s last word, nothing between')
+  assert.deepEqual(out.groups, ['G0'])
+  assert.deepEqual(out.exchange.turns, [36])
+  assert.equal(out.exchange.of, 1)
+  assert.equal(out.subject.messages, 2, 'and the count a reader is told is the selection, not the session')
+  assert.deepEqual(out.exchange.excluded.map((e) => e.kind), ['user-approval'])
+  const text = h.tool.output.render({}, out)[0].text
+  assert.match(text, /EVIDENCE: G0 -- 1 of 1 exchange\(s\)/)
+  assert.match(text, /EXCLUDED 1 harness `user\/message`\(s\)/)
+  // G0 + G1 IS THE WORKING RECORD, so the same call naming both composes every event -- the old behaviour, unchanged.
+  const both = await h.tool.execute({ groups: ['G0', 'G1'] }, {})
+  assert.equal(both.subject.messages, 6)
+  // AND WHAT THIS BUILD CANNOT COMPOSE IS REFUSED.
+  await assert.rejects(() => h.tool.execute({ groups: ['G2'] }, {}), /G2 cannot be composed by this build/)
+  await assert.rejects(() => h.tool.execute({ groups: ['G0'], turn: 99 }, {}), /has no turn 99/)
+})
+
 const harness = (overrides = {}) => {
   const lines = []
   const calls = []
@@ -115,7 +151,9 @@ test('it judges a stored session and reports WHAT it judged, with the input\u201
   assert.deepEqual(out.answers, { review: { label: 'yes', confidence: 0.8 } })
   // `offset` RIDES BESIDE `lastMessages` ALWAYS, even at 0: the two are one paging decision, and an absent one
   // invites "was it ignored?" -- the same reason `lastMessages: 0` is written rather than omitted.
-  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, offset: 0, messages: 4, total: 4 })
+  // `groups` and `turn` ride beside the paging decision for the same reason: a reading that does not name the evidence
+  // it was given cannot be told from one given different evidence (see `docs/measurement-depth.md`).
+  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, offset: 0, groups: null, turn: null, messages: 4, total: 4 })
   assert.equal(typeof out.stateHash, 'string')
   assert.equal(out.stateHash.length, 12, 'a short hash, so two evaluations of the same input are recognisable as one')
   assert.equal(out.truncated, false)

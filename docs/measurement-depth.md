@@ -233,12 +233,17 @@ a defect.
 
 ## Capabilities this exposes
 
-1. **No "exchange" selector.** G0 cannot be asked for today: `lastMessages`/`offset` take contiguous slices, and the
-   ask and the final answer of a turn are separated by the working record. An exchange selector is the prerequisite
-   for the test above.
+1. ~~**No "exchange" selector.**~~ **BUILT** — `groups: ["G0"]`, plus `turn: N` to pick one exchange, on
+   `system1_evaluate_session`. It takes the human's messages by `data.source.kind == "user"` (not every `user/message`
+   is the human: 8 of 46 were injections carrying 80% of that stream's volume), and the answer is the turn's LAST word
+   rather than its first. It reports the exclusions, and it REFUSES G2/G3 rather than approximating them.
 2. **Question-directed evidence** — per-question declaration of the level needed, then one call per group of
    questions that share a level, replacing the positional cap.
-3. **A `source.kind` filter.** Of the 46 `operator` messages in the freeciv session, **38 are the human (3,868 chars)
+3. ~~**A `source.kind` filter.**~~ **BUILT into the selector above** — and while building it, `textOf` was found to
+   read only `data.message.content`, so a `user/message`'s text (which lives at `data.content`) counted as ZERO
+   characters in the coverage denominator, the segment sizer and the sessions reader, while the composer read both.
+   Fixed; the same human+answer window now measures 44 characters where it measured 9.
+4. **The original note, kept for the record:** Of the 46 `operator` messages in the freeciv session, **38 are the human (3,868 chars)
    and 8 are the harness (15,521 chars)** — four skill catalogues alone are 14,524. So the `operator` stream is 83%
    human **by count** and **20% by volume**, and `human-conduct-session@1` is asked about all of it. Any G0 selector
    must take `source.kind == "user"` for the human's ask, or it will hand the judge a skill catalogue as a question.
