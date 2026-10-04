@@ -22,6 +22,16 @@ indistinguishable from one given the tools.
 `G0` the asks and the answers · `G1` the working record · `G2` the harness's own acts.
 Scope: **1×** one exchange (an *episode*) · **all** every exchange (a *trajectory*) · **end** the closing state.
 
+### The selection methods
+
+| what you want | how to ask | note |
+|---|---|---|
+| one exchange | `groups: ["G0"], turn: 37` | an *episode* |
+| several exchanges | `groups: ["G0"], turns: [37,38,39,40]` | a run of turns is a **segment whose boundaries come from the harness's own turn numbering**, so unlike `segmentChars` it cannot split a thought and a reader can check it |
+| every exchange | `groups: ["G0"]` | the *trajectory*; ~186,000 chars for the freeciv session's 37 |
+| the same, with the machinery | `groups: ["G0","G1"], turn: 37` | what the old `lastMessages`/`offset` arithmetic approximated |
+| the closing state | `groups: ["G0"]` over the last turn | the `end` scope |
+
 **Several exchanges are still `G0`** — the same group at `session` scope. The scope is the whole reason six rows below
 cannot be answered at one exchange, so it is named on every row and belongs in the spec beside the groups:
 `evidence: { groups: [...], scope: "exchange" | "session" | "end" }`.

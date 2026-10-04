@@ -89,3 +89,26 @@ test('the render names the evidence and the exclusions', () => {
   // WITH NO GROUP NAMED THERE IS NOTHING TO SAY, rather than a line about the default.
   assert.equal(selectionNote({ groups: null, turn: null, exchange: null }), '')
 })
+
+test('SEVERAL TURNS are still G0: the same group at a larger scope', () => {
+  const session = [
+    human(1, 'ask 36'), said(2, 36, 'answer 36'),
+    human(3, 'ask 37'), said(4, 37, 'answer 37'),
+    human(5, 'ask 38'), said(6, 38, 'answer 38'),
+  ]
+  const two = applyGroups({ events: session, groups: ['G0'], turns: [37, 38] })
+  assert.equal(two.problem, null)
+  assert.deepEqual(two.events.map((e) => e.seq), [3, 4, 5, 6], 'two exchanges: the ask and the answer of each')
+  assert.deepEqual(two.turns, [37, 38])
+  assert.equal(two.turn, null, 'a list is not a single turn')
+  assert.equal(two.exchange.exchanges, 2)
+  assert.equal(two.exchange.of, 3, 'and it says how many exchanges it did NOT measure')
+  // ONE TURN IS THE SAME METHOD WITH ONE MEMBER, so both forms share one implementation.
+  assert.deepEqual(applyGroups({ events: session, groups: ['G0'], turn: 37 }).events.map((e) => e.seq), [3, 4])
+  assert.deepEqual(applyGroups({ events: session, groups: ['G0'], turns: [37] }).events.map((e) => e.seq), [3, 4])
+  // A RUN OF TURNS AT G1 IS A SEGMENT BOUNDED BY THE HARNESS'S OWN NUMBERING, not by a character count.
+  assert.deepEqual(turnEvents(session, [37, 38]).map((e) => e.seq), [3, 4, 5, 6])
+  // AND A TURN THAT DOES NOT EXIST IS NAMED.
+  assert.match(applyGroups({ events: session, groups: ['G0'], turns: [37, 99] }).problem, /no turn 99/)
+  assert.match(selectionNote({ groups: ['G0'], turn: null, turns: [37, 38], exchange: two.exchange }), /turns 37-38 \(2\)/)
+})
