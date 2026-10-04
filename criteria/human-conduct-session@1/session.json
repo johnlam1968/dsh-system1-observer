@@ -1,0 +1,84 @@
+[
+  {
+    "id": "operator_request_clear",
+    "type": "score",
+    "instructions": "In SESSION TRANSCRIPT, how far could a competent engineer have STARTED WORK from the operator's opening message alone, without asking anything back?",
+    "levels": [
+      "no: the goal, the subject or the constraint is missing, so work could not begin without a question",
+      "partly: the goal is there but something a decision depends on is not, and it had to be asked for or guessed",
+      "yes: the goal and the constraints needed to begin are in the opening message"
+    ]
+  },
+  {
+    "id": "operator_supplied_context",
+    "type": "choice",
+    "instructions": "Did the operator provide the context the work needed -- files, paths, versions, the actual error text, prior decisions?",
+    "options": [
+      { "label": "unprompted", "criterion": "the context the agent used was in the operator's own messages, given without being asked for" },
+      { "label": "only_when_asked", "criterion": "the agent had to ask for it, and the operator then supplied it" },
+      { "label": "never_provided", "criterion": "the agent asked or needed it and it never arrived, so the agent worked around it or guessed" },
+      { "label": "not_needed", "criterion": "the work needed no context beyond the request itself" },
+      { "label": "cannot_tell", "criterion": "the transcript does not show enough to say", "abstain": true }
+    ]
+  },
+  {
+    "id": "operator_corrections_timely",
+    "type": "noul",
+    "instructions": "When the operator corrected the agent, did the correction arrive BEFORE the agent had built further work on the wrong assumption?",
+    "criteria": {
+      "true": "each correction comes before more work is built on what it corrects",
+      "false": "at least one correction arrives only after the agent has built on the mistake, or no correction was given when one was needed"
+    }
+  },
+  {
+    "id": "operator_kept_one_goal",
+    "type": "choice",
+    "instructions": "How did the operator's GOAL move across the session, judged from their own messages?",
+    "options": [
+      { "label": "one_goal", "criterion": "the same goal throughout, clarified but never replaced" },
+      { "label": "narrowed", "criterion": "the goal was deliberately narrowed or split, and the operator said so" },
+      { "label": "changed_direction", "criterion": "a different goal appears later without the first being closed or abandoned explicitly" },
+      { "label": "abandoned", "criterion": "the operator stops pursuing the goal without saying the work is done or dropped" },
+      { "label": "cannot_tell", "criterion": "the transcript does not show enough to say", "abstain": true }
+    ]
+  },
+  {
+    "id": "operator_did_their_part",
+    "type": "noul",
+    "instructions": "Did the operator answer the questions they were asked, so that work which depended on those answers could continue?",
+    "criteria": {
+      "true": "every question the agent needed answered was answered, or none was needed",
+      "false": "the agent asked something it needed and the answer never came, so the work stalled or proceeded on an assumption"
+    }
+  },
+  {
+    "id": "operator_feedback_specific",
+    "type": "choice",
+    "instructions": "Judged from the operator's messages, was their feedback specific enough for the agent to act on?",
+    "options": [
+      { "label": "specific", "criterion": "the feedback names what is wrong or wanted, in terms of the work" },
+      { "label": "partly", "criterion": "the direction is clear but the agent still has to decide what exactly to change" },
+      { "label": "vague", "criterion": "the feedback states dissatisfaction or a preference without anything actionable" },
+      { "label": "none_given", "criterion": "the operator gave no feedback, so there is nothing to judge" },
+      { "label": "cannot_tell", "criterion": "the transcript does not show enough to say", "abstain": true }
+    ]
+  },
+  {
+    "id": "operator_recognised_errors",
+    "type": "noul",
+    "instructions": "Did the operator catch an error in the agent's work -- a wrong fact, a broken change, a misread request -- and name it?",
+    "criteria": {
+      "true": "the operator names a specific error the agent made, in the agent's own output",
+      "false": "no error is named by the operator, whether because there was none or because none was noticed"
+    }
+  },
+  {
+    "id": "operator_left_agent_blocked",
+    "type": "noul",
+    "instructions": "Did the session end, or stall, with the agent waiting on something only the operator could decide or provide?",
+    "criteria": {
+      "true": "the last exchange leaves a decision, an approval or a piece of information with the operator",
+      "false": "nothing is outstanding on the operator's side at the end"
+    }
+  }
+]
