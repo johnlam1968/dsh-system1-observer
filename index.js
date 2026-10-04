@@ -9,6 +9,7 @@ import { createEventFeed, DEFAULT_MAX_PER_SESSION } from './lib/host/feed.js'
 // `apply`, and the argument shapes this file calls are held by the tests that execute `apply`. There is no
 // interface version to compare: pinned across a repository boundary a version integer has a job, but here it
 // could only ever fire when the person who broke the shape also volunteered to bump it.
+import { readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,6 +53,31 @@ import { createTurnListener } from './lib/turn-listener.js'
 import { registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
 
 const name = 'system1-observer'
+
+/**
+ * This package's own version, read from its manifest rather than restated -- a constant would drift from it.
+ *
+ * EXPORTED SO IT CAN BE TESTED, and that is not decoration. The first version of this function used `readFileSync`
+ * without importing it, and its own `try/catch` turned the ReferenceError into `null` -- so every package recorded
+ * `version: null` and nothing anywhere said why. A catch-all around a name that does not exist converts "this is
+ * broken" into "this is empty", which is the failure class this repository keeps recording.
+ */
+export function packageVersion() {
+  try {
+    return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? null
+  } catch {
+    return null
+  }
+}
+
+/** The harness version this row is running inside, when it can be resolved. Recorded on a package, never asserted. */
+const DSH_VERSION = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL('./node_modules/@deepseek-ai/dsh/package.json', import.meta.url), 'utf8')).version ?? null
+  } catch {
+    return null
+  }
+})()
 
 // `agents` is a HARD dependency because the observer reads `ctx.agents.currentInitiator()` inside listeners,
 // and Cordis's context proxy throws on an undeclared service property. `system1` is deliberately NOT here:
@@ -523,6 +549,10 @@ async function apply(ctx, config) {
       tools.register(createResultsTool({
         path: evidence.path,
         runId: evidence.runId(),
+        // THE PACKAGE RECORDS WHAT PRODUCED IT, so a report read a year later can say which build wrote it -- and the
+        // version comes from the manifest rather than a constant that would drift from it.
+        version: packageVersion(),
+        meta: { dsh: DSH_VERSION },
       }))
       // SYSTEM1_QUESTIONS: the composing half of the loop (ROADMAP 13.3 item 2). It validates with the SAME
       // loader the row uses before it writes anything, refuses to overwrite a published scope without an explicit
