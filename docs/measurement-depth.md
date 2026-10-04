@@ -52,6 +52,40 @@ is the cheap one.
 
 ---
 
+## Two axes, and only ONE of them is the group
+
+A selection is always **(groups × scope)**, and conflating the two is what makes "G0" sound ambiguous:
+
+| axis | what it answers | values |
+|---|---|---|
+| **group** | WHICH evidence | **G0** the asks and the answers · **G1** the working record · **G2** the harness's acts · **G3** the pacing · **G4** the measurer's record (always attached) |
+| **scope** | HOW MUCH of the session | `exchange` one · `session` every one · `end` the last one |
+
+**SEVERAL EXCHANGES ARE STILL G0.** They are the same evidence category at a larger scope, so they need no group of
+their own — and the disjointness test that made these *groups* rather than levels settles it: a "trajectory" group
+would contain G0 exactly and contain nothing else.
+
+But the SUBJECT does change, which is why it feels like it needs a name:
+
+| scope | the subject | what it can answer |
+|---|---|---|
+| `exchange` | an **episode** | was this answered, and was the answer any good |
+| `session` | a **trajectory** | did the goal drift, did they have to repeat, was context lost |
+| `end` | the **closing state** | was anything left blocked |
+
+Six of the sixteen shipped questions need `session`, and one needs `end` (`docs/question-suitability.md`).
+
+### And at `session` scope there is a second question: whole, or aggregated?
+
+A trajectory can be judged two ways, and they are **not the same claim**:
+
+* **whole** — every exchange in one state, one judgement about the conversation;
+* **aggregated** — one judgement per exchange, combined in code (`segmentChars` over the exchange boundaries).
+
+The aggregate is honest about itself — "`one_goal` in 12 of 16 exchanges" — but it can **mask the very thing a
+trajectory question asks about.** A goal that changed four times reads as 12 of 16 agreeing, which sounds like
+stability. **For a trajectory question, drift IS the subject, and an average is the one summary that cannot show it.**
+
 ## Choosing by what you want to know
 
 The groups are selected by the QUESTION, and two questions that look similar need different groups:
@@ -73,7 +107,8 @@ hierarchy — which is the other reason these are groups and not levels.
 
 ## G0 — the exchange
 
-**What the human typed, and what the human read.** Nothing between.
+**What the human typed, and what the human read.** Nothing between. One exchange at `exchange` scope, or every
+exchange at `session` scope — the same group, and a different subject.
 
 | | |
 |---|---|
@@ -81,7 +116,7 @@ hierarchy — which is the other reason these are groups and not levels.
 | excludes | narration, tool calls, tool results, injections, everything the harness did |
 | can answer | was the request clear; was it served; is the outcome usable; did the operator have to repeat themselves |
 | cannot answer | anything about process: verification, loops, recovery, scope, context, work handed back |
-| price here | **~186,000 chars** for the whole session's 37 exchanges |
+| price here | **10,885 chars** for one exchange of the freeciv session; **~186,000** for all 37 |
 
 **G0 is not necessarily small.** Here it is large because the operator's asks and the final answers are long reviews.
 "A shallow measurement" is not the same claim as "a cheap one".

@@ -19,8 +19,16 @@ indistinguishable from one given the tools.
 
 ## The matrix
 
-`G0` the exchange · `G1` the working record · `G2` the harness's own acts.
-Scope: **1×** one exchange · **all** the whole session · **end** the last exchange.
+`G0` the asks and the answers · `G1` the working record · `G2` the harness's own acts.
+Scope: **1×** one exchange (an *episode*) · **all** every exchange (a *trajectory*) · **end** the closing state.
+
+**Several exchanges are still `G0`** — the same group at `session` scope. The scope is the whole reason six rows below
+cannot be answered at one exchange, so it is named on every row and belongs in the spec beside the groups:
+`evidence: { groups: [...], scope: "exchange" | "session" | "end" }`.
+
+At `session` scope, say whether the trajectory is judged **whole** (one judgement over every exchange) or
+**aggregated** (one per exchange, combined in code). They are different claims, and for drift questions — 2, 12 — an
+aggregate can hide the thing the question is about: a goal that changed four times reads as "`one_goal` in 12 of 16".
 
 | # | question | needs | scope | why |
 |---|---|---|---|---|
