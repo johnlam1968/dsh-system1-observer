@@ -185,7 +185,8 @@ prize: it is *whole*, which is the property the current default lacks.
 
 ## Question 2's answers: what to do when the purpose's evidence does not fit
 
-These are answers to the SECOND question, and none of them may change the first one. Ordered by
+These are answers to the SECOND question, and **none of them may change the first one.** They are ordered by
+preference — not by size — because size is not the criterion the selection answers to.
 
 **The first row is not the largest selection; it is the one that buys the most per character.** Size orders nothing
 here, except through one rule:
