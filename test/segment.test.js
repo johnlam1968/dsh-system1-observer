@@ -176,9 +176,11 @@ test('a segment that FAILS is reported and excluded from every n, never averaged
   assert.equal(out.segments[1].failure.reason, 'socket closed', 'the row says which segment and why')
   assert.match(failing.output.render({}, out)[0].text, /1 segment\(s\) produced no reading at all/)
   assert.match(failing.output.render({}, out)[0].text, /FAILED: socket closed/)
-  // AND WITHOUT `segmentChars` THE SAME TOOL MAKES ONE CALL AT THE ROW'S OWN CAP, so the technique is opt-in and does
-  // not change what a single-call judgement composes.
+  // AND WITHOUT `segmentChars` THE SAME TOOL MAKES ONE CALL -- at the JUDGE'S BUDGET, which is what BOTH paths use now.
+  // It used to hand the composer `undefined`, so the row's `composeMaxChars` applied; that default is 8,000, so every
+  // non-segmented measurement was cut to 8,000 characters no matter how little evidence the selection held. A group
+  // chosen BECAUSE it fits was then cut anyway, which is the one thing the selection exists to prevent.
   const h2 = harness()
   await h2.tool.execute({}, {})
-  assert.deepEqual(h2.composed, [undefined], 'one call, and no compose override')
+  assert.deepEqual(h2.composed, [stateBudgetChars], 'one call, composed at the budget')
 })

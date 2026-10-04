@@ -11,6 +11,7 @@ import { composeTurnState } from '../lib/turn-state.js'
 import { probeFingerprint, probeScore } from '../lib/probe-score.js'
 import { PROBE_QUESTION } from '../lib/seams.js'
 import { noul } from '../lib/model/questions.js'
+import { stateBudgetChars } from '../lib/model/limits.js'
 
 const message = (seq, type, text) => ({
   seq,
@@ -121,6 +122,23 @@ test('groups: [G0] gives the judge the exchange and NOT the working record', asy
   // AND WHAT THIS BUILD CANNOT COMPOSE IS REFUSED.
   await assert.rejects(() => h.tool.execute({ groups: ['G2'] }, {}), /G2 cannot be composed by this build/)
   await assert.rejects(() => h.tool.execute({ groups: ['G0'], turn: 99 }, {}), /has no turn 99/)
+})
+
+// THE SINGLE PATH COMPOSES AT THE JUDGE'S BUDGET, not the row's `composeMaxChars` (8,000 by default). Every
+// non-segmented measurement was cut to 8,000 characters regardless of what fitted -- so a level chosen BECAUSE it fits
+// was still cut, which is the one thing the group selection exists to prevent.
+test('a single-call measurement composes at the BUDGET, not at the row\'s legacy cap', async () => {
+  const seen = []
+  const h = harness({ compose: (events, maxChars) => { seen.push(maxChars); return composeTurnState({ events, scope: 'session', maxChars: maxChars ?? 8000 }) } })
+  await h.tool.execute({}, {})
+  assert.equal(seen[0], stateBudgetChars, 'the one call gets the budget: ' + seen[0])
+  // AND THE SEGMENTED PATH KEEPS THE SAME CEILING, so the two paths cannot disagree about what "whole" means.
+  const wide = harness({
+    compose: (events, maxChars) => { seen.push(maxChars); return composeTurnState({ events, scope: 'session', maxChars: maxChars ?? 8000 }) },
+    stored: async () => ({ events: Array.from({ length: 30 }, (_, k) => EVENTS.map((e, i) => message(k * 10 + i + 1, e.type, 'x'.repeat(5000)))).flat(), messages: null, slice: null, coverage: { events: 0, messages: 300, chars: 1500000, toolEvents: 0 }, session: { id: 'S1' }, problem: null }),
+  })
+  await wide.tool.execute({}, {})
+  assert.equal(seen.slice(1).every((m) => m === stateBudgetChars), true, 'every segment too: ' + JSON.stringify([...new Set(seen.slice(1))]))
 })
 
 const harness = (overrides = {}) => {
