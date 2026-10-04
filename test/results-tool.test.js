@@ -233,3 +233,28 @@ test('a call that FAILED is counted as asked and failed, not silently dropped fr
   assert.match(text, /hook tool \[the `answers` shape -- a tool or evaluation line, NOT the turn writer\]/, 'and a tool line is not labelled the turn writer')
   assert.doesNotMatch(text.split('hook tool')[1].split('\n')[0], /\[the turn writer\]/, 'which is what a shape test used to say about it')
 })
+
+// FOUND BY AN INDEPENDENT AGENT ON A LIVE RUN, which is the point of testing with one. `separates` for a `noul` measures
+// whether the answers fall on DIFFERENT SIDES of 0.5 -- a noul that always says yes separates nothing -- and the single
+// sentence "every answer was the same" was used for that AND for a choice whose labels were literally identical. Given
+// 0.53 .. 0.87 the agent concluded the question was "reading a default, not conversation variability", an inference the
+// flag does not support: the values differ, the direction does not.
+test('a unanimous DIRECTION and an identical VALUE are reported as different findings', () => {
+  const nouls = [0.53, 0.61, 0.87].map((p, i) => call({ at: 'T' + i, questions: { q: { id: 'q', type: 'noul' } }, answer: { answers: { q: { type: 'noul', probability: p } } } }))
+  const spread = summariseQuestions(nouls).find((entry) => entry.id === 'q')
+  assert.equal(spread.separates, false, 'nothing separates: every answer is on the same side')
+  assert.equal(spread.probabilities.min, 0.53)
+  assert.equal(spread.probabilities.max, 0.87, 'and the VALUES differ, which the old note denied')
+  assert.match(spread.note, /same side of 0\.5 \(all at or above\)/)
+  assert.match(spread.note, /not the same finding as identical answers/)
+  assert.doesNotMatch(spread.note, /every answer was the same value/)
+
+  // A CHOICE WITH ONE LABEL REALLY IS ONE VALUE, and that sentence is kept for it.
+  const same = ['x', 'x', 'x'].map((label, i) => call({ at: 'T' + i, questions: { q: { id: 'q', type: 'choice' } }, answer: { answers: { q: { type: 'choice', label } } } }))
+  const flat = summariseQuestions(same).find((entry) => entry.id === 'q')
+  assert.equal(flat.separates, false)
+  assert.match(flat.note, /every answer was the same value/)
+  // AND A NOUL THAT STRADDLES 0.5 DOES SEPARATE, so the flag is still doing its job.
+  const both = [0.2, 0.8, 0.4].map((p, i) => call({ at: 'T' + i, questions: { q: { id: 'q', type: 'noul' } }, answer: { answers: { q: { type: 'noul', probability: p } } } }))
+  assert.equal(summariseQuestions(both).find((entry) => entry.id === 'q').separates, true)
+})
