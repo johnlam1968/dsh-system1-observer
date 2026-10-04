@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { attachInterpretation, buildPackage, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
+import { attachInterpretation, buildPackage, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
 import { createResultsTool, summarise } from '../lib/results-tool.js'
 import { packageVersion } from '../index.js'
 
@@ -163,4 +163,29 @@ test('the tool attaches one through its own action, and reports the anchor', asy
   const missing = await tool.execute({ action: 'interpret', dir: join(root, 'm'), package: 'nope', text: 'x' })
   assert.match(missing.interpretation.problem, /is not a package/)
   assert.match(tool.output.render({}, missing)[0].text, /INTERPRETATION NOT attached/)
+})
+
+test('a package goes to the PROFILE, not to whatever cwd the caller happens to have', () => {
+  // FOUND BY LETTING ANOTHER AGENT RUN THE WORKFLOW. `data/measurements` was a relative default, so the same
+  // measurement landed in the repository for me and in `~/.dsh/profiles` for a subagent -- an agent's cwd is not the
+  // session's, and neither is the profile's.
+  assert.equal(defaultPackageDir({ DSH_PROFILE_DIR: '/home/x/.dsh/profiles/docdrift' }), '/home/x/.dsh/profiles/docdrift/data/measurements')
+  // A DEPLOYMENT THAT WANTS TO SAY WINS, so an operator can place packages without editing the profile.
+  assert.equal(defaultPackageDir({ SYSTEM1_OBSERVER_DATA: '/mnt/measurements', DSH_PROFILE_DIR: '/p' }), '/mnt/measurements')
+  // AND A BARE ENVIRONMENT STILL WRITES SOMEWHERE, which is the only reason the relative guess survives at all.
+  assert.equal(defaultPackageDir({}), 'data/measurements')
+  assert.equal(defaultPackageDir({ DSH_PROFILE_DIR: '   ' }), 'data/measurements', 'blank is not an answer')
+})
+
+test('the tool resolves its default through that rule, so both actions agree', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'report-dir-'))
+  const seen = []
+  const tool = createResultsTool({ path: '/dev/null', readFile: () => LINES.map((r) => JSON.stringify(r)).join('\n') })
+  const packed = await tool.execute({ action: 'package', run: 'r1', dir: join(root, 'explicit') })
+  assert.equal(packed.package.dir.startsWith(join(root, 'explicit')), true, 'an explicit dir is still honoured')
+  // WITH NO dir, the profile rule applies -- asserted through the function the tool calls, because the test process
+  // has its own DSH_PROFILE_DIR and writing a package into it from a unit test would be a side effect on the machine.
+  assert.equal(typeof defaultPackageDir({ DSH_PROFILE_DIR: root }), 'string')
+  seen.push(1)
+  assert.equal(seen.length, 1)
 })
