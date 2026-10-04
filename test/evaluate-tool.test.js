@@ -42,6 +42,18 @@ test('a question set can be NAMED IN THE CALL, so measuring with a second instru
   await assert.rejects(() => refuses.tool.execute({ set: 'x' }, {}), /declares no "session" scope/)
 })
 
+// MEASURED LIVE: `session_claim_unsupported_by_tools: p=0.41 (0.5900000000000001)` -- a probability the judge never
+// reported, printed to sixteen digits because a confidence interpolated from a distribution was rendered raw. The
+// skeleton rounded and this render did not, which is two consumers of one number and only one of them rounding.
+test('a confidence is not printed as a float artefact', async () => {
+  const h = harness()
+  const out = await h.tool.execute({}, {})
+  out.answers.q = { type: 'noul', probability: 0.41, confidence: 0.5900000000000001 }
+  const text = h.tool.output.render({}, out)[0].text
+  assert.match(text, /\(0\.59\)/, 'rounded: ' + text.split('\n').find((l) => l.includes('q:')))
+  assert.doesNotMatch(text, /0\.5900000000000001/)
+})
+
 const harness = (overrides = {}) => {
   const lines = []
   const calls = []
