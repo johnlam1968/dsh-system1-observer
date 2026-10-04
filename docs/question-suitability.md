@@ -20,6 +20,7 @@ indistinguishable from one given the tools.
 ## The matrix
 
 `G0` the asks and the answers · `G1` the working record · `G2` the harness's own acts.
+(**ask**, **turn**, **exchange**, **ask-group** and **block** are defined in `docs/measurement-depth.md`.)
 Scope: **1×** one exchange (an *episode*) · **all** every exchange (a *trajectory*) · **end** the closing state.
 
 ### The selection methods

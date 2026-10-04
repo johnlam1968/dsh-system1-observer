@@ -52,6 +52,50 @@ is the cheap one.
 
 ---
 
+## The words: ask, turn, exchange, ask-group, block
+
+Five things get conflated in conversation, and the two most recent findings turn on the difference. **None of them was
+defined in this file before — including "ask", which it used freely eight times.**
+
+| word | what it is | how to see it in the log | measured |
+|---|---|---|---|
+| **ask** | ONE message the HUMAN typed | `user/message` whose `data.source.kind == "user"` | freeciv **38**, this session **253** |
+| **turn** | one driver excursion | `turn/start` … `turn/end` | freeciv **37**, this session **487** |
+| **exchange** | what G0 selects *today*: the ask(s) before a turn, and that turn's last assistant message | derived, **turn-anchored** | — |
+| **ask-group** | an ask and EVERY turn it drove, up to the next ask | derived | freeciv ≈1 turn/ask; **this session ≈2** |
+| **block** | a run of ask-groups about one subject | a segmentation, stored with the reading | 4 blocks from a 3B model over freeciv's 38 asks |
+
+### A turn, measured
+
+```
+turn/start
+  agent/inbox/spliced      the HARNESS speaks first: 37 of 37 turns in the freeciv session
+  user/message             the ask, inside the turn (index 2 in 34 of 37)
+  assistant/message …      narration and tool calls
+  tool/result …
+  assistant/message        the turn's last MESSAGE          <- what G0 keeps
+  step/end                 the turn's last EVENT
+turn/end {reason}
+```
+
+`turn/end.reason` is the AUTHORITY for a boundary — 36 `completed`, 1 `interrupted`. A `blocked` turn (a reject, zero
+steps) has **no assistant message at all**, so "a turn ends with an assistant message" holds for `completed` turns and
+for no other reason automatically.
+
+### Two measured warnings
+
+**A turn is not an ask.** The freeciv session nearly coincides — 37 turns, 38 asks. This one does not: **253 asks
+across 487 turns**, because one ask drives several turns. So the unit a G0 measurement wants is the **ask-group** — and
+**that is not what is built.** `exchangesOf` is TURN-anchored: it attaches an ask to the first turn that follows it, so
+the second and third turns of a multi-turn ask become exchanges with an **empty ask**. On a session of this shape,
+selecting G0 by turn selects a fragment. An **ask-based selector** is the missing capability.
+
+**And not every message on the human's channel is the human's.** Of the freeciv session's 46 `user/message` events,
+**38 are the human (3,868 chars) and 8 are the harness (15,521 chars)** — four skill catalogues alone are 14,524. An
+ask is the ones whose `source.kind` is `user`, and **a missing source is not an ask**. The harness has a second
+injection mechanism as well — `agent/inbox/spliced`, 84 of them in that session — which never appears on the human's
+channel at all.
+
 ## Two axes, and only ONE of them is the group
 
 A selection is always **(groups × scope)**, and conflating the two is what makes "G0" sound ambiguous:
