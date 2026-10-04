@@ -78,9 +78,13 @@ Two session-scoped sets ship with this repository:
 
 **Read both.** Half of a session's outcome is the operator's, and a reading that says "the request was partly served"
 is not actionable until it is separated from "the opening message did not say what was wanted". Switch sets with
-`system1_settings { action: 'set', knob: 'questionSet', value: '<name>' }` — it is live, no restart — and switch back
-when you are done, because a settings change is recorded on the trace and the measurements view will refuse to pool
-across it.
+**NAME THE SET IN THE CALL**, one call per instrument:
+
+`system1_evaluate_session { sessionId, set: 'human-conduct-session@1', segmentChars: 57600, package: true }`
+
+Without `set` the row's own set applies. Do NOT change the row's `questionSet` and change it back: that is a side
+effect on somebody else's configuration, it puts two `config` lines inside your own window, and it costs four
+operations instead of none. That is exactly what an earlier agent did, which is why this parameter exists (F65).
 
 If no set fits, author one: `system1_question_sets { action: 'write', set, scope: 'session', specs: [...] }`. Keep
 `choice` questions with an explicit abstain option, and prefer `choice` over `noul` whenever the judgement depends on
@@ -133,8 +137,8 @@ questions appear side by side, which is how a reader sees that a truncated measu
 **NAME ONE TABLE PER INSTRUMENT, and report BOTH.** A session's outcome is half the agent's and half the operator's:
 `agent-helpfulness-session@1` and `human-conduct-session@1`. The tool cannot split them for you -- which questions
 belong to which set is a fact about the sets, not about the numbers -- and a report of one instrument is a report of
-half the session. Switch sets with `system1_settings { action: 'set', knob: 'questionSet', value: '<name>' }` (live),
-run each, and restore the setting afterwards.
+half the session. Name each instrument in its own call with `set:` (see above) -- one call per instrument, no
+settings change, and no configuration lines inside the window you are about to package.
 
 **SAY WHICH SET EACH TABLE IS**, with `set` and `setHash`, because the window records ONE set hash for every call in it
 (register row F59) -- and the tool refuses to copy one instrument's hash onto another's table rather than guessing.
