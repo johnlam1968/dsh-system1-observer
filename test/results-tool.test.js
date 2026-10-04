@@ -25,6 +25,11 @@ test('a probability is read from the shapes the model actually narrows to', () =
   assert.deepEqual(answerOf({ type: 'noul', probabilityTrue: 0.2 }), { value: 0.2, kind: 'probability' })
   assert.deepEqual(answerOf({ type: 'choice', label: 'an_answer' }), { value: 'an_answer', kind: 'label' })
   assert.deepEqual(answerOf({ type: 'score', level: 'partly' }), { value: 'partly', kind: 'level' })
+  // AND THE NUMERIC LEVEL, which is what `narrowAnswers` actually produces for a score: the probability-weighted mean.
+  // Reading only a STRING level made every score answer `unreadable` in every aggregate -- measured on a live package,
+  // three questions at `n=0 unreadable=10` while the evaluate tool read the same lines fine.
+  assert.deepEqual(answerOf({ type: 'score', level: 1.28, confidence: 0.4, probabilities: { no: 0.2, yes: 0.8 } }), { value: 1.28, kind: 'level' })
+  assert.equal(answerOf({ type: 'score', level: null }), null, 'a score with no mean is still unreadable, not zero')
   // A CONFIDENCE IS NOT AN ANSWER: a noul that carries only a confidence has no probability to report, and reading
   // the confidence as one would invent a reading.
   assert.equal(answerOf({ type: 'noul', confidence: 1 }), null)

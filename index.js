@@ -517,10 +517,15 @@ async function apply(ctx, config) {
   // ONE COMPOSER, TWO TOOLS. `system1_evaluate_session` judges a session and `system1_sessions` SHOWS what
   // would be judged; if each built its own state the two could drift, and the tool that exists to preview a
   // judgement would be previewing something else. Hoisted rather than duplicated for exactly that reason.
-  const composeSubject = (events) => composeTurnState({
+  // `maxChars` IS AN OVERRIDE FOR SEGMENTED CALLS, and it is not optional plumbing. A segmented evaluation composes
+  // EACH SEGMENT, and the row's `composeMaxChars` is a WHOLE-SESSION parameter: measured, five segments of the freeciv
+  // session each composed to 49k-70k characters, and the row's 8,000 cap cut every one of them to exactly 8,000 --
+  // so segmenting would have bought nothing at all while looking like it had. A segment passes the state budget
+  // instead, which is the number the segmentation was measured against.
+  const composeSubject = (events, maxChars) => composeTurnState({
         events,
         scope: 'session',
-        maxChars: readConfigValue(liveConfig().composeMaxChars),
+        maxChars: maxChars ?? readConfigValue(liveConfig().composeMaxChars),
         toolMaxChars: readConfigValue(liveConfig().toolBlockMaxChars),
         tailChars: readConfigValue(liveConfig().tailChars),
       })

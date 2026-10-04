@@ -10,6 +10,7 @@ import { createEvaluateTool, EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../lib/eval
 import { composeTurnState } from '../lib/turn-state.js'
 import { choice, noul } from '../lib/model/questions.js'
 import { checkAgainst } from '../lib/tool-args.js'
+import { stateBudgetChars } from '../lib/model/limits.js'
 
 const message = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
 const toolCall = (seq, id, name, args) => ({ seq, time: seq, type: 'tool/call', data: { callId: id, name, arguments: args } })
@@ -77,6 +78,10 @@ test('the aggregate is ARITHMETIC over segments, and keeps every reading it aver
 /** The tool, with a `decide` that answers per segment so the aggregate is not a constant. */
 function harness() {
   const lines = []
+  // THE SECOND ARGUMENT IS RECORDED. The segmented path must NOT be handed the row's whole-session cap: measured, five
+  // segments of the freeciv session each compose to 49k-70k characters, and the row's 8,000-char cap cut every one of
+  // them to exactly 8,000 -- so segmenting would have bought nothing while looking like it had worked.
+  const composed = []
   const tool = createEvaluateTool({
     settings: () => ({ source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0 }),
     stored: async () => ({
@@ -86,7 +91,7 @@ function harness() {
       session: { id: 'S1' }, problem: null,
     }),
     liveEvents: async () => EVENTS,
-    compose: (events) => composeTurnState({ events, scope: 'session', maxChars: 8000, toolMaxChars: 4000, tailChars: 1000 }),
+    compose: (events, maxChars) => { composed.push(maxChars); return composeTurnState({ events, scope: 'session', maxChars: maxChars ?? 8000, toolMaxChars: 4000, tailChars: 1000 }) },
     questions: () => ({
       questions: {
         flavour: noul('did it go well?'),
@@ -102,7 +107,7 @@ function harness() {
     },
     record: (line) => lines.push(line),
   })
-  return { tool, lines }
+  return { tool, lines, composed }
 }
 
 test('a SEGMENTED run reads every part, writes one line per part, and aggregates in code', async () => {
@@ -141,6 +146,11 @@ test('a SEGMENTED run reads every part, writes one line per part, and aggregates
   assert.match(text, /served \[choice\]: n=3 modal=no \(67%\) no=2 yes=1/)
   assert.match(text, /not a session-level judgement/)
   assert.match(text, /seg 0: messages 1-2 \(2\)/)
+
+  // EVERY SEGMENT WAS COMPOSED WITH THE DOCUMENTED STATE BUDGET, not with the row's whole-session cap -- and the
+  // single-call path is still handed `undefined`, so it keeps the row's setting.
+  assert.deepEqual([...new Set(h.composed)], [stateBudgetChars], 'a segment is composed against the BUDGET')
+  assert.equal(h.composed.length, out.subject.segmented.segments, 'once per segment, not once per run')
 })
 
 test('a segment that FAILS is reported and excluded from every n, never averaged in as a zero', async () => {
@@ -166,6 +176,9 @@ test('a segment that FAILS is reported and excluded from every n, never averaged
   assert.equal(out.segments[1].failure.reason, 'socket closed', 'the row says which segment and why')
   assert.match(failing.output.render({}, out)[0].text, /1 segment\(s\) produced no reading at all/)
   assert.match(failing.output.render({}, out)[0].text, /FAILED: socket closed/)
-  // AND WITHOUT `segmentChars` THE SAME TOOL MAKES ONE CALL, so the technique is opt-in.
-  h.tool.execute({}, {})
+  // AND WITHOUT `segmentChars` THE SAME TOOL MAKES ONE CALL AT THE ROW'S OWN CAP, so the technique is opt-in and does
+  // not change what a single-call judgement composes.
+  const h2 = harness()
+  await h2.tool.execute({}, {})
+  assert.deepEqual(h2.composed, [undefined], 'one call, and no compose override')
 })
