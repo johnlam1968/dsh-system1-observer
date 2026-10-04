@@ -21,8 +21,14 @@ characters of dialogue text. **Prices are from ONE session and vary with the ses
 | **L3** | **the pacing** | how the work was distributed in time | stream deltas (`dt`, `time0`), `usage` token counts, step durations |
 | **L4** | **the measurer's own record** | what this measurement did to the session | `stateChars`, truncation flags, segment rows, state hash, refusals |
 
-The levels are **nested by content** — L2 contains L1 contains L0, if you take everything — but they are very much
-**not nested by cost**, which is the point of the pricing below.
+**Read the numbering as how much of the session is COVERED, not as a chain of prerequisites.** The event sets are
+**disjoint categories**: L2's events are not inside L1's, and L1's are not inside L0's. So a measurement may take any
+subset of them — and the pricing below says it usually should. The ladder describes coverage; a measurement is a
+*selection* from it.
+
+That distinction is why a strategy can read **L0 + L2**: the exchange plus the harness's own acts, deliberately
+*skipping* the working record. It is not a rung on the way to L2; it is a different selection, and the pricing says it
+is the cheap one.
 
 ---
 
@@ -140,9 +146,23 @@ prize: it is *whole*, which is the property the current default lacks.
 
 ## Strategies, ordered
 
+**Which selection answers which question.** The choices are combinations, not rungs — pick by what the question reads:
+
+| the question is about | select | price here |
+|---|---|---|
+| the exchange and its outcome | L0 (+L4) | ~186,000 |
+| the process — verification, recovery, scope | L0 + L1 (+L4) | ~1,426,000 |
+| attribution, conditions, who ended it | **L0 + L2** (+L4) | ~196,000 |
+| cost and pacing | any of the above + L3 | derived numbers |
+
+**L0 + L2 breaks the ladder on purpose.** L2 is 0.7% of L1's price — 9,924 against 1,426,401, **144×** — so buying the
+working record in order to obtain attribution pays 144 times for evidence those questions never read. The converse is
+also true and worth stating: without L1, no question about verification or recovery can be answered at all. **The
+level a measurement needs is a property of the question, not a setting on the session.**
+
 | strategy | verdict |
 |---|---|
-| **whole at a level that fits** (L0 + L2) | first choice. ~10,800 + ~10,000 chars here: whole, auditable, cheap |
+| **whole, at a level that fits** (see the combinations above) | first choice: whole, auditable, cheap |
 | **whole L1, when it fits** | fine — no cap, no cut |
 | **question-directed selection** from L1 | when it does not fit: give `claim_unsupported_by_tools` the *results*, give a code question the *arguments*. Never a positional cut |
 | **mechanical segmentation** | only when even the chosen level does not fit — every segment whole, the aggregate computed in code |
