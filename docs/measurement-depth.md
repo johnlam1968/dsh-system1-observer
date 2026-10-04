@@ -16,6 +16,21 @@ characters of dialogue text. **Prices are from ONE session and vary with the ses
 
 ---
 
+## Two questions, in this order
+
+1. **What do we want to measure?** A *decision* about the subject, answered by what a reader needs to know — not by
+   what happens to be available. "The result-oriented performance of the agent", "how the LLM behaved", and "was that
+   behaviour induced" are three different subjects with three different evidence sets.
+2. **Can the judge's constraint fit that evidence?** A *calculation* — arithmetic against the token budget, not a
+   judgement about what matters.
+
+**The order matters because the calculation must not be allowed to make the decision.** When the evidence a purpose
+needs does not fit, that is a fact about the **method**. It licenses: selecting the parts the question reads,
+projecting deterministically (G0 is exactly such a projection), segmenting mechanically, or storing a generated
+summary inside the package. It does **not** license measuring a smaller subject and reporting it under the original
+name — which is what a positional cut does, and how a rendering at 9% of the evidence came back looking like a
+session-level verdict.
+
 ## Quick reference
 
 | short | name | one line | adds |
@@ -168,7 +183,9 @@ prize: it is *whole*, which is the property the current default lacks.
 
 ---
 
-## Strategies, ordered by PREFERENCE, not by size
+## Question 2's answers: what to do when the purpose's evidence does not fit
+
+These are answers to the SECOND question, and none of them may change the first one. Ordered by
 
 **The first row is not the largest selection; it is the one that buys the most per character.** Size orders nothing
 here, except through one rule:
@@ -205,6 +222,11 @@ level a measurement needs is a property of the question, not a setting on the se
 | **generated summaries** | only if the summary ships in the package |
 | **LLM-chosen semantic boundaries** | implicit-intent risk is real; the deeper problem is **reproducibility** — an LLM boundary is not re-derivable without the same model and prompt. If used, the boundary list ships in the package |
 | **regex truncation** | this is what the 4,000-character tool cap already is: −91% of the evidence, sign inverted |
+
+**And the answer that is always available, and always better than a proxy: declare the purpose unmeasurable at this
+constraint.** Measuring something smaller and reporting it under the original name is the one option that cannot be
+checked by the reader — the artifact looks the same either way. A named refusal is a finding; a quiet substitution is
+a defect.
 
 ---
 
