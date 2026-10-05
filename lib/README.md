@@ -26,6 +26,8 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 ## The subject: what gets measured
 
 * `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
+* `session-index.js` — the hand-rolled session store, READ side: its path, its tables, and search over message text, reasoning, tool calls and tool results
+* `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
 * `exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
 * `sessions.js` — which sessions the observer watches at all
 * `subject.js` — which model produced the text being judged

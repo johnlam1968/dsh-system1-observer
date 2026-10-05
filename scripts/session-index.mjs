@@ -31,11 +31,12 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { defaultIndexPath, findSessions, metaOf, searchSessions } from '../lib/session-index.js'
 
 /** Where the harness keeps its sessions, unless told otherwise. */
 export const DEFAULT_SESSIONS_DIR = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'sessions')
-/** The derived store. Droppable: `build` recreates it. */
-export const DEFAULT_INDEX = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'session-index.db')
+/** The derived store, resolved by the read side so both callers agree on one path. */
+export const DEFAULT_INDEX = defaultIndexPath()
 
 /**
  * THE STORE'S OWN VERSION, because a receipt is not enough.
@@ -310,106 +311,8 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
-/**
- * Sessions whose TITLE, id or cwd matches, newest first.
- *
- * A title is matched with `LIKE` rather than FTS on purpose: `LIKE` has no query syntax to escape, and the escaping is
- * exactly the guard the harness's own search performs for us ("interpreted as data, never executable FTS syntax"). At
- * this size it is also faster than nothing.
- */
-/** What the store says about itself: `text_indexed`, `built_at`, `sessions`. */
-export function metaOf(out = DEFAULT_INDEX) {
-    const db = new DatabaseSync(out, { readOnly: true })
-    const meta = {}
-    for (const row of db.prepare('SELECT key, value FROM meta').all()) meta[row.key] = row.value
-    db.close()
-    return meta
-}
-
-/**
- * WHERE A PHRASE CAN LIVE, and the list is not just messages.
- *
- * `lib/host/session-format.js` and the harness's own `extractSessionEventText` both treat TOOL TRAFFIC as searchable
- * text -- a call's arguments and a result's output -- and a search that only read messages would answer "not in this
- * library" for a phrase that is sitting in a tool result. Measured while writing this: the fixture's phrase was in
- * `tool_results`, not in any message, and the first version of this function reported no matches.
- */
-function textHits(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
-    const db = new DatabaseSync(out, { readOnly: true })
-    const like = `%${String(term)}%`
-    const snippet = (column) => `MIN(substr(COALESCE(${column},''), max(1, instr(lower(COALESCE(${column},'')), lower(?)) - 60), 160))`
-    const queries = [
-        ['text', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('m.text')} AS snippet
-                  FROM sessions s JOIN messages m ON m.session_id = s.id
-                  WHERE m.text LIKE ? GROUP BY s.id`],
-        ['reasoning', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('m.reasoning')} AS snippet
-                  FROM sessions s JOIN messages m ON m.session_id = s.id
-                  WHERE m.reasoning LIKE ? GROUP BY s.id`],
-        ['tool-result', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('t.text')} AS snippet
-                  FROM sessions s JOIN tool_results t ON t.session_id = s.id
-                  WHERE t.text LIKE ? GROUP BY s.id`],
-        ['tool-call', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('c.args')} AS snippet
-                  FROM sessions s JOIN tool_calls c ON c.session_id = s.id
-                  WHERE c.args LIKE ? GROUP BY s.id`],
-    ]
-    const byId = new Map()
-    for (const [source, sql] of queries) {
-        let rows = []
-        try { rows = db.prepare(sql + ' ORDER BY hits DESC LIMIT ?').all(String(term), like, limit) } catch { rows = [] }
-        for (const row of rows) {
-            const held = byId.get(row.id) ?? { id: row.id, title: row.title, cwd: row.cwd, created_at: row.created_at, hits: 0, sources: [], snippet: '' }
-            held.hits += row.hits
-            held.sources.push(source)
-            if (held.snippet === '' && typeof row.snippet === 'string' && row.snippet !== '') held.snippet = row.snippet
-            byId.set(row.id, held)
-        }
-    }
-    db.close()
-    return [...byId.values()].sort((a, b) => b.hits - a.hits || (b.created_at ?? 0) - (a.created_at ?? 0))
-}
-
-/**
- * TEXT SEARCH, and title/cwd/id matching, in ONE answer.
- *
- * `textIndexed` is reported rather than assumed: a store built without `--text` holds no message text at all, and
- * answering that query as though it had searched the text would read as "the phrase is not in the library".
- */
-export function searchSessions(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
-    const meta = metaOf(out)
-    const textIndexed = meta.text_indexed === '1'
-    const rows = new Map()
-    for (const row of findSessions(term, { out, limit })) {
-        rows.set(row.id, { id: row.id, title: row.title, cwd: row.cwd, created_at: row.created_at, hits: 0, matchedIn: 'title/cwd/id' })
-    }
-    if (textIndexed) {
-        for (const hit of textHits(term, { out, limit })) {
-            const matchedIn = hit.sources.join('+')
-            const held = rows.get(hit.id)
-            if (held === undefined) {
-                rows.set(hit.id, { id: hit.id, title: hit.title, cwd: hit.cwd, created_at: hit.created_at, hits: hit.hits, matchedIn, snippet: hit.snippet ?? '' })
-            } else {
-                held.hits = hit.hits
-                held.matchedIn = held.matchedIn + '+' + matchedIn
-                held.snippet = hit.snippet ?? ''
-            }
-        }
-    }
-    const ordered = [...rows.values()].sort((a, b) => b.hits - a.hits || (b.created_at ?? 0) - (a.created_at ?? 0))
-    return { term: String(term), textIndexed, rows: ordered.slice(0, limit), total: ordered.length }
-}
-
-export function findSessions(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
-    const db = new DatabaseSync(out, { readOnly: true })
-    const like = `%${String(term)}%`
-    const rows = db.prepare(`
-      SELECT id, title, title_source, cwd, created_at, asks, messages, tool_calls, has_title
-      FROM sessions
-      WHERE title LIKE ? OR cwd LIKE ? OR id LIKE ?
-      ORDER BY (title LIKE ?) DESC, created_at DESC
-      LIMIT ?`).all(like, like, `${String(term)}%`, like, limit)
-    db.close()
-    return rows
-}
+// THE READ SIDE LIVES IN `lib/session-index.js`, so this script and the plugin cannot drift about a path, a column or
+// a query: `findSessions`, `metaOf` and `searchSessions` are imported from there, and both callers use the same code.
 
 const ms = (t) => `${(Number(process.hrtime.bigint() - t) / 1e6).toFixed(0)} ms`
 
@@ -421,7 +324,7 @@ export function readCounts(out = DEFAULT_INDEX) {
     return { sessions: row.sessions, titled: row.titled ?? 0, shadowed: row.shadowed ?? 0, asks: row.asks ?? 0 }
 }
 
-function main(argv) {
+async function main(argv) {
     const [command, ...rest] = argv
     const flag = (name, fallback) => {
         const at = rest.indexOf(`--${name}`)
@@ -450,7 +353,7 @@ function main(argv) {
         const term = rest.find((a) => !a.startsWith('--') && a !== flag('out', null) && a !== flag('limit', null))
         if (term === undefined) { console.error('find needs a term'); return 2 }
         const started = process.hrtime.bigint()
-        const rows = findSessions(term, { out, limit: Number(flag('limit', 20)) })
+        const rows = await findSessions(term, { path: out, limit: Number(flag('limit', 20)) })
         console.log(`${rows.length} session(s) matching ${JSON.stringify(term)} in ${ms(started)}`)
         for (const row of rows) {
             console.log(`  ${row.id}`)
@@ -464,7 +367,7 @@ function main(argv) {
         const term = rest.find((a) => !a.startsWith('--') && a !== flag('out', null) && a !== flag('limit', null))
         if (term === undefined) { console.error('search needs a term'); return 2 }
         const started = process.hrtime.bigint()
-        const found = searchSessions(term, { out, limit: Number(flag('limit', 20)) })
+        const found = await searchSessions(term, { path: out, limit: Number(flag('limit', 20)) })
         console.log(`${found.total} session(s) matching ${JSON.stringify(found.term)} in ${ms(started)}`
             + (found.textIndexed
                 ? ' (message text, reasoning, tool results and tool arguments are indexed)'
@@ -488,4 +391,4 @@ function main(argv) {
     return 2
 }
 
-if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop())) process.exit(main(process.argv.slice(2)))
+if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop())) process.exit(await main(process.argv.slice(2)))

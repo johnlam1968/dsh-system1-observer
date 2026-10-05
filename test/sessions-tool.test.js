@@ -7,6 +7,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionsTool, rowsOf, SESSIONS_TOOL_NAME, textOf } from '../lib/sessions-tool.js'
 import { composeTurnState } from '../lib/turn-state.js'
+import { buildIndex } from '../scripts/session-index.mjs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const record = (id, { cwd = '/home/john/freeciv', createdAt = 1000, live = false, persisted = true } = {}) => ({ header: { id, cwd, createdAt }, live, persisted })
 
@@ -101,7 +105,7 @@ test('search finds a session by the TEXT of its conversation, which list cannot'
   const tool = createSessionsTool({ query: fakeQuery({ records: [record('session-deep')], titles: { 'session-deep': 'unrelated title' }, hits, seen }) })
   const value = await tool.execute({ action: 'search', query: 'civil disorder' })
   assert.equal(value.action, 'search')
-  assert.equal(value.usedService, 'searchSessions')
+  assert.equal(value.usedService, 'searchSessions (the harness index)')
   assert.equal(value.count, 1)
   assert.equal(value.sessions[0].id, 'session-deep')
   assert.match(value.sessions[0].snippet, /civil disorder/)
@@ -110,15 +114,52 @@ test('search finds a session by the TEXT of its conversation, which list cannot'
   assert.match(tool.output.render({}, value)[0].text, /session-deep/)
 })
 
-test('search REFUSES rather than falling back to a substring scan when the index is absent', async () => {
-  const tool = createSessionsTool({ query: fakeQuery({ records: [record('session-a')] }) })
+test('search FALLS BACK to the hand-rolled store and says which backend answered', async () => {
+  // The harness index in this deployment is `openAt: never`, so it REFUSES -- and the answer must come from our own
+  // store with the refusal carried as a problem, never silently. `F98` is why the store exists.
+  const root = mkdtempSync(join(tmpdir(), 'sessions-search-'))
+  const index = join(root, 'index.db')
+  try {
+    const dir = join(root, '--home-john-proj--', 'session-deep')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'session.v4.jsonl'), [
+      JSON.stringify({ type: 'session', version: 4, id: 'session-deep', createdAt: 5, cwd: '/home/john/proj' }),
+      JSON.stringify({ type: 'user/message', seq: 1, time: 1, data: { turn: 1, source: { kind: 'user' }, content: [{ type: 'text', text: 'the operator asked about civil disorder' }] } }),
+    ].join('\n') + '\n')
+    buildIndex({ sessionsDir: root, out: index, withText: true })
+    const refusing = {
+      async listSessions() { return [] },
+      async readTitleSnapshots() { return [] },
+      async searchSessions() { throw new Error('session search is disabled: openAt "never"') },
+    }
+    const tool = createSessionsTool({ query: refusing, indexPath: index })
+    const value = await tool.execute({ action: 'search', query: 'civil disorder' })
+    assert.match(value.usedService, /^session-index \(hand-rolled/)
+    assert.equal(value.count, 1)
+    assert.equal(value.sessions[0].id, 'session-deep')
+    assert.equal(value.textIndexed, true)
+    assert.match(value.sessions[0].matchedIn, /text/)
+    // THE FIRST BACKEND'S FAILURE IS DISCLOSED, not hidden by the second
+    assert.match(value.problems.join(' '), /harness session index did not answer/)
+    const text = tool.output.render({}, value)[0].text
+    assert.match(text, /via session-index \(hand-rolled/)
+    assert.match(text, /PROBLEM: the harness session index did not answer/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('search REFUSES BY NAME when NEITHER backend can answer, and never reports a bare zero', async () => {
+  const tool = createSessionsTool({
+    query: fakeQuery({ records: [record('session-a')] }),          // no searchSessions at all
+    indexPath: '/tmp/definitely-not-a-store.db',
+  })
   const value = await tool.execute({ action: 'search', query: 'anything' })
   assert.equal(value.sessions.length, 0)
-  assert.match(value.problem, /searchSessions/)
-  assert.match(tool.output.render({}, value)[0].text, /UNAVAILABLE/)
-  // a substring scan would have "found" this session by title; saying nothing would have looked like no matches
-  const listed = await tool.execute({ action: 'list', search: 'anything' })
-  assert.equal(listed.sessions.length, 0)
+  assert.match(value.problems.join(' '), /no `searchSessions`/)
+  assert.match(value.problems.join(' '), /no readable session index at/)
+  assert.equal(value.textIndexed, false)
+  const text = tool.output.render({}, value)[0].text
+  assert.match(text, /PROBLEM: no readable session index/)
+  assert.match(text, /NEITHER|PROBLEM/)
 })
 
 test('search without a query says which argument is missing', async () => {

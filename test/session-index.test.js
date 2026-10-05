@@ -6,7 +6,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildIndex, findSessions, foldSession, metaOf, readCounts, searchSessions, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
+import { buildIndex, foldSession, readCounts, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
+import { findSessions, metaOf, searchSessions } from '../lib/session-index.js'
 
 /** A fixture session: header at the RECORD level, a title event whose `source` is an object, and a replace op. */
 function fixture() {
@@ -114,12 +115,12 @@ test('a second build refolds only what CHANGED, so the warm-up is paid once', ()
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
-test('search finds a phrase inside a CONVERSATION when the store was built with --text', () => {
+test('search finds a phrase inside a CONVERSATION when the store was built with --text', async () => {
     const f = fixture()
     const out = join(f.root, 'index.db')
     try {
         buildIndex({ sessionsDir: f.root, out, withText: true })
-        const found = searchSessions('pushed', { out })
+        const found = await searchSessions('pushed', { path: out })
         assert.equal(found.textIndexed, true)
         assert.equal(found.rows.length, 1)
         assert.equal(found.rows[0].id, f.id)
@@ -128,27 +129,27 @@ test('search finds a phrase inside a CONVERSATION when the store was built with 
         assert.equal(found.rows[0].matchedIn, 'tool-result')
         assert.match(found.rows[0].snippet, /pushed/)
         // and a phrase in a MESSAGE is found by the other source, so neither path shadows the other
-        const inMessage = searchSessions('summary of the above', { out })
+        const inMessage = await searchSessions('summary of the above', { path: out })
         assert.equal(inMessage.rows[0].id, f.id)
         assert.match(inMessage.rows[0].matchedIn, /text/)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
-test('search SAYS SO when the store holds no message text, rather than reporting no matches', () => {
+test('search SAYS SO when the store holds no message text, rather than reporting no matches', async () => {
     const f = fixture()
     const out = join(f.root, 'index.db')
     try {
         buildIndex({ sessionsDir: f.root, out })           // no --text
-        assert.equal(metaOf(out).text_indexed, '0')
-        const found = searchSessions('pushed', { out })
+        assert.equal((await metaOf(out)).text_indexed, '0')
+        const found = await searchSessions('pushed', { path: out })
         assert.equal(found.textIndexed, false, 'a store with no text cannot have searched any')
         assert.equal(found.rows.length, 0, 'and the phrase really is absent from titles, ids and directories')
         // the title path still works from the same store
-        assert.equal(searchSessions('GitHub account', { out }).rows[0].id, f.id)
+        assert.equal((await searchSessions('GitHub account', { path: out })).rows[0].id, f.id)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
-test('changing the TEXT MODE voids the receipts, because a receipt must cover the mode', () => {
+test('changing the TEXT MODE voids the receipts, because a receipt must cover the mode', async () => {
     const f = fixture()
     const out = join(f.root, 'index.db')
     try {
@@ -156,15 +157,15 @@ test('changing the TEXT MODE voids the receipts, because a receipt must cover th
         const withText = buildIndex({ sessionsDir: f.root, out, incremental: true, withText: true })
         assert.equal(withText.modeChanged, true)
         assert.equal(withText.refolded, 1, 'every session is refolded so the text is actually stored')
-        assert.equal(metaOf(out).text_indexed, '1')
+        assert.equal((await metaOf(out)).text_indexed, '1')
         // and the reverse move re-refolds too, rather than leaving text behind that a later search would trust
         const back = buildIndex({ sessionsDir: f.root, out, incremental: true })
         assert.equal(back.modeChanged, true)
-        assert.equal(searchSessions('pushed', { out }).textIndexed, false)
+        assert.equal((await searchSessions('pushed', { path: out })).textIndexed, false)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
-test('the index answers "the session in project X" BY CWD, in one query', () => {
+test('the index answers "the session in project X" BY CWD, in one query', async () => {
     const f = fixture()
     const out = join(f.root, 'index.db')
     try {
@@ -172,13 +173,13 @@ test('the index answers "the session in project X" BY CWD, in one query', () => 
         assert.equal(built.sessions, 1)
         assert.equal(built.titled, 1)
         // the handle that works: the project, not the title -- the title is a summary of the WORK
-        const byCwd = findSessions('zeroclaw-voice-proxy', { out })
+        const byCwd = await findSessions('zeroclaw-voice-proxy', { path: out })
         assert.equal(byCwd.length, 1)
         assert.equal(byCwd[0].id, f.id)
         assert.equal(byCwd[0].title, 'Push repo to GitHub account')
         // and the title is findable too, which is the capability the service cannot provide
-        assert.equal(findSessions('GitHub account', { out }).length, 1)
-        assert.equal(findSessions('nothing-like-this', { out }).length, 0)
+        assert.equal((await findSessions('GitHub account', { path: out })).length, 1)
+        assert.equal((await findSessions('nothing-like-this', { path: out })).length, 0)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
