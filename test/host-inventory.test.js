@@ -73,6 +73,12 @@ const LIB = jsFiles(join(ROOT, 'lib'))
   .filter((file) => !file.includes(join('lib', 'host')))
   .map((file) => code(read(file)))
   .join('\n')
+// AND THE PACKAGES THIS REPOSITORY SHIPS, because a host edge moved there and an unscanned edge is an undeclared one:
+// `dsh-session-adapter`'s plugin entry reaches `sessionQuery` with the same literal the row does. `lib/host` is excluded
+// above for the same reason it is excluded for `lib`: it is the INVENTORY, prose about the host rather than a call to it.
+const PACKAGES = jsFiles(join(ROOT, 'packages'))
+  .map((file) => code(read(file)))
+  .join('\n')
 
 const grab = (text, pattern) => [...text.matchAll(pattern)].map((m) => m[1])
 const servicesIn = (text) => grab(text, new RegExp(`ctx\\.get\\('(${NAME})'\\)`, 'g'))
@@ -81,7 +87,7 @@ const eventsIn = (text) => grab(text, new RegExp(`ctx\\.on\\('(${NAME}(?:/${NAME
 const unique = (list) => [...new Set(list)].sort()
 
 test('every service reached BY LITERAL is declared, and no declaration is stale', () => {
-  const used = unique([...servicesIn(ROW), ...injectedIn(ROW), ...servicesIn(LIB), ...injectedIn(LIB)])
+  const used = unique([...servicesIn(ROW), ...injectedIn(ROW), ...servicesIn(LIB), ...injectedIn(LIB), ...servicesIn(PACKAGES), ...injectedIn(PACKAGES)])
   const declared = Object.keys(HOST_SERVICES)
   assert.deepEqual(used.filter((name) => !declared.includes(name)), [], 'an undeclared service is a host dependency nobody wrote down')
   assert.deepEqual(declared.filter((name) => !used.includes(name)), [], 'and a stale declaration claims one the plugin does not have')
@@ -89,7 +95,7 @@ test('every service reached BY LITERAL is declared, and no declaration is stale'
 })
 
 test('every event subscribed BY LITERAL is declared, and no declaration is stale', () => {
-  const used = unique([...eventsIn(ROW), ...eventsIn(LIB)])
+  const used = unique([...eventsIn(ROW), ...eventsIn(LIB), ...eventsIn(PACKAGES)])
   const declared = Object.keys(HOST_EVENTS)
   assert.deepEqual(used.filter((name) => !declared.includes(name)), [], 'an undeclared event is a host dependency nobody wrote down')
   assert.deepEqual(declared.filter((name) => !used.includes(name)), [], 'and a stale declaration claims one the plugin does not have')

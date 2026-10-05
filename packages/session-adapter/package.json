@@ -2,7 +2,7 @@
   "name": "dsh-session-adapter",
   "version": "0.1.0",
   "type": "module",
-  "description": "The DSH session surface this repository's plugins are thin adapters over: the harness's event vocabulary in one home, the model-surface fold, and the per-session event feed. Pure modules -- no host call of any kind.",
+  "description": "The DSH session surface this repository's plugins are thin adapters over: the harness's event vocabulary in one home, the model-surface fold, the per-session event feed, and the sessionQuery-backed reads -- as importable functions AND as a `sessionAdapter` service.",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
@@ -11,9 +11,25 @@
     "./feed": "./lib/feed.js",
     "./reader": "./lib/reader.js",
     "./surface-authority": "./lib/surface-authority.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
-  "files": ["index.js", "lib/**/*.js", "package.json"],
-  "engines": { "node": "^22.19.0 || >=24.0.0" },
-  "license": "MIT"
+  "files": [
+    "index.js",
+    "lib/**/*.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.4"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

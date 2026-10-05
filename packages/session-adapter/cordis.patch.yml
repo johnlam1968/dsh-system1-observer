@@ -1,0 +1,7 @@
+# A HOST ROW. The adapter reads the harness's session surface, so it belongs to the deployment rather than to one
+# agent's preset -- and it has no config on purpose: the window (`kinds`, `lastMessages`, `offset`) is what a CALLER
+# asks for, and the data comes from `sessionQuery`. That service is reached AT CALL TIME, so a deployment that mounts
+# this row before (or without) the host's session service is not broken by it.
+- insert:
+    - id: session-adapter
+      name: 'dsh-session-adapter'
