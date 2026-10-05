@@ -168,6 +168,64 @@ than argued. A throwaway SQLite index over **183 pi sessions plus the two dsh se
 4. **Cost the size.** 103 MB for 30k rows is the FTS table mirroring the text; an index over asks and counts alone
    would be a fraction of that, and only the text worth searching needs to be in it.
 
+## Where the schema came from: derived from bytes, when the source declares it
+
+Asked directly, and the honest answer is **derived from real logs**, with the source read only for the parts being
+hunted at the time. That is measurably worse than reading first, and `session-persistence-jsonl` proves it:
+
+```ts
+// packages/session/session-persistence-jsonl/lib/types/format.d.ts -- the DECLARED first record
+interface HeaderLine {
+  type: 'session'; version: number; id: SessionId; createdAt: number; cwd?: string
+  parentSession?: SessionId; isSeeded: boolean; origin?: 'subagent'; delegationDepth: number; agentPreset?: string
+}
+```
+
+`cwd` and `createdAt` were derived by reading a file -- and the first attempt read them from `data.cwd`, which is
+wrong, giving **0 of 498** rows a directory. The other five fields were never derived at all, and adding them says
+something the index could not previously see:
+
+| | |
+|---|---|
+| sessions that are a **subagent** (`origin: 'subagent'`) | **318 of 498** |
+| sessions naming a **parent** session | **319** |
+| presets | `cordis` 356, `standard` 34, `minimal` 2, none 106 |
+
+**Sixty-four per cent of this library is subagent runs, not conversations** -- exactly the distinction the observer's
+own `observeSubagents` knob encodes (default OFF: *"records a subagent's streams and tool calls as skip lines"*). An
+index of "sessions" that cannot tell them apart answers a question about conversations with the wrong population, and
+a derived schema is how that happens. It is the third time in this file that reading the producer would have replaced
+a derivation (`F79`, `F89`, `F95`).
+
+## How a LIVING session refreshes: file-level today, offset-level designed
+
+**Today it is file-level, and that is the weak spot.** The receipt is `mtime` + `bytes`, so a session being appended to
+invalidates its receipt on every turn and the WHOLE file is decoded again: measured, one incremental run refolded
+exactly one session -- the one being written in -- and cost **26.5 s** for a 33 MB log, a cost that grows with the
+session. Every earlier claim about "incremental" is about the 497 files that did **not** change.
+
+**The design follows from what the backend already is.** `session-persistence-jsonl` states its own model: *"stores
+each session in a current append-only JSONL log ... checksummed Zstandard frames by default"*, and the package exposes
+a `SessionLogOffset` plus a *"truncation-repair offset computation"*. So the correct refresh is per-Sequence, not
+per-file:
+
+1. **Store the offset consumed and the high-water `seq`** per session, not the file's mtime.
+2. **Decode only the frames after that offset** -- frames are independently decodable, which is why the format is
+   multi-frame at all.
+3. **Make the append IDEMPOTENT** by keying rows on `(session_id, seq)` and inserting with conflict-replace, so
+   re-reading a little overlap is harmless: the boundary need only be no LATER than the last event already stored.
+4. **Derive the counters with SQL** (`asks`, `messages`, `shadowed` are aggregates over rows already present) instead
+   of accumulating them in the reader, so an append cannot drift from a count.
+5. **Treat a torn tail as the backend does**: the last frame is checksummed, so a partial frame at the end of a crashed
+   session fails to decode -- stop at the last good frame and record THAT offset, which is the truncation-repair case
+   the package documents.
+6. **Fall back to a full refold when the offset cannot be used, and say so on the row** -- the rule `F94` added after
+   a stale receipt skipped 498 sessions and left a column empty.
+
+**Not built yet.** What exists is the file-level refresh plus the schema version that voids receipts when the shape
+moves; the offset-level refresh is the next step, and it is the one that makes a LIVING session cost its last frame
+rather than its whole life.
+
 ## The cost of the service path, measured from the session's OWN log
 
 The harness writes a `time` on every tool call and its result, so the calls this plugin made can be timed after the
