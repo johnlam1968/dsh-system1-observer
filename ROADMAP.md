@@ -768,3 +768,77 @@ minimum honest evidence, recorded here as the design for the missing gate:
 | labelling a battery after seeing the run table | **PARTIALLY BUILT, and the limit is stated rather than papered over.** The battery's hash rides every `experiment` line, so a battery edited after a run is a DIFFERENT INSTRUMENT and the two cannot be pooled -- that is the part a hash can do. What no hash can do is prove WHEN a file was authored: a battery written after seeing the run table and then hashed is indistinguishable from one written before. That needs a timestamp or a commit, not a rule in this repository |
 | aborting the whole read when any line is unattributed | **refused**: traces recorded before these fields existed are real evidence, so the view REPORTS the gap and refuses to pool across it rather than returning nothing. Aborting would delete the history that makes the gap visible |
 | an operator hash changing inside one run | **not built** -- the run table now exposes it, which is the part that matters first |
+
+## 12. The current plan: two splits, and what each waits on
+
+P5 asked one question — stay a plugin, or extract the engine. The work since has split it in two, and both now have a
+**measured** boundary rather than a preference. This section is the plan of record; `docs/adapters-and-standards.md`
+holds the evidence behind every number here.
+
+### 12.1 Split A — the measurement core, as a package with no DSH import
+
+P5's hedge, now quantified. Measured over 63 files / ~11,100 lines:
+
+* **81% of the code is host-free**; only **12 files, 2,056 lines** call the harness at all, and of the 13 domain files
+  exactly **one** does (`lib/model/service.js`, the instrument's host edge).
+* The interface the core would speak is **five concepts**, derived from six harnesses rather than invented: an ask, an
+  answer, the model's reasoning, tool traffic, and a boundary — plus the per-harness facts (`shadowed`, `interrupted`,
+  attempts, the boundary label). `lib/host/session-format.js` is the DSH side of that line, and it is one file.
+* Precedent, already in this workspace: **`dsh-system1-runtime`** is the pure mechanism (imported **by name**, pinned
+  at a tag, fetched by plain `npm install`) and **`dsh-docdrift`** describes itself as *"the first application of"* it.
+
+**What it waits on: a second consumer.** A pure repo extracted from one implementation bakes in that implementation's
+shape. P5's own reasoning (*"the ecosystem is in libraries"*) is the trigger, and the hedge — no DSH import from P1 on
+— is already satisfied, so nothing has to be undone to collect on it.
+
+### 12.2 Split B — the session adapter, as its own plugin
+
+The new half, and the one the operator named: a **"plugin for a plugin"** that owns session access so the measurement
+core never reads a log.
+
+* **Two channels, and the cut is in-band vs out-of-band, not live vs stored.** In-band is the harness pushing events
+  (the seams); out-of-band is us pulling (`readSession`, or the index). The constraints are the harness's own:
+  `agent/turn-stopping` is SERIAL, `fs/write-intent` is WATERFALL SINGLE SLOT, and a throw in `fs/observed` fails the
+  tool call — a store cannot be consulted in there.
+* **What moves out**: `lib/host/*`, `lib/session-subject.js`'s DSH half, `lib/sessions-tool.js`'s DSH half.
+  **What stays**: the selection semantics (G0/G1), composition, segmentation — and `lib/sessions.js`'s allow-list rule,
+  which is ours and is not about a format.
+* **The measured case**: a title search through `sessionQuery` costs **~54 s** (seven samples, median 53,951 ms) and the
+  index answers the same question in **1 ms**; the warm-up is 328 s once and **2 ms** per re-run when nothing changed.
+* The index now exists as `scripts/session-index.mjs` (498 sessions, 75.1 MB, `--incremental`), **with the caveat that
+  it is a script, not a plugin, and its refresh is file-level until the offset-level design lands** (§12.4).
+
+### 12.3 Where the phases stand — this file is partly stale
+
+| phase | status |
+|---|---|
+| **P0** | done |
+| **P1** two questions per call, `S` as a file | open; the measured gain stands (+55% tokens for 5× the questions, no latency cost) |
+| **P2** criteria dictionary, registry, `id@version` provenance | **partly**: question sets exist as directories with hashes, batteries and the experiment line exist; the criteria DICTIONARY and `id@version` on the trace are the gap |
+| **P3** session/turn targets and a helpfulness set | **largely done and not reflected here**: session scope, `turns`, the evidence groups G0–G4, `session@1` and `agent-helpfulness-session@1` all exist; what remains is the turn AGGREGATE and block segmentation as a first-class mode |
+| **P4** the rewrite loop | open, gated as written |
+| **P5** the vehicle | **now two decisions** (§12.1, §12.2) |
+
+### 12.4 Next, in dependency order
+
+0. **RESTART. 26 commits are not live**, including the session-vocabulary move that fixed a **4.5× overstatement** of
+   conversation text (`F82`), the `action: 'search'` on the service's own index, the `observed` marking, and cwd in
+   `search`. Until then the running tool reports inflated counts and cannot search by text.
+1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces `lib/host/surface.js` (20 lines) with the
+   AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
+2. **The offset-level refresh** — makes a LIVING session cost its last frame instead of its whole life (today: 26.5 s
+   per append on a 33 MB log, growing). Design in `docs/adapters-and-standards.md`.
+3. **The subagent distinction** — **318 of 498 sessions are subagent runs**, and the index cannot yet filter them out
+   while `observeSubagents` (default OFF) already encodes that policy for the live path.
+4. **The pi reader** — the second adapter, and the test of the interface: pi shares DSH's store layout and 183 of its
+   sessions are on this disk.
+5. **The core extraction** — when a second consumer exists, per §12.1.
+
+### 12.5 What would make us stop, or reverse
+
+* **If the index becomes a second source of truth.** It is derived, rebuildable and receipted; a forensic question
+  reads the log. Two channels must be able to disagree VISIBLY, so the channel-agreement test (compose one turn both
+  ways) is a prerequisite for trusting either.
+* **If the two channels drift.** `test/surface-compare.test.js` compares this plugin's fold against
+  `sessionQuery.readSurface`; the same pattern is owed to the index.
+* **If the core is extracted before a second consumer.** Then the "pure" package is DSH-shaped with a neutral name.
