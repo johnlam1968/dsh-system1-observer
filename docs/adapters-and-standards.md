@@ -388,6 +388,46 @@ observe        observeSession(id, options)
 ORACLE that `lib/host/surface.js` is checked against (`test/surface-compare.test.js`), while the live path takes the
 surface from the session object instead.
 
+### The harness's own search index exists, and this profile turns it OFF
+
+Confirmed live after a restart: `system1_sessions { action: 'search' }` refuses in **51 ms** with
+
+> *"session search is disabled: this deployment configures the session-query index with `openAt` \"never\""*
+
+`@deepseek-ai/dsh-session-query-sqlite` is *"ranked SQLite FTS5 search across session history, either across sessions or
+within one session, with cursor pagination … a separate derived database, so searches reflect current state"* —
+**the same design as `scripts/session-index.mjs`**, shipped by the harness. Its `openAt` is
+`'startup' | 'first-search' | 'never'` and **defaults to `startup`**; the refusal is a base-bundle default, not a
+choice made in this profile:
+
+```yaml
+- id: session-query-sqlite          # in the @deepseek-ai/dsh-base layer
+  name: '@deepseek-ai/dsh-session-query-sqlite'
+  config:
+    path: ':memory:'
+    openAt: never
+```
+
+Other knobs, read from the package: `journalMode` (default `wal`), `defaultLimit` 20, `maxLimit` 100, `snippetChars`
+240, `persistedReadConcurrency` 4, `preparedSessionCacheSize` 5. Two properties matter for us: **results match tokens
+and phrases, not arbitrary substrings**, and **each index path has a single process owner**.
+
+**To enable it**, override that row in the profile patch — `openAt: first-search` so startup is not delayed, and a
+FILE path so the index survives a restart:
+
+```yaml
+- id: session-query-sqlite
+  name: '@deepseek-ai/dsh-session-query-sqlite'
+  config:
+    path: !!js dshHomePath('session-query.db')
+    openAt: first-search
+```
+
+**The cost is the one this file already measured for its own index**: the first search pays a build over the whole
+library (505 files, 191 MB — our own build was 120-330 s), and a persistent path means later starts reuse it. What I
+did NOT read is the incremental mechanism behind `_ensureReady`/`_open`, which is awaited before serving a search; the
+README states only that the index is derived and that searches reflect current state.
+
 ### What the service CANNOT do: match a TITLE
 
 Checked because it is the obvious next question after full text. Three declarations settle it:
