@@ -803,7 +803,9 @@ core never reads a log.
   (the seams); out-of-band is us pulling (`readSession`, or the index). The constraints are the harness's own:
   `agent/turn-stopping` is SERIAL, `fs/write-intent` is WATERFALL SINGLE SLOT, and a throw in `fs/observed` fails the
   tool call — a store cannot be consulted in there.
-* **What moves out**: `lib/host/*`, `lib/session-subject.js`'s DSH half, `lib/sessions-tool.js`'s DSH half.
+* **What moves out** (now moved, 2026-10-05): `lib/host/*`'s session-shaped three, `session-subject.js`'s host-backed
+  half (as `reader.js`), the surface authority, and the host's search call; the row's own `subjectSettings` stayed,
+  because the package must not read this plugin's config.
   **Moved 2026-10-05**: the session-shaped three (`session-format`, `surface`, `feed`) are the package
   `dsh-session-adapter`, imported by name; `fs-journal.js` and the inventory stayed, because a filesystem journal is not
   session-shaped. The remaining half calls the host, so it needs the service. **And the two files this section said to
@@ -896,7 +898,7 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 | **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned; candidates measured (`seams.js` 297, `questions.js` 278, `question-sets.js` 311, `probe-score.js` 390, `calibrate.js` 233, `compare.js` 160, `model/*` ~400, `observe.js` 247, `evidence.js` 229, `register.js` 161) |
 | **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
 | **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
-| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | dsh plugin | **the IN-BAND half is extracted** (2026-10-05): the session vocabulary, the surface fold and the event feed are now the package `dsh-session-adapter` (`packages/session-adapter/`, imported BY NAME because the composer cannot await a service -- `F104`), and the checks followed them there. What remains: the `sessionQuery`-backed reads (`lib/session-subject.js` 223 + the dsh half of `lib/sessions-tool.js` 290, both by INJECTION), which are the SERVICE half |
+| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | package `dsh-session-adapter` (`packages/session-adapter/`), imported BY NAME | **BOTH halves are in the package** (2026-10-05): the in-band half (session vocabulary, surface fold, feed) and the host-backed half (`lib/reader.js` -- the subject read, the list, the window slicing, the coverage, the host's full-text search -- and `lib/surface-authority.js`). The host reaches them through a PARAMETER (`sessionQuery`), never through `ctx`, so the inventory still checks that they contain no host call. **What remains is the SERVICE FORM**: a Cordis service over the same functions, for a consumer that injects rather than imports, plus the row to mount it -- the observer does not need it, because it imports the package |
 | **(e)** | **the composition**: profiles, bundle list, pinned versions, plans and ledgers | repository, no code of its own | homeless today: it is spread over this repo and `~/.dsh/profiles/docdrift`, and with two plugins it stops being hypothetical |
 
 **The seams that must be drawn explicitly, or the shape drifts:**

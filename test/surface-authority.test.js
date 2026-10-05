@@ -12,7 +12,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
-import { currentSurfaceSeqs } from '../lib/surface-authority.js'
+import { currentSurfaceSeqs } from 'dsh-session-adapter/surface-authority'
 
 const FILTER = [{ kind: 'surface', values: ['current'] }]
 

@@ -9,6 +9,8 @@
     "./session-format": "./lib/session-format.js",
     "./surface": "./lib/surface.js",
     "./feed": "./lib/feed.js",
+    "./reader": "./lib/reader.js",
+    "./surface-authority": "./lib/surface-authority.js",
     "./package.json": "./package.json"
   },
   "files": ["index.js", "lib/**/*.js", "package.json"],

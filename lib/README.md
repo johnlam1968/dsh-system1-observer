@@ -25,14 +25,16 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 
 ## The subject: what gets measured
 
-* `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
-* `surface-authority.js` — WHICH events are in the model's CURRENT surface, asked of the host (`filterEvents {kind:'surface', values:['current']}`); returns null rather than an empty answer when it cannot, so the fold in `host/surface.js` stays in charge
 
 **THE SESSION-SHAPED THREE ARE NO LONGER IN `lib/host/`.** The harness's event vocabulary (`session-format`), the surface
 fold (`surface`) and the event feed (`feed`) are the pure half of the session adapter and live in the package
 [`dsh-session-adapter`](packages/session-adapter/), imported by name. The reason is measured (`F104`): they must be
 **importable**, because the composer runs inside a synchronous path that cannot await a Cordis service. `fs-journal.js`
 and this map stay, because the filesystem journal is not session-shaped.
+* `subject-settings.js` — the row's own subject settings (`source`, `sessionId`, `kinds`, `lastMessages`), read
+  live. It is the ONE part of the old `session-subject.js` that read OUR config; the rest was the harness's shapes
+  and is now `dsh-session-adapter/reader`, with `surface-authority` beside it. Both take the `sessionQuery`
+  service as a PARAMETER, so they still contain no host call for the inventory to find.
 * `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
 
 **THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.

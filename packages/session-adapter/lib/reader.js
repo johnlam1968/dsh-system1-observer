@@ -18,7 +18,6 @@
 // NOTHING HERE THROWS. A stored evaluation is on demand rather than in the critical path of a turn, so a throw would
 // not fail a turn -- but it would still be the wrong shape for a caller that has to explain what went wrong. Every
 // failure comes back as a named problem beside an empty or partial event list.
-import { readConfigValue } from './config-value.js'
 import { EVENT, isToolTraffic, textOfEvent } from 'dsh-session-adapter/session-format'
 
 /**
@@ -204,20 +203,18 @@ export async function readStoredSubject({ sessionQuery, sessionId, kinds, lastMe
   }
 }
 
-/** The row's own settings, as the reader needs them. Read live, like every other setting in this plugin. */
-export function subjectSettings(config) {
-  const source = readConfigValue(config?.subjectSource)
-  const sessionId = readConfigValue(config?.subjectSession)
-  const kinds = readConfigValue(config?.subjectKinds)
-  const last = readConfigValue(config?.subjectLastMessages)
-  return {
-    source: source === 'stored' ? 'stored' : 'live',
-    sessionId: typeof sessionId === 'string' ? sessionId : '',
-    kinds: Array.isArray(kinds) && kinds.length > 0 ? kinds : [...DEFAULT_KINDS],
-    lastMessages: Number.isInteger(last) && last > 0 ? last : 0,
-  }
-}
-
 function messageOf(error) {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The HOST's own full-text search, as a call rather than a policy.
+ *
+ * WHICH BACKEND ANSWERS IS THE CALLER'S DECISION -- this plugin prefers the harness index and falls back to its store,
+ * and says which answered (`lib/sessions-search.js`). This function is only the host half: it hands the query over
+ * unchanged, and the host documents it as DATA ("never executable FTS syntax").
+ */
+export async function searchStoredSessions(sessionQuery, { query, limit = 20 } = {}) {
+  if (sessionQuery === undefined || sessionQuery === null || typeof sessionQuery.searchSessions !== 'function') return null
+  return sessionQuery.searchSessions({ query, limit })
 }

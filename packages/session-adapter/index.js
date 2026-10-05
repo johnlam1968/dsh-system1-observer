@@ -18,3 +18,5 @@
 export * from './lib/session-format.js'
 export { surfaceEvents } from './lib/surface.js'
 export { createEventFeed, DEFAULT_MAX_PER_SESSION } from './lib/feed.js'
+export { DEFAULT_KINDS, SUBJECT_KINDS, coverageOf, eventTypesOf, listStoredSessions, readStoredSubject, searchStoredSessions, sliceEvents } from './lib/reader.js'
+export { currentSurfaceSeqs } from './lib/surface-authority.js'

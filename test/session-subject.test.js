@@ -6,8 +6,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  DEFAULT_KINDS, SUBJECT_KINDS, eventTypesOf, listStoredSessions, readStoredSubject, sliceEvents, subjectSettings,
-} from '../lib/session-subject.js'
+  DEFAULT_KINDS, SUBJECT_KINDS, eventTypesOf, listStoredSessions, readStoredSubject, sliceEvents,
+} from 'dsh-session-adapter/reader'
+// `subjectSettings` reads THIS PLUGIN's config, so it stayed here rather than going into the adapter package.
+import { subjectSettings } from '../lib/subject-settings.js'
 import { composeTurnState } from '../lib/turn-state.js'
 
 /** One session event in the shape the harness writes and the composer reads. */

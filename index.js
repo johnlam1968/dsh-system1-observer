@@ -1,6 +1,6 @@
 import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './lib/host/fs-journal.js'
 import { surfaceEvents } from 'dsh-session-adapter/surface'
-import { currentSurfaceSeqs } from './lib/surface-authority.js'
+import { currentSurfaceSeqs } from 'dsh-session-adapter/surface-authority'
 import { createEventFeed, DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
@@ -19,7 +19,8 @@ import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
-import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
+import { SUBJECT_KINDS, listStoredSessions, readStoredSubject } from 'dsh-session-adapter/reader'
+import { subjectSettings } from './lib/subject-settings.js'
 import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
 import { observesEverySession, readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
