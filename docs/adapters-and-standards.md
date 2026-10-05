@@ -263,6 +263,51 @@ Every one of those is **per-harness** (almost all Claude Code), and **none carri
 Third-party code: if any of it is adopted, review the source and pin a commit — the same rule this repository applies
 to plugins.
 
+## Why convert a session to a database at all
+
+The operator asked for the rationale rather than the build. Every claim below is tied to a measurement taken in this
+repository; none of it is a general preference for databases.
+
+### The case FOR, as capabilities bought and costs paid today
+
+| what a database buys | what it costs us today, measured |
+|---|---|
+| **Seek instead of scan.** A query reads rows; a session read decodes everything. | One session's asks paged from an index in **7.7 ms**, against decoding a **23 MB** zstd log of **10,939 concatenated frames** whose decoder stops at the first frame — and `readSession` hands back the whole event list regardless of how little is wanted |
+| **A boundary the harness may not have.** The index can hold a DERIVED unit for every source. | **All 44** pi messages loaded with a null turn, so a "per turn" query **looked cross-harness and answered for dsh alone**. The failure is silent, which is what makes this the strongest single argument |
+| **Arithmetic stays arithmetic.** Counting, filtering, grouping and joining belong in SQL, not in a model call. | There is **no per-session ask count at all**; `search` matches only a title or an id substring; a full-text query for `telegram` matched **2,316 times** inside one pi session that no title search would ever surface |
+| **A distribution to read a number against.** A reading means more beside the population it came from. | `dsh 4.21` against `pi 0.19` reasoning-to-visible — a cross-harness comparison nothing here can currently make, and `1.85 of 2` means little without other sessions' readings |
+| **The fidelity facts become addressable.** `shadowed`, attempts and turn-end reasons stop being re-derived per request. | **3,417 messages are shadowed** in one session, **8 attempts**, **541 turn-end reasons** — today only `surfaceEvents()` and the composer ever see them, and "which readings judged withdrawn text?" is not a question anyone can ask |
+| **The cost is small and known.** | **4.1 s** to build over 185 sessions and **103 MB**, which is the FTS mirroring the text; an asks-and-counts index is a fraction of it. A disposable index costs nothing to throw away |
+| **It is convergent practice, including by a harness vendor.** | mcode ships an ask index with **byte offsets and a `sha256` artifact revision**; zeroclaw ships **SQLite + FTS + import receipts**; cct and ccrecall do it for Claude Code; agent-eval streams transcripts with per-session diagnostics. A vendor shipping an index alongside its own log is evidence that the log alone is not enough to query |
+| **It collapses duplicated readers, which this repo has already paid for.** | `textOf` existed twice with different rules; `F78` had to be fixed twice; when they were finally unified the divergence turned out to be a **4.5× overstatement** of conversation (12,774,434 chars reported against 2,839,380 visible) |
+
+### The case AGAINST, and what answers each
+
+| the objection | the answer |
+|---|---|
+| **It is a second copy of a fact**, and this repository's rule is one home per fact. | It must be **derived, rebuildable and receipted** — never the source of truth. Forensic questions read the log. A 4.1 s rebuild makes "derived" real rather than aspirational |
+| **A schema is an interface, and interfaces drift.** | Version it and validate on read, as mcode does (`schemaVersion`, `artifactRevision`) and as `dsh-system1-runtime` does (`interface-version.js`). Our `check:compat` gate is the pattern |
+| **Flattening loses the surface.** | It does — unless the schema carries `shadowed` and an attempt kind. Without them the index silently becomes an ATIF-style step list, and the **3,417** number is exactly the risk |
+| **It invites questions measurement should not answer.** | "Tokens" is not "quality"; a cheap session is not a good one. That warning is already in the register, and a database makes it easier to forget |
+| **It may be premature.** | The trigger is concrete: build it when a question you want is **arithmetic** and **not answerable now**. Three such questions are listed in the first table |
+| **The harness may provide it.** | `sessionQuery` already exists, so the index must add SQL, FTS, cross-harness normalization or materialization — otherwise it is a third reader. If dsh ships query support, the index should be droppable without loss |
+
+### The decision test
+
+| the question | where it belongs |
+|---|---|
+| arithmetic, across many sessions, many pages, or needing the derived unit | **the index** |
+| a judgement — was the request served, was the operator clear, was the claim supported | **system1**, because no schema holds it |
+| one session, one read, one time | **the raw log**, because the index is not yet worth its build |
+
+### The temporary index is the strongest form of the argument
+
+"Even temporarily" removes most of the cost side. A disposable index needs **no schema versioning, no staleness owner
+and no maintenance**: build it for one analysis, keep the SQL and the source hashes with the finding, and drop it. That
+turns a one-off question from a script into a line of SQL — measured repeatedly in this session, where six throwaway
+Python scripts each existed to answer one such question — and it makes a reading **reproducible by query** rather than
+by trust, which is what `docs/measurement-depth.md` already asks of a package.
+
 ## Status
 
 **Nothing here is built.** This file records what was read, so a decision can be made against evidence rather than
