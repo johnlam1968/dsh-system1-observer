@@ -94,6 +94,7 @@ Read directly from disk, not from documentation.
 | **zeroclaw** (Rust, OpenClaw variant) | `~/.zeroclaw/data/sessions/*.db` | **SQLite**, plus FTS5 search | `session_metadata.turn_id` | column **`reasoning_content`** |
 | **Hermes** | `~/hermes-agent/trajectory_compressor.py` | JSONL **turn list** ("system, human, first gpt, first tool") | turn order | — |
 | **ATIF** (the emerging standard) | not installed; read from the RFC | JSON | `step_id` | **`reasoning_content`** + a separate **`reasoning_effort`** |
+| **mcode** (minimax-code, a vendor's own harness) | `~/.minimax/v2/sessions/<YYYY>/<MM>/<DD>/<ts>-session_<b64>/` | **a directory per session**: `manifest.json` (declares the layout), `messages.jsonl`, **`user-message-locators.jsonl`**, `ledger.jsonl`, `display.jsonl`, `snapshot`, `llm-call.json` | `message.turn_id` (`turn_mu8ritzb_…`) | see below — it is the closest of the six to what this repo is building |
 
 ### The concepts that survive all five
 
@@ -120,6 +121,52 @@ Counted on this host: pi writes **`text` 27,261, `thinking` 3,159, `toolCall` 15
    carries a **`jsonl_import_receipts`** table (`source_name`, `source_hash`, `source_len`) for importing JSONL
    sessions **with a receipt** — the same "count what you ingested, hash what it was" discipline this repository applies
    to a batch. On this host that table is empty (0 rows), so the path exists rather than being in use.
+
+## mcode, read in full: an index, a ledger, and a manifest
+
+The sixth harness, and the most instructive, because it solves the same problems by name:
+
+| mcode file | what it is | our equivalent |
+|---|---|---|
+| `manifest.json` | `schemaVersion`, `sessionId`, timestamps, `source`, **`layout: "v2-final-dated-session"`**, and a `paths` map naming every other file | the package manifest + `lib/host/session-format.js`'s stated layout |
+| `messages.jsonl` | `{ message_id, turn_id, message: { role, content: [{ type: 'text', text }] } }` | the event log, minus the control plane |
+| **`user-message-locators.jsonl`** | **an ask index by BYTE OFFSET and LINE NUMBER**, each entry carrying `generation` and **`artifactRevision: "sha256:…"`** | the ask index we derived by hand two turns ago — mcode ships it, and pins the revision it was built against |
+| `ledger.jsonl`, `display.jsonl`, `snapshot` | separate projections of one session | our G0/G1/G2 selections, and the Composer |
+| `llm-call.json` | `api: 'anthropic-messages'`, `maxTokens`, `model`, `maxSerializedInputBytes`, an output-revision instruction | `lib/model/limits.js` + the question set |
+
+Two transferable lessons. **The index is pinned to a revision** (`sha256` of the artifact it indexes), so a stale index
+is detectable rather than silently wrong — the same discipline as zeroclaw's `jsonl_import_receipts` and agent-eval's
+malformed-line count. And **mcode's first `user` message is a `<system-reminder>` carrying agent context**
+(`agentName`, `agentRole`, `SESSION ROLE: root`): the "not every user message is the human" problem is not dsh's, it
+is universal, and any G0-style selection in any harness needs the same discrimination.
+
+## Slice and dice: the index question, measured
+
+The operator's proposal — *a translation to a database might be much easier for slice and dice* — was tested rather
+than argued. A throwaway SQLite index over **183 pi sessions plus the two dsh sessions measured throughout this file**
+(30,499 message rows, one FTS5 table):
+
+| | |
+|---|---|
+| build | **4.1 s** for 185 sessions, from cold |
+| size | **103.5 MB** — the full-text index duplicates the text, so the index costs about what the content does |
+| Q1 sessions by human asks | **0.2 ms** — a per-session aggregate the tools cannot produce at all today |
+| Q2 full-text across every session | **5.4 ms** — today `search` is a substring of the TITLE or ID only; the top hit is a pi session matching `telegram` 2,316 times, which no current tool would ever surface |
+| Q3 reasoning-to-visible ratio per harness | **0.1 ms** — dsh **4.21** (10,022,200 reasoning chars against 2,376,466 visible) versus pi **0.19** (6,063,677 against 31,207,980): the dsh sessions on this host are reasoning-dominated, pi's are visible-dominated, and that is a comparison no current tool can make at all |
+| Q5 one session's asks, paged | **7.7 ms**, without decoding a 23 MB zstd log |
+
+### The design, if this is built
+
+1. **A derived index, never a second source of truth.** The log stays the evidence, because `surfaceOp: replace` and
+   `assistant/attempt` exist only there — and an index PROJECTS the log rather than the ATIF export, or it inherits
+   ATIF's two losses.
+2. **Rebuildable, with a receipt.** Sessions are append-only, so an incremental import keyed on the high-water `seq`,
+   with the source hash and length stored (mcode's `artifactRevision`, zeroclaw's `jsonl_import_receipts`), makes
+   "is this index current?" a query rather than a hope. A 4.1 s full rebuild also makes the receipt optional.
+3. **The schema must carry what the export loses**: a `shadowed` flag and an `attempt` row kind, or the index quietly
+   becomes ATIF with extra steps.
+4. **Cost the size.** 103 MB for 30k rows is the FTS table mirroring the text; an index over asks and counts alone
+   would be a fraction of that, and only the text worth searching needs to be in it.
 
 ## Status
 
