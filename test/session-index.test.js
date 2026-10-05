@@ -149,6 +149,62 @@ test('search SAYS SO when the store holds no message text, rather than reporting
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
+test('the FTS5 mirror answers, and the store says WHICH mechanism ran', async () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        const built = buildIndex({ sessionsDir: f.root, out, withText: true })
+        assert.equal(built.searchMode, 'fts5')
+        assert.ok(built.ftsRows > 0, 'the mirror holds the searchable rows')
+        const meta = await metaOf(out)
+        assert.equal(meta.search_mode, 'fts5')
+        assert.equal(meta.fts_rows, String(built.ftsRows))
+        const found = await searchSessions('summary of the above', { path: out })
+        assert.equal(found.searchMode, 'fts5')
+        assert.equal(found.rows[0].id, f.id)
+        // FTS5 marks the match inside its own snippet, so a reader can see WHAT matched
+        assert.match(found.rows[0].snippet, /\[.*\]/)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('the query is handed to FTS5 as a LITERAL PHRASE, never as executable syntax', async () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out, withText: true })
+        // the stored message is "summary of the above": as a PHRASE, "summary AND above" is not in it; as SYNTAX it
+        // would be (both tokens are present), so this pair distinguishes the two readings.
+        assert.equal((await searchSessions('summary of the above', { path: out })).rows.length, 1)
+        assert.equal((await searchSessions('summary AND above', { path: out })).rows.length, 0)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a store built WITHOUT the mirror still searches, by scan, and says so', async () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        const built = buildIndex({ sessionsDir: f.root, out, withText: true, fts: false })
+        assert.equal(built.searchMode, 'like')
+        assert.equal(built.ftsRows, 0)
+        const found = await searchSessions('summary of the above', { path: out })
+        assert.equal(found.searchMode, 'like')
+        assert.equal(found.rows[0].id, f.id, 'the scan finds the same phrase the mirror would')
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a query with no searchable token does not throw and names the mechanism that ran', async () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out, withText: true })
+        const found = await searchSessions('***', { path: out })
+        assert.ok(['fts5', 'like'].includes(found.searchMode), `unexpected search mode ${found.searchMode}`)
+        assert.equal(found.rows.length, 0)
+        const quoted = await searchSessions('say "hello" now', { path: out })
+        assert.ok(['fts5', 'like'].includes(quoted.searchMode), 'a quoted phrase must not become syntax either')
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
 test('changing the TEXT MODE voids the receipts, because a receipt must cover the mode', async () => {
     const f = fixture()
     const out = join(f.root, 'index.db')

@@ -195,6 +195,34 @@ search covers what the harness's own extractor covers — message text, reasonin
 arguments** — because a search that read only messages would answer "not in this library" for a phrase sitting in a
 tool result (measured: the fixture's phrase was in `tool_results`, not in any message).
 
+## The store's FTS5 mirror, and what it cost
+
+A `LIKE` scan over 155 MB answered in **242 ms**; the same question through an FTS5 mirror answers in **9 ms**. So the
+builder now maintains `search_fts` — a **mirror, not a second store**: every searchable row is already in `messages`,
+`tool_results` and `tool_calls`, so it is rebuilt with one `INSERT … SELECT` per source and no session file is read
+again. Measured on the real library: **91,158 mirrored rows in ~6 s** (an incremental build went 41.7 s → 47.4 s), and
+the store grew from **154.7 MB to 353.3 MB** — the mirror costs about what the text costs, which is the price of the
+27–40× speed-up and worth stating plainly.
+
+| query | scan | FTS5 |
+|---|---|---|
+| `session-query-sqlite` | 242 ms | **9 ms** |
+| `Push repo to GitHub account` | 162 ms | **4 ms** |
+
+**The mode is a receipt, like the text mode.** `meta.search_mode` records `fts5` or `like`, and the read side uses the
+mirror only when the store says it has one — so a store built before this change still answers, by scan, and says so.
+A build with `fts = false` is a real store too, and the same search on it reports `like`.
+
+**`snippet()` IS REFUSED IN AN AGGREGATE CONTEXT**, measured: the single-statement version threw *"unable to use
+function snippet in the requested context"* when `snippet()` shared a `SELECT` with `GROUP BY`. `snippet()` with a join
+and **without** `GROUP BY` is fine, so the query is two statements: grouped counts, then a snippet per matched session.
+The match is marked in the snippet (`the operator asked about [civil disorder]`), which the scan's raw window cannot do.
+
+**The query syntax is now OURS to keep safe.** The harness promises a search query is "interpreted as data, never
+executable FTS syntax"; `MATCH` has no such manners, so a phrase is quoted and its quotes doubled before it is handed
+over (`ftsPhrase`). The test asserts the difference: `summary AND above` finds nothing (a phrase that is not in the
+text) while `summary of the above` finds the message — if the words were syntax, the first would have matched.
+
 ## Where the schema came from: derived from bytes, when the source declares it
 
 Asked directly, and the honest answer is **derived from real logs**, with the source read only for the parts being

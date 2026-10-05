@@ -20,7 +20,7 @@
 // default and this store keeps the capability.
 //
 // Usage:
-//   node scripts/session-index.mjs build  [--out FILE] [--sessions DIR] [--text] [--incremental]
+//   node scripts/session-index.mjs build  [--out FILE] [--sessions DIR] [--text] [--incremental] [--no-fts]
 //   node scripts/session-index.mjs find   <term> [--out FILE] [--limit N]
 //   node scripts/session-index.mjs search <phrase> [--out FILE] [--limit N]
 //   node scripts/session-index.mjs stats  [--out FILE]
@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS tool_calls(session_id TEXT NOT NULL, call_id TEXT, na
 -- (NO BACKTICKS IN THIS BLOCK: the schema is a JavaScript template literal, and a backtick in a SQL comment ends it.
 -- Cost two syntax errors to learn.)
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+-- THE FTS5 MIRROR OF EVERY SEARCHABLE ROW. Not a second store: it is derived from messages, tool_results and
+-- tool_calls, so it can be rebuilt from them without re-reading a single session file. It exists because a LIKE scan
+-- answers in ~200 ms at 155 MB and FTS5 asks the same question through an inverted index.
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(body, session_id UNINDEXED, source UNINDEXED, tokenize = 'unicode61');
 CREATE TABLE IF NOT EXISTS tool_results(session_id TEXT NOT NULL, call_id TEXT, text TEXT, chars INTEGER NOT NULL DEFAULT 0, is_error INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS results_by_session ON tool_results(session_id);
 CREATE INDEX IF NOT EXISTS messages_by_session ON messages(session_id);
@@ -227,7 +231,7 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
 }
 
 /** Build the index. Returns what it wrote, so a caller can print it rather than assume it. */
-export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_INDEX, withText = false, incremental = false, onProgress = null } = {}) {
+export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_INDEX, withText = false, incremental = false, fts = true, onProgress = null } = {}) {
     const db = new DatabaseSync(out)
     db.exec('PRAGMA journal_mode = WAL;')
     // A DERIVED STORE MIGRATES BY BEING THROWN AWAY. `CREATE TABLE IF NOT EXISTS` cannot add a column -- measured here,
@@ -237,11 +241,13 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     const schemaMoved = heldVersion !== SCHEMA_VERSION
     if (schemaMoved) {
         db.exec('DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS tool_calls; '
-            + 'DROP TABLE IF EXISTS tool_results; DROP TABLE IF EXISTS titles_fts; DROP TABLE IF EXISTS meta;')
+            + 'DROP TABLE IF EXISTS tool_results; DROP TABLE IF EXISTS titles_fts; DROP TABLE IF EXISTS meta; '
+            + 'DROP TABLE IF EXISTS search_fts;')
     }
     db.exec(SCHEMA)
     const heldText = db.prepare("SELECT value FROM meta WHERE key = 'text_indexed'").get()?.value ?? ''
     const modeChanged = (heldText === '1') !== withText
+    const wantFts = fts && withText
     const receiptsUsable = incremental && !schemaMoved && !modeChanged
     if (!receiptsUsable) {
         db.exec('DELETE FROM sessions; DELETE FROM messages; DELETE FROM tool_calls; DELETE FROM tool_results;')
@@ -270,6 +276,7 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     const now = new Date().toISOString()
     let done = 0
     let skipped = 0
+    let ftsRebuilt0 = false
     for (const file of files) {
         const stat = statSync(file.path)
         const held = known.get(file.id)
@@ -291,6 +298,7 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
         for (const c of calls) insertCall.run(...c)
         for (const r of results) insertResult.run(...r)
         done += 1
+        ftsRebuilt0 = true
         if (onProgress !== null && done % 25 === 0) onProgress(done, files.length)
     }
     db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(id UNINDEXED, title, cwd)')
@@ -299,16 +307,41 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // THE VERSION IS STAMPED LAST. Stamping it before the build marked a store that never finished as current: the next
     // run saw "same version", kept the old tables, and failed on a column that did not exist. A crash must leave the
     // version BEHIND the schema so the following run rebuilds.
+    // THE MIRROR IS REBUILT FROM THE TABLES, NOT FROM THE LOGS: every searchable row is already stored, so this costs
+    // one INSERT..SELECT per source instead of decoding 499 session files again. The receipt is the row counts: if the
+    // mirror and the sources disagree -- or anything was refolded, which changes the sources -- it is rebuilt.
+    const searchable = db.prepare(`SELECT
+        (SELECT COUNT(*) FROM messages WHERE text IS NOT NULL AND text <> '')
+      + (SELECT COUNT(*) FROM messages WHERE reasoning IS NOT NULL AND reasoning <> '')
+      + (SELECT COUNT(*) FROM tool_results WHERE text IS NOT NULL AND text <> '')
+      + (SELECT COUNT(*) FROM tool_calls WHERE args IS NOT NULL AND args <> '') AS n`).get().n
+    let ftsRows = db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n
+    let ftsRebuilt = false
+    if (wantFts && (ftsRebuilt0 || ftsRows !== searchable)) {
+        db.exec('DELETE FROM search_fts')
+        db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'text' FROM messages WHERE text IS NOT NULL AND text <> ''`)
+        db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT reasoning, session_id, 'reasoning' FROM messages WHERE reasoning IS NOT NULL AND reasoning <> ''`)
+        db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'tool-result' FROM tool_results WHERE text IS NOT NULL AND text <> ''`)
+        db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT args, session_id, 'tool-call' FROM tool_calls WHERE args IS NOT NULL AND args <> ''`)
+        ftsRows = db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n
+        ftsRebuilt = true
+    } else if (!wantFts && ftsRows > 0) {
+        db.exec('DELETE FROM search_fts')
+        ftsRows = 0
+        ftsRebuilt = true
+    }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     const stamp = db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
     stamp.run('text_indexed', withText ? '1' : '0')
+    stamp.run('search_mode', wantFts ? 'fts5' : 'like')
+    stamp.run('fts_rows', String(ftsRows))
     stamp.run('built_at', new Date().toISOString())
     stamp.run('sessions', String(readCounts(out).sessions))
     db.close()
     // THE SUMMARY IS READ BACK FROM THE STORE, not accumulated during the walk: in an incremental run most rows were
     // never walked, so a running counter would describe the refold rather than the index.
     const counts = readCounts(out)
-    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, titled: counts.titled, untitled: counts.sessions - counts.titled, out }
+    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, ftsRebuilt, ftsRows, searchMode: wantFts ? 'fts5' : 'like', titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
 // THE READ SIDE LIVES IN `lib/session-index.js`, so this script and the plugin cannot drift about a path, a column or
@@ -338,12 +371,16 @@ async function main(argv) {
             out,
             withText: rest.includes('--text'),
             incremental: rest.includes('--incremental'),
+            // `--no-fts` builds the same store WITHOUT the mirror: a real store that searches by scan, which is how the
+            // scan path stays exercised rather than assumed.
+            fts: !rest.includes('--no-fts'),
             onProgress: (done, total) => process.stderr.write(`  ${done}/${total}\r`),
         })
         console.log(`${result.sessions} session(s) in the store; refolded ${result.refolded}, skipped ${result.skipped} unchanged`
             + `${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}`
             + `${result.modeChanged && !result.schemaMoved ? ' (the TEXT MODE changed, so every receipt was void)' : ''}`
             + `, in ${ms(started)} -> ${result.out}`)
+        console.log(`  search: ${result.searchMode}${result.searchMode === 'fts5' ? `, ${result.ftsRows} mirrored row(s)${result.ftsRebuilt ? ' (rebuilt)' : ' (unchanged)'}` : ' -- no FTS5 mirror, text is matched by scan'}`)
         console.log(`  with a session/title event: ${result.titled} | without: ${result.untitled}` +
             (result.untitled > 0 ? ' (those are the ones a title service must fold per request)' : ''))
         console.log(`  size: ${(statSync(out).size / 1048576).toFixed(1)} MB`)
@@ -370,7 +407,7 @@ async function main(argv) {
         const found = await searchSessions(term, { path: out, limit: Number(flag('limit', 20)) })
         console.log(`${found.total} session(s) matching ${JSON.stringify(found.term)} in ${ms(started)}`
             + (found.textIndexed
-                ? ' (message text, reasoning, tool results and tool arguments are indexed)'
+                ? ` (${found.searchMode === 'fts5' ? 'FTS5 mirror' : 'LIKE scan'}: message text, reasoning, tool results and tool arguments)`
                 : ' -- CONVERSATION TEXT IS NOT INDEXED in this store, so only titles, ids and directories were compared; rebuild with --text to search what was said and what tools returned'))
         for (const row of found.rows) {
             console.log(`  ${row.id}`)
