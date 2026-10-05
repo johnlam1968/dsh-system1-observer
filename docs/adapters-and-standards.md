@@ -435,6 +435,58 @@ repository; none of it is a general preference for databases.
 | **It may be premature.** | The trigger is concrete: build it when a question you want is **arithmetic** and **not answerable now**. Three such questions are listed in the first table |
 | **The harness may provide it.** | `sessionQuery` already exists, so the index must add SQL, FTS, cross-harness normalization or materialization — otherwise it is a third reader. If dsh ships query support, the index should be droppable without loss |
 
+### Why NOT scrape the session logic and go straight to a database
+
+Asked directly, and the measurement answers it. **A database does not replace this plugin's session logic; it replaces
+about 114 lines of paging arithmetic and then CONSUMES the rest as its ingester.**
+
+| piece | lines | a database would… |
+|---|---|---|
+| `session-subject.js` `sliceEvents` (kinds, `lastMessages`, `offset`) | 40 | **replace with `WHERE`/`LIMIT`** |
+| `session-subject.js` `coverageOf` (counts and character totals) | 24 | **replace with aggregates** |
+| `session-subject.js` `listStoredSessions` | 27 | **replace with a list query** |
+| `sessions-tool.js` `rowsOf` (cwd/availability/title filtering) | 23 | **replace with a predicate** |
+| `session-subject.js` `readStoredSubject` | 36 | **become the INGESTER** — the same `readSession` call, once per session rather than once per question |
+| `session-subject.js` `eventTypesOf`, `subjectSettings` | 51 | **stay** — the kind→event-type mapping IS the format knowledge |
+| `lib/host/session-format.js` | 138 | **stay** — the vocabulary the ingester reads through |
+| `sessions-tool.js` `createSessionsTool` (contract, render, refusals) | 309 | **stay** — a tool must exist whatever answers it |
+| `lib/exchange.js` (G0/G1), `turn-state.js`, `segment.js`, `tool-blocks.js` | ~860 | **stay** — this is the business logic, and no schema holds a judgement |
+| `lib/host/surface.js` (the fold) | 20 | **replace with a SERVICE CALL**, not a database: `filterEvents(id, [{kind:'surface', values:['current']}])` |
+
+So the deletion is about **114 of ~11,100 lines — roughly 1%** — and the schema would need `eventTypesOf`,
+`readStoredSubject`, `session-format.js` and every semantic module anyway. **"Go straight to the database" is a
+relabelling, not a simplification**, and it discards knowledge that is expensive to re-derive: the two message shapes,
+the `source.kind` discrimination, the fact that a turn is not an ask, the surface refusal, and the 4.5x reader bug
+(`F82`). The schema is a projection OF that knowledge, so it has to be written into the ingester rather than deleted
+with the paging.
+
+### Three things a database cannot cover at all
+
+1. **The live path.** `host/feed.js`, the turn observer, the seams, `readSurfaceSeqs` from the session object — these
+   are event *subscriptions*, not queries. A store has nothing to say about a turn that is happening now.
+2. **The semantics.** `exchange.js`, `turn-state.js`, `segment.js`, `tool-blocks.js`: what an ask is, what the judge is
+   shown, how the subject is sized, and the refusal when a group cannot be composed.
+3. **Freshness of the session being measured.** `readSession` returns the present state every time; an index is stale
+   by construction, and the session this was written in is being appended to as it is written. A disposable rebuild is
+   4.1 s, which is fine — but it is a decision the service reader never has to make.
+
+### And the trap this repository has already fallen into three times
+
+`F89`/`F90`: we hand-rolled search, event filtering and titles that `sessionQuery` already provided. Replacing a
+working, service-backed reader with a private store **doubles down on that risk and freezes a snapshot of a service
+that is still moving** — the title policy, for instance, changes with one line upstream.
+
+### The two questions are different, and they want different shapes
+
+| the question | the shape |
+|---|---|
+| **"read THIS session"** — one at a time, live or stored, as a judge would see it | the **service**, through the code that already works |
+| **"study a CORPUS"** — 183 sessions, aggregates, titles, cross-harness | the **database**, where the existing code is not scrapped but simply not in the path |
+
+So: do not scrape. Add the index for corpus questions, **reusing the existing reader as its ingester**, and let the
+deletion — about 114 lines of paging — follow once the index has proven itself. Deleting first would discard the
+knowledge and re-derive it badly, which is what `F79` was.
+
 ### The decision test
 
 | the question | where it belongs |
