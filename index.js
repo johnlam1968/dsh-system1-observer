@@ -1,5 +1,6 @@
 import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './lib/host/fs-journal.js'
 import { surfaceEvents } from './lib/host/surface.js'
+import { currentSurfaceSeqs } from './lib/surface-authority.js'
 import { createEventFeed, DEFAULT_MAX_PER_SESSION } from './lib/host/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
@@ -522,9 +523,14 @@ async function apply(ctx, config) {
   // session each composed to 49k-70k characters, and the row's 8,000 cap cut every one of them to exactly 8,000 --
   // so segmenting would have bought nothing at all while looking like it had. A segment passes the state budget
   // instead, which is the number the segmentation was measured against.
-  const composeSubject = (events, maxChars) => composeTurnState({
+  // THE AUTHORITY WHERE A CALLER CAN AWAIT, THE FOLD EVERYWHERE ELSE (`lib/surface-authority.js`). This composer is
+  // reached from the TOOLS, which are async and know the session id -- so they get the host's own answer about which
+  // events are in the current surface, including its `shadowed`/`log-only` distinction, and `composeTurnState` falls
+  // back to the fold only when that answer is `null` (no service, a refusal, or the in-band path, which cannot await).
+  const composeSubject = async (events, maxChars, sessionId = null) => composeTurnState({
         events,
         scope: 'session',
+        surfaceSeqs: sessionId === null ? null : await currentSurfaceSeqs(typeof ctx.get === 'function' ? ctx.get('sessionQuery') : undefined, sessionId),
         maxChars: maxChars ?? readConfigValue(liveConfig().composeMaxChars),
         toolMaxChars: readConfigValue(liveConfig().toolBlockMaxChars),
         tailChars: readConfigValue(liveConfig().tailChars),

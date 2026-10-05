@@ -835,8 +835,17 @@ core never reads a log.
    hand-rolled fallback, the `observed` marking, cwd in `search`, the trigram dispatch and its short-query guard, the
    `refresh` action, the insert fix, and the extracted `dsh-session-index` row all report themselves in the running
    process.
-1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces `lib/host/surface.js` (20 lines) with the
-   AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
+1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — **THE WIRING IS DONE (2026-10-05); THE DELETION IT
+   PROMISED IS NOT, and this item was wrong to call it "ready"** (`F104`). Verified in the producer:
+   `SessionEventResultFilter` has a `surface` kind and `SessionEventSurface = 'current' | 'shadowed' | 'log-only'`, so
+   the authority is real and better than our fold (it also names the two non-current states). But it is **ASYNC** and
+   **OPTIONAL**: an in-band seam handler cannot await it, and a deployment without `sessionQuery` must keep an answer --
+   without the fold, the shadowed-answer defect `lib/host/surface.js` was written for comes straight back. So
+   `lib/surface-authority.js` asks the host wherever a caller can await (the TOOL path: `system1_sessions` `read
+   --format subject` and both `system1_evaluate_session` composers), `composeTurnState` keeps the fold as the fallback,
+   and a test asserts BOTH halves -- the shadowed event is absent with the authority and present without it.
+   **`host/surface.js` and `host/feed.js` therefore MOVE to (d) rather than being deleted**, and their retirement rows
+   say so.
 2. ~~**The offset-level refresh**~~ — **WITHDRAWN, because the phases were measured and it is not where the time is**
    (`F103`): decode **0.9 s**, fold **0.9 s**, insert **41.3 s → 0.3 s** once each session is written in one transaction,
    mirror **18.7 s**. A stored frame offset would save the decode — 1.8 s of a 43 s refold — and was recommended,
@@ -889,7 +898,9 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 
 1. **(b) vs (d): the store serves what was BUILT, the adapter serves what is LIVE.** Without that rule two
    plugins both read sessions and disagree, which is `F98`'s lesson at a different layer -- a divergence nobody
-   can see.
+   can see. **And (d)'s in-band half must be IMPORTABLE (a library or a package's plain functions), not only a
+   service**: the composer runs inside a synchronous seam, and the authority measured in `F104` is async -- a plugin
+   whose only surface is a Cordis service cannot serve that path at all.
 2. **(a) owns the instrument's artifacts and the instrument's tools.** The trace format, the reading/register
    semantics and the measurement package are (a)'s, and so are the tools that measure the INSTRUMENT rather than
    the session (`system1_questions`, `system1_battery`). Today those live in (c), which is why a second consumer
