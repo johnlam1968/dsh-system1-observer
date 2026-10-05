@@ -826,13 +826,15 @@ core never reads a log.
    `search`. Until then the running tool reports inflated counts and cannot search by text.
 1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces `lib/host/surface.js` (20 lines) with the
    AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
-2. **The offset-level refresh** — makes a LIVING session cost its last frame instead of its whole life. **Measured
-   through the agent's own refresh path: 43.3 s of REFOLD for one living session** (the rest was a mirror defect, fixed
-   — `F102`), which is why the rebuild runs in a child process rather than in the harness. Design in
-   `docs/adapters-and-standards.md`; a stored frame offset would make it about a second.
-   **And the mirror step it left behind**: maintaining one session costs 13.2 s because `DELETE ... WHERE session_id = ?`
-   scans an UNINDEXED FTS column. A `session_id → rowid` side table, or `contentless_delete`, would cut that to
-   milliseconds; measured and named rather than guessed.
+2. ~~**The offset-level refresh**~~ — **WITHDRAWN, because the phases were measured and it is not where the time is**
+   (`F103`): decode **0.9 s**, fold **0.9 s**, insert **41.3 s → 0.3 s** once each session is written in one transaction,
+   mirror **18.7 s**. A stored frame offset would save the decode — 1.8 s of a 43 s refold — and was recommended,
+   designed and selected before anything was measured. One instrumented run retired it. **The refresh went 110 s →
+   56 s → 21 s** for a living session this way.
+   **What is left, measured, in this order:** the **mirror step (18.7 s)**, which is `DELETE ... WHERE session_id = ?`
+   scanning an UNINDEXED FTS column — an external-content FTS5 table over an indexed `search_rows` table, or a
+   `session_id → rowid` map, would cut it to milliseconds; then the **refold (2.1 s)**, which is now small enough that
+   nothing is worth building for it.
    **And the store now carries SESSION SEARCH, hand-rolled, because the native route was tried and reverted**: enabling
    `@deepseek-ai/dsh-session-query-sqlite` in this profile made `api-session-controller` fail to start, the cause was
    never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`

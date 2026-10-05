@@ -307,15 +307,27 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // library before the fix: one changed session cost refold 43.3 s + mirror 66.6 s, because 91,380 mirror rows were
     // deleted and re-inserted for 499 sessions of which exactly one had changed.
     const refoldedIds = []
+    // WHERE THE REFOLD'S TIME GOES, because "make it incremental" is only worth it if the DECODE is the cost: the phases
+    // are timed separately so the next change targets the measured one.
+    const phase = { decodeMs: 0, foldMs: 0, insertMs: 0 }
     for (const file of files) {
         const stat = statSync(file.path)
         const held = known.get(file.id)
         if (held !== undefined && held.mtime === stat.mtimeMs && held.bytes === stat.size) { skipped += 1; continue }
         let lines
+        const t0 = Date.now()
         try { lines = sessionLines(file.path) } catch { continue }
+        phase.decodeMs += Date.now() - t0
+        const t1 = Date.now()
         const { row, messages, calls, results } = foldSession({ ...file, text: lines.text, sha256: lines.sha256, bytes: stat.size })
-        // REFOLDING REPLACES A SESSION, so every table it appears in is cleared first -- sessions, messages, calls and
-        // results. Deleting the session row and then asking for it (which an earlier draft of this did) reads nothing.
+        phase.foldMs += Date.now() - t1
+        const t2 = Date.now()
+        // ONE TRANSACTION PER SESSION, and the measurement is why: with a commit per row, the insert phase of ONE 33 MB
+        // session measured **41.3 s** -- against 0.9 s to DECODE it and 0.9 s to fold it. The cost was never the log, it
+        // was SQLite committing every message, call and result on its own. A session is replaced atomically here too,
+        // which is what "refolding replaces a session" should mean: a reader sees the old session or the new one.
+        db.exec('BEGIN')
+        try {
         if (held !== undefined) {
             dropSession.run(file.id); dropCalls.run(file.id); dropResults.run(file.id)
             db.prepare('DELETE FROM sessions WHERE id = ?').run(file.id)
@@ -327,6 +339,9 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
         if (withText) for (const m of messages) insertMessage.run(...m)
         for (const c of calls) insertCall.run(...c)
         for (const r of results) insertResult.run(...r)
+        db.exec('COMMIT')
+        } catch (error) { db.exec('ROLLBACK'); throw error }
+        phase.insertMs += Date.now() - t2
         done += 1
         ftsRebuilt0 = true
         refoldedIds.push(file.id)
@@ -410,7 +425,7 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // THE SUMMARY IS READ BACK FROM THE STORE, not accumulated during the walk: in an incremental run most rows were
     // never walked, so a running counter would describe the refold rather than the index.
     const counts = readCounts(out)
-    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, ftsRebuilt, ftsMaintained, ftsRows, refoldMs, mirrorMs, searchMode: wantFts ? 'fts5' : 'like', tokenizer: wantFts ? wantTokenizer : 'none', titled: counts.titled, untitled: counts.sessions - counts.titled, out }
+    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, ftsRebuilt, ftsMaintained, ftsRows, refoldMs, mirrorMs, ...phase, searchMode: wantFts ? 'fts5' : 'like', tokenizer: wantFts ? wantTokenizer : 'none', titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
 // THE READ SIDE LIVES IN `lib/session-index.js`, so this script and the plugin cannot drift about a path, a column or
@@ -450,7 +465,7 @@ async function main(argv) {
             + `${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}`
             + `${result.modeChanged && !result.schemaMoved ? ' (the TEXT MODE changed, so every receipt was void)' : ''}`
             + `, in ${ms(started)} -> ${result.out}`)
-        console.log(`  cost: refold ${(result.refoldMs / 1000).toFixed(1)} s, mirror ${(result.mirrorMs / 1000).toFixed(1)} s`)
+        console.log(`  cost: refold ${(result.refoldMs / 1000).toFixed(1)} s (decode ${(result.decodeMs / 1000).toFixed(1)} s, fold ${(result.foldMs / 1000).toFixed(1)} s, insert ${(result.insertMs / 1000).toFixed(1)} s), mirror ${(result.mirrorMs / 1000).toFixed(1)} s`)
         console.log(`  search: ${result.searchMode}${result.searchMode === 'fts5' ? ` (${result.tokenizer}), ${result.ftsRows} mirrored row(s)${result.ftsRebuilt ? ' (rebuilt whole)' : result.ftsMaintained > 0 ? ` (maintained for ${result.ftsMaintained} session(s))` : ' (unchanged)'}` : ' -- no FTS5 mirror, text is matched by scan'}`)
         console.log(`  with a session/title event: ${result.titled} | without: ${result.untitled}` +
             (result.untitled > 0 ? ' (those are the ones a title service must fold per request)' : ''))

@@ -231,11 +231,22 @@ conversation, without a shell.
 
 **It runs in a CHILD PROCESS, and the measurement is why**: one living 33 MB session measured **110.6 s** to refresh,
 then **56.6 s** after a defect was found and fixed in the same pipeline (`refolded 1, skipped 498`). Instrumenting the
-builder split that cost, which is how the defect was visible at all: **refold 43.3 s + mirror 66.6 s** — two thirds of
-a one-session refresh spent deleting and re-inserting the whole 91,380-row FTS mirror. The mirror is now maintained for
-the refolded sessions only (`F102`), and what remains is named: **43.3 s of refold** (the offset-level refresh of
-`ROADMAP.md` §12.4) and **13.2 s of mirror maintenance**, which is the `session_id` scan of an UNINDEXED FTS column and
-would need a rowid map. The builder decodes logs through `zstd` with `spawnSync`, so
+builder split that cost, which is how the defects were visible at all, and the split retired a roadmap item:
+
+| phase (one living session) | first measurement | then | now |
+|---|---|---|---|
+| decode (multi-frame zstd, 33 MB) | 0.9 s | 0.9 s | **0.9 s** |
+| fold (parse and accumulate) | 0.9 s | 0.9 s | **0.9 s** |
+| insert into SQLite | **41.3 s** | 41.3 s | **0.3 s** |
+| FTS mirror maintenance | 66.6 s (whole mirror) | 13.2 s | **18.7 s** (store is larger) |
+| **refresh total** | **110 s** | 56 s | **21 s** |
+
+Two things follow, and both are corrections rather than additions. **The offset-level refresh is withdrawn** (`F103`):
+it would save the decode — 1.8 s of 43 s — and it was recommended and selected before any phase had been timed.
+**The insert phase is where the time was**: a commit per row made 50,000 rows cost 41.3 s, and one transaction per
+session took it to 0.3 s while also making a session's replacement atomic. **What is left is the mirror step (18.7 s)**,
+which is `DELETE ... WHERE session_id = ?` scanning an UNINDEXED FTS column; an external-content FTS5 table over an
+indexed `search_rows` table, or a `session_id → rowid` map, is the measured next target. The builder decodes logs through `zstd` with `spawnSync`, so
 in-process that would block the harness — including the very session it is observing — for close to two minutes. A
 child process costs a pid and keeps the observer out of its subject's way; `timeoutMs` lets a caller wait less and come
 back, and the report distinguishes **finished** from **still running** rather than claiming a rebuild that has not
