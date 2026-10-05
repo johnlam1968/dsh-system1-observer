@@ -248,10 +248,22 @@ are ~10 KB, and they are the difference between *"the LLM expanded scope"* and *
 | can answer | how many model calls a turn took; where it stalled; what it cost |
 | caution | **pacing is not deliberation.** A long pause is a long pause. Do not let a question read `dt` as thinking |
 
-There is **no reasoning-token bucket and no reasoning block** in this session: content blocks are `text` (803),
-`tool-call` (529), `tool-addition` (11), `tool-removal` (6); stream blocks are `text` (272) and `tool-call` (529).
-Reasoning *effort* is configurable (the `subagent` tool exposes it) while reasoning *content* is neither metered nor
-stored — so two runs differing only in reasoning effort are indistinguishable in the file.
+**REASONING IS STORED WHEN THE MODEL PRODUCES IT — corrected (`F83`).** This session has no reasoning block and no
+reasoning-token bucket: its content blocks are `text` (803), `tool-call` (529), `tool-addition` (11), `tool-removal`
+(6). **That is a fact about this session, not about the format**, and an earlier version of this paragraph stated it
+as the latter. Measured since, on the long development session: **3,846 `reasoning` blocks carrying 9,936,678
+characters — five times that session's visible text**, and unmistakably deliberation.
+
+Two consequences, and they point opposite ways:
+
+* **A reading of what the human READ must exclude reasoning**, or the operator is credited with the model's private
+  deliberation. That excludes it in one place (`lib/host/session-format.js`), which is why the reported "chars of
+  conversation" for that session fell from 12,774,434 to 2,839,380.
+* **A question about the model's own deliberation is answerable**, from the reasoning blocks in G1, rather than
+  impossible as this file previously implied.
+
+Reasoning *effort* is still configurable (the `subagent` tool exposes it) and still unrecorded, so two runs differing
+only in effort remain indistinguishable in the file — but only where the model emitted no reasoning block.
 
 ## G4 — the measurer's own record
 

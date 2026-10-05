@@ -101,6 +101,7 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 ## The host adapter
 
 * `host/index.js` — the host surface this plugin depends on, in one place, and how it is checked
+* `host/session-format.js` — the harness's session vocabulary: the event types, the two message shapes, and which block kinds count as text
 * `host/feed.js` — the live event feed, taken from the harness rather than polled
 * `host/surface.js` — the model surface, derived from the log's own surface ops
 * `host/fs-journal.js` — what the filesystem actually did, recorded from the harness

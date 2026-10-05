@@ -29,7 +29,14 @@ const message = (type, text) => ({ type, seq: 1, time: 0, data: { message: { con
 
 test('textOf reads the content shapes the harness writes, and nothing else', () => {
   assert.equal(textOf({ data: { message: { content: 'plain' } } }), 'plain')
-  assert.equal(textOf({ data: { message: { content: [{ text: 'one' }, { text: 'two' }] } } }), 'one two')
+  // A BLOCK CARRIES ITS TYPE. The harness declares `TextBlock` as `{ type: 'text'; text: string }`
+  // (`packages/llm/llm/lib/types/types.d.ts:46`), so a block without one is NOT a shape it writes -- this fixture
+  // used to omit it, and the reader accepted it, which is how the shape stayed wrong in six other cases.
+  assert.equal(textOf({ data: { message: { content: [{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }] } } }), 'one two')
+  // AND REASONING IS NOT THE MESSAGE. `ReasoningBlock` carries a `text` field too, so the reader that took `.text`
+  // from any block returned the model's thinking as though the operator had written it. This is that defect pinned.
+  const reasoning = { data: { message: { content: [{ type: 'reasoning', text: 'thinking' }, { type: 'text', text: 'shown' }] } } }
+  assert.equal(textOf(reasoning), 'shown')
   assert.equal(textOf({ data: {} }), '')
 })
 
