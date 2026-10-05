@@ -304,6 +304,47 @@ A bonus found in the same read: those search documents carry a per-event **`surf
 `log-only`), so the harness's own index already distinguishes what the model saw — further evidence that `filterEvents`
 with `{kind: 'surface', values: ['current']}` is the authoritative form of the fold this plugin approximates.
 
+### The title IS an event — and the search layer refuses it BY POLICY
+
+The challenge was fair: if the UI shows a title, the data exists. It does, and it is in the same log:
+
+```ts
+// declared by packages/session/session-title (a MERGE into SessionEventMap, not core)
+'session/title': {
+  title: string              // normalized non-empty title text
+  messageSeqs: SessionSeq[]  // the exact human `user/message` seqs it was derived from
+  source: SessionTitleSource // 'fallback' | provider | 'user' (an explicit rename)
+}
+```
+
+`session-title-llm` generates it (appending `session/title-llm-request` for the call itself), and the UI shows it
+because the UI goes through the **title service** — `readTitleSnapshots` reads the latest `session/title` event. So
+there is no side store, no missing file, and no asymmetry in storage: **two consumers read one log.**
+
+**What differs is declared semantics.** `extractSessionEventText` in the search layer handles `user/message`,
+`assistant/message`, `tool/call`, `tool/result`, `todo/write` and `turn/end`, returns `''` for
+`turn/start`, `step/start`, `step/end`, `assistant/attempt` and `request/header`, and **returns `'' for anything it
+does not know** — with the reason written next to it:
+
+> *"SessionEventMap is merge-extensible. Unknown events remain non-searchable until a concrete first-party consumer
+> defines semantics."*
+
+`session/title` is merge-declared by `session-title`, so to the search layer it is an unknown event. **The refusal is
+the design, and it is the same rule this repository applies to a filter that matches nothing**: guessing a text field
+for an arbitrary event would index provider payloads and JSON blobs as prose, which is worse than not indexing them.
+
+Three consequences worth keeping:
+
+1. **A plugin-merged event is invisible to every first-party consumer that switches on event type** — search and
+   extraction here — while the format MIGRATIONS handle it explicitly (`session-format-v1-to-v2`, `v3-to-v4` both list
+   `session/title`). So "the UI shows it" and "search cannot find it" are consistent, not contradictory.
+2. **The service will not change from our side.** The fix upstream is one line — a `case 'session/title'` returning the
+   title, by whoever owns those semantics. We cannot inject into a switch that lives in the harness.
+3. **We can index it ourselves.** `session/title` events arrive in the same `readSession` list this plugin already
+   consumes, so an index we build can carry the title, its `messageSeqs` and its `source` **without calling the title
+   service at all** — and can therefore search and rank it. That is a capability no service call provides, and it is
+   the same shape as the argument below: the platform refuses by policy; a store we own need not.
+
 **AND THIS IS WHERE AN INDEX ADDS A CAPABILITY RATHER THAN SPEED.** A title is a column, so:
 
 ```sql
