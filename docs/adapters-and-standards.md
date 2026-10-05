@@ -214,6 +214,55 @@ messages_fts(text, session_id, role)
 Two defects in my own prototype, disclosed rather than left to be found: the per-session tool count in the first run
 was a **global** count printed per session, and pi's DAG was stored as JSON rather than as a column.
 
+## What already exists (checked 2026-10, not assumed)
+
+The operator's guess was right: **there are many, and two are nearly this design** — for a different harness. Checked
+in both ecosystems: `find_dsh_plugin` returns **nothing** for session/database/index/search (no dsh plugin does this),
+while the wider field has several.
+
+| project | harness | store | what it does |
+|---|---|---|---|
+| [**Alfredvc/cct**](https://github.com/alfredvc/cct) | Claude Code | **DuckDB** (Rust + React viewer) | *"Your Claude Code transcripts as SQL… **The primitive is the database. The skills are playbooks on top.**"* Ingests `~/.claude/projects`, serves a viewer on `:8766`, reports cost per turn, expands subagents. Ships a **typed parser crate** with *"strongly-typed `Entry` variants and a **round-trip validator for catching schema drift**"* |
+| [**spences10/ccrecall**](https://github.com/spences10/ccrecall) | Claude Code | **SQLite** (`node:sqlite`) | incremental `sync` that *"reports what it found"*, `search` (FTS), `tools`, `query "<sql>"`, `schema`. Its `sync_state(file_path, last_modified, **last_byte_offset**)` is the receipt this file proposed, already built |
+| [apache/maka #2263](https://github.com/apache/maka/pull/2263) | generic | SQLite | *"import legacy JSONL session transcripts into SQLite"* |
+| [Claude-Code-Agent-Monitor](https://github.com/hoangsonww/Claude-Code-Agent-Monitor) | Claude Code + Codex | SQLite + web dashboard | sessions, tool usage, subagent orchestration, live analytics, an import API |
+| [`agent-recorder`](https://pypi.org/project/agent-recorder/), [`daily-claude-log`](https://pypi.org/project/daily-claude-log/) | various | files/reports | flight-recorder style capture and per-day summaries |
+| **the generic layer** | any | DuckDB / SQLite | `duckdb 'select * from read_json_auto(...)'`, `jsonl-to-sqlite`, `sqlite-utils insert --nl` — **SQL over any JSONL in one line, no adapter** |
+
+### ccrecall's schema is the closest reusable artifact
+
+It solved the same normalization by hand, and its shape validates ours from the outside:
+
+```sql
+messages(uuid, session_id, parent_uuid, type, model, content_text, content_json,
+         thinking, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
+tool_calls(id, message_uuid, session_id, tool_name, tool_input, timestamp)
+tool_results(id, tool_call_id, message_uuid, session_id, content, is_error, timestamp)
+sync_state(file_path, last_modified, last_byte_offset)
+```
+
+`thinking` as a column, `parent_uuid` for the DAG, `is_error` on a tool result, and `sync_state` for incremental
+resumption — four of the five decisions this file reached independently. It also carries `teams`/`team_members`/
+`team_tasks` for Claude Code's swarm mode, which is our subagent axis.
+
+### The gap, stated precisely
+
+Every one of those is **per-harness** (almost all Claude Code), and **none carries dsh's `surfaceOp`/`shadowed` or
+`assistant/attempt`**. So:
+
+* **Reuse rather than rebuild**: the generic JSONL/DuckDB layer, the schema SHAPE above, incremental sync keyed on a
+  byte offset, and cct's best idea — **the query playbook as an agent skill**, which is what our question sets already
+  are.
+* **Build only what is missing**: the **cross-harness** adapter (dsh, pi, mcode, Hermes as sources into one schema) and
+  the **fidelity columns** (`shadowed`, attempts, turn-end reason) that the per-harness tools do not need and dsh does.
+* **And a principle the survey suggests**: cct uses *skills as playbooks* for questions SQL can answer, while this repo
+  asks a decision model. The split should follow the evidence — **facts in SQL, judgements in system1**. "Asks per
+  session", "reasoning share", "tool error rate", "cost per turn" are SQL facts; "was the request served" is not.
+  Asking a model what arithmetic can answer is the failure our own calibration register is built to catch.
+
+Third-party code: if any of it is adopted, review the source and pin a commit — the same rule this repository applies
+to plugins.
+
 ## Status
 
 **Nothing here is built.** This file records what was read, so a decision can be made against evidence rather than
