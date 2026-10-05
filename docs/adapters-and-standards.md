@@ -83,6 +83,44 @@ From `agent-eval`, both of which are already rules in `docs/findings.md` and are
 * **absence is not zero** — *"A run whose diagnostic says `hasCost: false` has no cost, not a cost of zero — check the
   flag before you aggregate the field."* That is this repository's presence-versus-absence rule, stated by someone else.
 
+## Measured on this host: five harnesses, five substrates, and one shared concept list
+
+Read directly from disk, not from documentation.
+
+| harness | where it lives here | substrate | boundaries | its name for the model's reasoning |
+|---|---|---|---|---|
+| **dsh** | `~/.dsh/sessions/<slug>/<id>/session.v{N}.jsonl.zstd` | zstd **event log**, `seq` + `surfaceOp` | `turn/start` … `turn/end`, `step/*` | block `{ type: 'reasoning', text }` |
+| **pi** (183 sessions, still in use) | `~/.pi/<agent>/sessions/<slug>/<ts>_<uuid>.jsonl` | plain JSONL **append log with a parent-linked DAG** (`id`/`parentId`) | `session` header (`version: 3`) + `id`/`parentId` | block `{ type: 'thinking', thinking }` — **a different block type AND a different field name** |
+| **zeroclaw** (Rust, OpenClaw variant) | `~/.zeroclaw/data/sessions/*.db` | **SQLite**, plus FTS5 search | `session_metadata.turn_id` | column **`reasoning_content`** |
+| **Hermes** | `~/hermes-agent/trajectory_compressor.py` | JSONL **turn list** ("system, human, first gpt, first tool") | turn order | — |
+| **ATIF** (the emerging standard) | not installed; read from the RFC | JSON | `step_id` | **`reasoning_content`** + a separate **`reasoning_effort`** |
+
+### The concepts that survive all five
+
+This is the whole argument for a thin core, and it is a SHORT list: **an ask** (role `user`), **an answer** (role
+`assistant`), **the model's reasoning** (four names, four shapes), **tool traffic** (dsh `tool/call`+`tool/result`; pi
+blocks `toolCall` + role `toolResult`; zeroclaw `acp_tool_calls`; ATIF `tool_calls[]`+`observation.results[]`), and **a
+boundary**. Everything else is a harness's own business — and our G0/G1/G2 are selections over exactly those five.
+
+Counted on this host: pi writes **`text` 27,261, `thinking` 3,159, `toolCall` 15,429, `image` 131** blocks across
+**1,707 `user` and 16,291 `assistant` messages** in 183 sessions, and its record types include **`compaction`** (7),
+**`context_edit`** (6), **`model_change`** (230) and **`thinking_level_change`** (185).
+
+### Three findings that change the plan
+
+1. **pi and dsh share the STORE LAYOUT** — `sessions/<slug>/<timestamp>_<uuid>.jsonl`, the same `--home-john-…--` slug
+   convention, and a `version` field on the session header (pi writes 3). They differ in the RECORD schema, not in the
+   shape of the tree. **So the cheapest second adapter is pi, not ATIF**: 183 local sessions, a familiar store, and a
+   flat JSONL log. That is the adapter that would actually test the core's interface.
+2. **The "unrecorded comparability axis" is unrecorded only HERE.** pi records `thinking_level_change` as a first-class
+   event (185 of them), and ATIF carries `reasoning_effort` per step. Our `R`-axis problem is dsh's, not the field's —
+   which means a comparison across harnesses could control for it while a comparison within dsh cannot.
+3. **zeroclaw already solves intake twice over**: it speaks **ACP** (`acp_sessions`, `acp_messages`,
+   `acp_tool_calls`, `acp_session_events` — and its message table has a `reasoning_content` column, ATIF's name), and it
+   carries a **`jsonl_import_receipts`** table (`source_name`, `source_hash`, `source_len`) for importing JSONL
+   sessions **with a receipt** — the same "count what you ingested, hash what it was" discipline this repository applies
+   to a batch. On this host that table is empty (0 rows), so the path exists rather than being in use.
+
 ## Status
 
 **Nothing here is built.** This file records what was read, so a decision can be made against evidence rather than
