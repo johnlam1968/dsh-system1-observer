@@ -38,7 +38,7 @@ export const DEFAULT_INDEX = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'
  * looks exactly like a store with nothing to say. So the version is stored in the file (`PRAGMA user_version`) and a
  * mismatch throws the receipts away.
  */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions(
@@ -50,7 +50,12 @@ CREATE TABLE IF NOT EXISTS sessions(
   reasoning_chars INTEGER NOT NULL DEFAULT 0, visible_chars INTEGER NOT NULL DEFAULT 0,
   tool_calls INTEGER NOT NULL DEFAULT 0, shadowed INTEGER NOT NULL DEFAULT 0,
   high_water INTEGER NOT NULL DEFAULT 0, bytes INTEGER NOT NULL DEFAULT 0,
-  source_sha256 TEXT, indexed_at TEXT NOT NULL, mtime REAL
+  source_sha256 TEXT, indexed_at TEXT NOT NULL, mtime REAL,
+  -- THE DECLARED HEADER FIELDS THE FIRST VERSION OF THIS SCHEMA MISSED. All five are in HeaderLine
+  -- (session-persistence-jsonl/lib/types/format.d.ts), which states the first JSONL record exactly: a derived schema
+  -- that reads one real file finds cwd and createdAt and never learns that a session can name its PARENT, say it
+  -- is a SUBAGENT's, or say how deep the delegation goes.
+  parent_session TEXT, origin TEXT, delegation_depth INTEGER, agent_preset TEXT, is_seeded INTEGER
 );
 CREATE TABLE IF NOT EXISTS messages(
   session_id TEXT NOT NULL, seq INTEGER, turn INTEGER, role TEXT, kind TEXT,
@@ -113,6 +118,7 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
         title: null, title_source: null, title_seqs: null, has_title: 0, explicit_rename: 0,
         events: 0, messages: 0, asks: 0, assistant: 0, reasoning_chars: 0, visible_chars: 0,
         tool_calls: 0, shadowed: 0, high_water: 0, bytes, source_sha256: sha256,
+        parent_session: null, origin: null, delegation_depth: null, agent_preset: null, is_seeded: null,
     }
     const messages = []
     const calls = []
@@ -135,6 +141,11 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
             if (typeof event.cwd === 'string') row.cwd = event.cwd
             if (typeof event.createdAt === 'number') row.created_at = event.createdAt
             if (typeof event.version === 'number') row.format = `v${event.version}`
+            if (typeof event.parentSession === 'string') row.parent_session = event.parentSession
+            if (typeof event.origin === 'string') row.origin = event.origin
+            if (typeof event.delegationDepth === 'number') row.delegation_depth = event.delegationDepth
+            if (typeof event.agentPreset === 'string') row.agent_preset = event.agentPreset
+            row.is_seeded = event.isSeeded === true ? 1 : 0
             continue
         }
         if (row.cwd === null && typeof data.cwd === 'string') row.cwd = data.cwd
@@ -228,8 +239,8 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     const insertSession = db.prepare(`INSERT INTO sessions
       (id, path, format, cwd, created_at, title, title_source, title_seqs, has_title, explicit_rename, events,
        messages, asks, assistant, reasoning_chars, visible_chars, tool_calls, shadowed, high_water, bytes,
-       source_sha256, indexed_at, mtime)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+       source_sha256, indexed_at, mtime, parent_session, origin, delegation_depth, agent_preset, is_seeded)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     const insertMessage = db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)')
     const insertCall = db.prepare('INSERT INTO tool_calls VALUES (?,?,?,?)')
     const insertResult = db.prepare('INSERT INTO tool_results (session_id, call_id, text, chars, is_error) VALUES (?,?,?,?,?)')
@@ -257,7 +268,8 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
         }
         insertSession.run(row.id, row.path, row.format, row.cwd, row.created_at, row.title, row.title_source, row.title_seqs,
             row.has_title, row.explicit_rename, row.events, row.messages, row.asks, row.assistant, row.reasoning_chars,
-            row.visible_chars, row.tool_calls, row.shadowed, row.high_water, row.bytes, row.source_sha256, now, stat.mtimeMs)
+            row.visible_chars, row.tool_calls, row.shadowed, row.high_water, row.bytes, row.source_sha256, now, stat.mtimeMs,
+            row.parent_session, row.origin, row.delegation_depth, row.agent_preset, row.is_seeded)
         if (withText) for (const m of messages) insertMessage.run(...m)
         for (const c of calls) insertCall.run(...c)
         for (const r of results) insertResult.run(...r)

@@ -15,7 +15,8 @@ function fixture() {
     const dir = join(root, '--home-john-CodingProjects-zeroclaw-voice-proxy--', id)
     mkdirSync(dir, { recursive: true })
     const lines = [
-        { type: 'session', version: 4, id, createdAt: 1789873194109, cwd: '/home/john/CodingProjects/zeroclaw-voice-proxy' },
+        { type: 'session', version: 4, id, createdAt: 1789873194109, cwd: '/home/john/CodingProjects/zeroclaw-voice-proxy',
+          parentSession: 'session-parent', origin: 'subagent', delegationDepth: 2, agentPreset: 'cordis', isSeeded: true },
         { type: 'turn/start', seq: 1, time: 1, data: { turn: 1 } },
         { type: 'user/message', seq: 2, time: 2, data: { turn: 1, source: { kind: 'user' }, content: [{ type: 'text', text: 'push this repo' }] } },
         { type: 'assistant/message', seq: 3, time: 3, data: { turn: 1, message: { content: [{ type: 'reasoning', text: 'think' }, { type: 'text', text: 'done' }] } } },
@@ -37,6 +38,13 @@ test('the header record carries cwd and createdAt at the TOP level, and it is wh
         const { row } = foldSession({ id: f.id, path: 'x', version: 4, text, sha256, bytes: 1 })
         assert.equal(row.cwd, '/home/john/CodingProjects/zeroclaw-voice-proxy')
         assert.equal(row.created_at, 1789873194109)
+        // THE FIELDS A DERIVED SCHEMA MISSES. `HeaderLine` declares all of these; reading one real file shows only cwd
+        // and createdAt, so a session that names its parent or says it is a subagent looks like any other.
+        assert.equal(row.parent_session, 'session-parent')
+        assert.equal(row.origin, 'subagent')
+        assert.equal(row.delegation_depth, 2)
+        assert.equal(row.agent_preset, 'cordis')
+        assert.equal(row.is_seeded, 1)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
