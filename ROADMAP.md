@@ -769,18 +769,21 @@ minimum honest evidence, recorded here as the design for the missing gate:
 | aborting the whole read when any line is unattributed | **refused**: traces recorded before these fields existed are real evidence, so the view REPORTS the gap and refuses to pool across it rather than returning nothing. Aborting would delete the history that makes the gap visible |
 | an operator hash changing inside one run | **not built** -- the run table now exposes it, which is the part that matters first |
 
-## 12. The current plan: two splits, and what each waits on
+## 14. The current plan: two splits, and what each waits on
 
 P5 asked one question — stay a plugin, or extract the engine. The work since has split it in two, and both now have a
 **measured** boundary rather than a preference. This section is the plan of record; `docs/adapters-and-standards.md`
 holds the evidence behind every number here.
 
-### 12.1 Split A — the measurement core, as a package with no DSH import
+### 14.1 Split A — the measurement core, as a package with no DSH import
 
-P5's hedge, now quantified. Measured over 63 files / ~11,100 lines:
+P5's hedge, now quantified. Measured over **66 files / 11,341 lines**:
 
-* **81% of the code is host-free**; only **12 files, 2,056 lines** call the harness at all, and of the 13 domain files
-  exactly **one** does (`lib/model/service.js`, the instrument's host edge).
+* **NOTHING IN `lib/` IMPORTS A DSH MODULE** -- re-measured after the store was extracted and the grep is empty. Only
+  **three files name a harness service** at all: `lib/model/service.js` (the instrument's host edge),
+  `lib/evaluate-tool.js` and `lib/telemetry.js`. The harness-SHAPED surface is a different measure: `lib/host/`
+  (**5 files, 425 lines**) plus the session-reading half (`lib/session-subject.js`, `lib/sessions-tool.js`) that
+  receives `sessionQuery` by INJECTION rather than by import.
 * The interface the core would speak is **five concepts**, derived from six harnesses rather than invented: an ask, an
   answer, the model's reasoning, tool traffic, and a boundary — plus the per-harness facts (`shadowed`, `interrupted`,
   attempts, the boundary label). `lib/host/session-format.js` is the DSH side of that line, and it is one file.
@@ -791,7 +794,7 @@ P5's hedge, now quantified. Measured over 63 files / ~11,100 lines:
 shape. P5's own reasoning (*"the ecosystem is in libraries"*) is the trigger, and the hedge — no DSH import from P1 on
 — is already satisfied, so nothing has to be undone to collect on it.
 
-### 12.2 Split B — the session adapter, as its own plugin
+### 14.2 Split B — the session adapter, as its own plugin
 
 The new half, and the one the operator named: a **"plugin for a plugin"** that owns session access so the measurement
 core never reads a log.
@@ -805,10 +808,17 @@ core never reads a log.
   which is ours and is not about a format.
 * **The measured case**: a title search through `sessionQuery` costs **~54 s** (seven samples, median 53,951 ms) and the
   index answers the same question in **1 ms**; the warm-up is 328 s once and **2 ms** per re-run when nothing changed.
-* The index now exists as `scripts/session-index.mjs` (498 sessions, 75.1 MB, `--incremental`), **with the caveat that
-  it is a script, not a plugin, and its refresh is file-level until the offset-level design lands** (§12.4).
+* **THE INDEX HALF IS DONE AND LIVE** (2026-10-05): the store is its own plugin and its own repository,
+  [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index) -- a `localSessionIndex` service, four
+  agent-facing tools (`session_index_list`/`_read`/`_search`/`_refresh`), a CLI, and **no dsh import at all**. Measured:
+  499 sessions, **748.1 MB**, a living session refreshing in **15-21 s**, search in 4-13 ms. The offset-level design is
+  **withdrawn** (`F103`: an instrumented refold measured decode 0.9 s / fold 0.9 s / insert 41.3 s -> 0.3 s).
+  **What is left of Split B is the OBSERVER's own session access**: `lib/host/` and the session-reading half of
+  `lib/session-subject.js` / `lib/sessions-tool.js`, so the measurement core never reads a log. Begin with the two
+  files already on the retirement list (`lib/host/feed.js`, `lib/host/surface.js`), which are to be DELETED rather than
+  moved -- `surface.js` is replaced by `filterEvents {kind: 'surface', values: ['current']}`.
 
-### 12.3 Where the phases stand — this file is partly stale
+### 14.3 Where the phases stand — this file is partly stale
 
 | phase | status |
 |---|---|
@@ -817,13 +827,14 @@ core never reads a log.
 | **P2** criteria dictionary, registry, `id@version` provenance | **partly**: question sets exist as directories with hashes, batteries and the experiment line exist; the criteria DICTIONARY and `id@version` on the trace are the gap |
 | **P3** session/turn targets and a helpfulness set | **largely done and not reflected here**: session scope, `turns`, the evidence groups G0–G4, `session@1` and `agent-helpfulness-session@1` all exist; what remains is the turn AGGREGATE and block segmentation as a first-class mode |
 | **P4** the rewrite loop | open, gated as written |
-| **P5** the vehicle | **now two decisions** (§12.1, §12.2) |
+| **P5** the vehicle | **now two decisions** (§14.1, §14.2) |
 
-### 12.4 Next, in dependency order
+### 14.4 Next, in dependency order
 
-0. **RESTART. 26 commits are not live**, including the session-vocabulary move that fixed a **4.5× overstatement** of
-   conversation text (`F82`), the `action: 'search'` on the service's own index, the `observed` marking, and cwd in
-   `search`. Until then the running tool reports inflated counts and cannot search by text.
+0. ~~**RESTART**~~ -- **DONE, repeatedly, and verified live**: the 4.5x count fix (`F82`), `action: 'search'` with the
+   hand-rolled fallback, the `observed` marking, cwd in `search`, the trigram dispatch and its short-query guard, the
+   `refresh` action, the insert fix, and the extracted `dsh-session-index` row all report themselves in the running
+   process.
 1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces `lib/host/surface.js` (20 lines) with the
    AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
 2. ~~**The offset-level refresh**~~ — **WITHDRAWN, because the phases were measured and it is not where the time is**
@@ -840,13 +851,19 @@ core never reads a log.
    never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`
    therefore gained `search`, a `meta` table recording `text_indexed` as a MODE receipt, and coverage of message text,
    reasoning, tool results and tool-call arguments.
-3. **The subagent distinction** — **318 of 498 sessions are subagent runs**, and the index cannot yet filter them out
+3. **The subagent distinction** — **318 of 499 sessions are subagent runs** (319 carry a parent session; re-measured
+   from the store), and the index cannot yet filter them out
    while `observeSubagents` (default OFF) already encodes that policy for the live path.
 4. **The pi reader** — the second adapter, and the test of the interface: pi shares DSH's store layout and 183 of its
    sessions are on this disk.
-5. **The core extraction** — when a second consumer exists, per §12.1.
+5. **The core extraction** -- when a second consumer exists, per §14.1. **The readiness test is one of two things and
+   neither is true today**: a SECOND CONSUMER (another repo or application that measures with this instrument), or a
+   FROZEN INTERFACE -- and P1's second question per call, P2's criteria dictionary and `id@version` provenance, P3's turn
+   aggregate and block segmentation, and §13.5's gate are all open, so the interface is still moving. The hedge is
+   satisfied (nothing in `lib/` imports dsh), so extraction is a PACKAGING decision whenever either trigger lands
+   rather than a refactor.
 
-### 12.5 What would make us stop, or reverse
+### 14.5 What would make us stop, or reverse
 
 * **If the index becomes a second source of truth.** It is derived, rebuildable and receipted; a forensic question
   reads the log. Two channels must be able to disagree VISIBLY, so the channel-agreement test (compose one turn both

@@ -5,7 +5,7 @@ Optionally, read the source code (if source code is not available, git clone it)
 
 ## What those two lines mean HERE
 
-* **The doc** — `README.md`, `ROADMAP.md` (§5 phases, §12 the current plan), and `docs/`: `docs/findings.md`
+* **The doc** — `README.md`, `ROADMAP.md` (§5 phases, §14 the current plan), and `docs/`: `docs/findings.md`
   (every defect with its cause, consequence and status), `docs/measurement-depth.md` (the evidence groups and
   scope), `docs/adapters-and-standards.md` (the session/database design and its measured costs),
   `docs/question-suitability.md`, `docs/conventions.md`.

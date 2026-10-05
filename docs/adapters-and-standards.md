@@ -280,7 +280,7 @@ Three properties, each deliberate:
 * **The store stays readable throughout**, because the mirror swap is one transaction and the tables are only appended
   to. A search during a rebuild answers from the previous state, which is why the caller is told to search again.
 
-**This is also the strongest argument for the offset-level refresh** (`ROADMAP.md` §12.4): 110 s is the price of
+**This is also the strongest argument for the offset-level refresh** (`ROADMAP.md` §14.4): 110 s is the price of
 re-decoding a whole living log to append a few frames, and a stored frame offset would make it about a second.
 
 ### The tokenizer decides what a query MEANS, so it is chosen and recorded
