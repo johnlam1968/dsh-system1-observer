@@ -168,6 +168,38 @@ than argued. A throwaway SQLite index over **183 pi sessions plus the two dsh se
 4. **Cost the size.** 103 MB for 30k rows is the FTS table mirroring the text; an index over asks and counts alone
    would be a fraction of that, and only the text worth searching needs to be in it.
 
+## The cost of the service path, measured from the session's OWN log
+
+The harness writes a `time` on every tool call and its result, so the calls this plugin made can be timed after the
+fact rather than estimated. Seven `system1_sessions` `list`+`search` calls in the session this was written in:
+
+```
+52977  53153 (aborted)  53796  53951  54359  54950  56176   ms      median ~53,951 ms = ~54 s
+```
+
+and the same tool's `read` action, for contrast: **703-1,384 ms** -- because `read` opens ONE session where `list`
+resolves a title for every session in the library.
+
+| path | one title search | source |
+|---|---|---|
+| `sessionQuery` through `system1_sessions` | **~54 s** (7 samples, 52,977-56,176 ms) | this session's own log |
+| the index (`scripts/session-index.mjs find`) | **1-2 ms** (9 runs) | measured, 33 MB store |
+| the index build, once | **120.3 s** | measured over 498 sessions |
+
+**So the index pays for itself after about 2.2 title searches**, and the difference per query is roughly four orders of
+magnitude. That is the honest form of the speed argument: not "a database is faster", but *54 seconds against one
+millisecond* -- and the 54 seconds is paid on EVERY search by an agent who does not yet know which session it wants,
+which is exactly the agent this tool exists for.
+
+Three caveats, two of them about my own measurement:
+
+1. **The aborted call cannot be blamed on a timeout**: it stopped at 53,153 ms while another completed at 56,176 ms, so
+   the operator's message arriving mid-call is the likelier cause. It is recorded as an abort, not as a limit.
+2. **Pairing a result to its call needs `(turn, step, callId)`**, not `callId` alone: ids repeat across turns, and
+   pairing on the id alone produced absurd deltas (one `read` appeared to take 14,265,497 ms). The seven `list`
+   samples above are consistent and were re-derived with the full key.
+3. One 30 ms entry is excluded: it is the pre-mount `UNAVAILABLE` call, not a search.
+
 ## The normalized schema, tested rather than proposed
 
 One SQLite schema, **seven sessions across three harnesses** — 2 dsh (this one and the freeciv play session), 3 pi, 2
