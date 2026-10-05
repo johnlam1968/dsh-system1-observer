@@ -874,10 +874,12 @@ core never reads a log.
    while `observeSubagents` (default OFF) already encodes that policy for the live path.
 4. **The pi reader** — the second adapter, and the test of the interface: pi shares DSH's store layout and 183 of its
    sessions are on this disk.
-5. **The `defineTool` migration, the `Service` subclass form, and the two host inventories** -- `F107`'s remaining
-   items, in that order. The migration replaces 12 hand-built definitions with the authored form (its prerequisite,
-   `@deepseek-ai/dsh-tools` as a real dependency, is done), and it also retires the raw-root `additionalProperties`
-   deviation, because the authored form takes an implicit parameter map.
+5. ~~**The `defineTool` migration**~~ -- **DONE** (`F108`): 12 tools authored through one adapter per plugin, the
+   raw-root `additionalProperties` deviation retired by construction, and six schema facts the harness's compiler
+   refused now fixed -- including `required` not existing in the VALUE schema DSL, untyped nodes, and a **latent bug**
+   (the battery's `got` was emitted and undeclared). **What remains of `F107`**: the `Service` subclass form (3 plugins,
+   which is what puts our services in the live catalogue) and host inventories for the two packages, plus the audit's
+   UNKNOWNs (`exec.signal`, waterfall `next()`, slot OPTIONS, the client build pipeline).
 6. **The core extraction** -- when a second consumer exists, per §14.1. **The readiness test is one of two things and
    neither is true today**: a SECOND CONSUMER (another repo or application that measures with this instrument), or a
    FROZEN INTERFACE -- and P1's second question per call, P2's criteria dictionary and `id@version` provenance, P3's turn

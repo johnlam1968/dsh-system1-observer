@@ -45,6 +45,7 @@ import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { createObserver } from './lib/observe.js'
 import { createTraceTool } from './lib/tool.js'
+import { asToolDefinition } from './lib/tool-definition.js'
 import { readTraceWindow, runIds } from './lib/trace-report.js'
 import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
 import { createDecideTool } from './lib/decide-tool.js'
@@ -540,7 +541,9 @@ async function apply(ctx, config) {
   ctx.inject(['tools'], (child) => {
     const tools = child.get('tools')
     if (tools === undefined || typeof tools.register !== 'function') return
-    tools.register(createTraceTool({
+    // EVERY TOOL GOES THROUGH THE AUTHORED FORM, in one place (`lib/tool-definition.js`, `F107`).
+    const register = (definition) => tools.register(asToolDefinition(definition))
+    register(createTraceTool({
       path: evidence.path,
       runId: evidence.runId(),
       liveAgents: liveAgentRoutes,
@@ -558,7 +561,7 @@ async function apply(ctx, config) {
       // shares the trace tool's path, and it exists because the question an agent asks before changing a setting
       // is "what do I have" -- whose honest answer is usually about n, about silence, and about what could not be
       // attributed, rather than about answers.
-      tools.register(createResultsTool({
+      register(createResultsTool({
         path: evidence.path,
         runId: evidence.runId(),
         // THE PACKAGE RECORDS WHAT PRODUCED IT, so a report read a year later can say which build wrote it -- and the
@@ -570,7 +573,7 @@ async function apply(ctx, config) {
       // loader the row uses before it writes anything, refuses to overwrite a published scope without an explicit
       // `replace`, and answers with the composition hash read back from disk -- so an agent can say which
       // instrument it just created rather than which one it intended to.
-      tools.register(createQuestionsTool({
+      register(createQuestionsTool({
         dir: () => setSettings(liveConfig()).dir,
       }))
       // SYSTEM1_SESSIONS: the agent-facing half of the session story. DSH gives an agent live peers and a plugin
@@ -582,7 +585,7 @@ async function apply(ctx, config) {
       // offer one as a set nobody wrote. It spends model calls, so it refuses before it spends, and it writes an
       // `experiment` line rather than a reading: an accuracy on five fabricated cases must not sit in a table of
       // judgements about somebody's real conversation.
-      tools.register(createBatteryTool({
+      register(createBatteryTool({
         dir: () => setSettings(liveConfig()).dir,
         setsDir: () => setSettings(liveConfig()).dir,
         decide: (request, options) => decide(request, options),
@@ -592,7 +595,7 @@ async function apply(ctx, config) {
         },
         toolId: 'system1-observer',
       }))
-      tools.register(createSessionsTool({
+      register(createSessionsTool({
         query: () => sessionQuery,
         settings: () => subjectSettings(liveConfig()),
         // THE ALLOW-LIST, READ ONCE PER CALL AND MATCHED BY ITS OWN MODULE. An agent cannot see which sessions this
@@ -606,7 +609,7 @@ async function apply(ctx, config) {
     // would let the tool and the instrument drift apart -- the exact failure the thin-tool design exists to
     // prevent. `mount` supplies the defaults the row was configured with, so the tool's own description names the
     // backend it will actually reach.
-    tools.register(createDecideTool({
+    register(createDecideTool({
       decide: (request, options) => decide(request, options),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
@@ -619,7 +622,7 @@ async function apply(ctx, config) {
     // THE WHOLE-CONVERSATION TOOL (§11). The seams judge a turn as it happens; this judges a session -- live, or one
     // that is already over -- whole or as a slice, and records its call under a hook that is deliberately NOT a probe
     // site, so a whole-session opinion never enters the probe calibration.
-    tools.register(createEvaluateTool({
+    register(createEvaluateTool({
       settings: () => subjectSettings(liveConfig()),
       // THE PACKAGE WRITER, over the SAME helpers the measurements tool registers -- one home for what a package is,
       // reached from two tools. `run: 'current'` because the evaluation that just happened IS this run's latest
@@ -727,7 +730,7 @@ async function apply(ctx, config) {
     // `write` goes through the harness's configEditor rather than editing the profile file, and NO knob list is
     // passed: the editor validates and reconciles a plugin's next config itself, so an unknown field is refused
     // by the thing that owns the schema instead of by a copy of it that would drift.
-    tools.register(createConfigTool({
+    register(createConfigTool({
       read: () => plainConfig(liveConfig()),
       // THE SCHEMA ITSELF, as a function: the tool digests it into per-setting type/bounds/writability for `list`
       // and checks `set` against it. Passed rather than imported so the tool stays testable without the plugin,

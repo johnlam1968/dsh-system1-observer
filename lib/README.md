@@ -95,6 +95,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 ## The agent-facing tools
 
 * `tool.js` — the agent's way in
+* `tool-definition.js` — OUR TOOL DECLARATIONS -> THE AUTHORED FORM (`defineTool`, `F107`): the one place the
+  parameter map is unwrapped, which is also what retires the raw-root `additionalProperties` deviation, plus the
+  recorded fact that the OUTPUT (value) schema DSL has no `required`
 * `tool-args.js` — checking a model's arguments against the tool's own declaration
 * `decide-tool.js` — `system1_decide`
 * `evaluate-tool.js` — `system1_evaluate_session`
