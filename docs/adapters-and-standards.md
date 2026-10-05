@@ -197,18 +197,17 @@ tool result (measured: the fixture's phrase was in `tool_results`, not in any me
 
 ## Where the store LIVES, and why it left this plugin
 
-The store is now its own package in this repository: **`packages/session-index/`** (published name
-`dsh-session-index`), mounted as the `session-index` bundle row and providing a **`localSessionIndex`** service. The
+The store is now **its own plugin and its own repository**: [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index),
+mounted as the `session-index` bundle row and providing a **`localSessionIndex`** service. The
 reason is the import audit that answered the operator's question: the store, its builder and its refresh import **no
 dsh code at all** — only `node:sqlite`, `node:child_process`, `node:fs`, `node:os`, `node:path`, `node:url` — while the
 plugin that measures sessions has no business owning a database.
 
-* `packages/session-index/lib/store.js` — the read side (path, tables, search, meta)
-* `packages/session-index/lib/build.js` — the builder (fold, the FTS mirror, transactions, phase timings)
-* `packages/session-index/lib/refresh.js` — the child-process incremental rebuild
-* `packages/session-index/bin/session-index.mjs` — the CLI; `scripts/session-index.mjs` remains as a **shim** because the
-  docs, the tool's own render text and several habits point at that path
-* `packages/session-index/index.js` — the row: `Config` (`path`, `sessionsDir`, `tokenizer`) and the service
+There: `lib/store.js` (the read side), `lib/build.js` (the builder), `lib/refresh.js` (the child-process rebuild),
+`lib/read.js` (reading a session's conversation), `lib/tools.js` (four agent-facing tools: `session_index_list`,
+`session_index_read`, `session_index_search`, `session_index_refresh`), `bin/session-index.mjs` (the CLI), and
+`index.js` (the row: `Config` and the service). In THIS repository, `scripts/session-index.mjs` remains as a **shim**
+because the docs, the tool's own render text and several habits point at that path.
 
 The plugin consumes it **by package import** (`dsh-session-index/store`, `.../refresh`) rather than by injection,
 because both live in the same repository and the import cannot silently differ from what the service would do; the

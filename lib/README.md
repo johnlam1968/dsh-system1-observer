@@ -28,7 +28,7 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 * `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
 * `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
 
-**THE STORE IS NO LONGER IN `lib/`.** It is its own package (`packages/session-index/`, published name `dsh-session-index`) that imports no dsh code: FTS5 search, title/cwd lookup, and an incremental rebuild behind a `localSessionIndex` service. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
+**THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
 * `sessions-tool-output.js` — the tool's output schema and its rendering, split out of `sessions-tool.js` when the fourth action arrived
 * `exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
 * `sessions.js` — which sessions the observer watches at all
