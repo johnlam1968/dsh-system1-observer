@@ -168,6 +168,33 @@ than argued. A throwaway SQLite index over **183 pi sessions plus the two dsh se
 4. **Cost the size.** 103 MB for 30k rows is the FTS table mirroring the text; an index over asks and counts alone
    would be a fraction of that, and only the text worth searching needs to be in it.
 
+## The native index was TRIED, broke the profile, and is left at its default
+
+`openAt: never` is a `dsh-base` default, so it was overridden in the profile patch — `openAt: first-search` with a file
+path, restating both fields because a patch replaces `config` wholesale. The composed config was verified. **Then the
+profile's Web UI reported `api-session-controller` (`@deepseek-ai/dsh-api-session-controller`) as "Failed to start"**,
+and commenting the override out fixed it. The consumer edge is real: that controller's own code calls
+`provider.searchSessions(...)`, so a dead provider fails its consumer, and its `static inject` is
+`["fileReferences", "typert"]` — a chain, not a direct edge.
+
+**The cause is UNRESOLVED, and that is recorded rather than guessed.** A probe of the SAME profile with the SAME
+override, applied through `--patch` on another port (`webserver` → 3099, `openBrowser: false`), **booted cleanly** —
+its only failure was `capability-inspector`, which is enabled-but-inactive in the live process *with the override
+commented out*, so it is independent of this. An earlier probe on `docdrift-headless` proved nothing at all: that boot
+died on `MISSING_CREDENTIAL: llm-pi-ai … openrouter` before reaching the row.
+
+Two lessons, both this repository's own:
+
+* **An edit to a live profile earns a probe first.** The probe came after the breakage; the ordering was the mistake,
+  not the hypothesis.
+* **A profile-layer override is not the same layer as `--patch`.** The probe cannot be said to have tested the profile
+  edit, only a near-identical one — which is exactly the class of difference `F79`, `F95` and `F97` are about.
+
+**So the decision is: the native index stays at `never`, and the hand-rolled store carries the capability.** Its text
+search covers what the harness's own extractor covers — message text, reasoning, **tool results and tool-call
+arguments** — because a search that read only messages would answer "not in this library" for a phrase sitting in a
+tool result (measured: the fixture's phrase was in `tool_results`, not in any message).
+
 ## Where the schema came from: derived from bytes, when the source declares it
 
 Asked directly, and the honest answer is **derived from real logs**, with the source read only for the parts being

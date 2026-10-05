@@ -13,10 +13,17 @@
 // names, the two message shapes, which block kinds are text -- and this script is the second consumer of that same
 // knowledge rather than a second opinion about it.
 //
+// IT IS THE HAND-ROLLED ANSWER TO SESSION SEARCH, and it is the one in use. The harness ships its own SQLite FTS
+// index (`@deepseek-ai/dsh-session-query-sqlite`), which this profile had configured `openAt: never`; enabling it
+// there made `api-session-controller` fail to start, and the cause was never reproduced (a probe of the same profile
+// with the same override on another port booted cleanly). See `F98`. So the native route is left at its deployment
+// default and this store keeps the capability.
+//
 // Usage:
-//   node scripts/session-index.mjs build [--out FILE] [--sessions DIR] [--text]
-//   node scripts/session-index.mjs find  <term> [--out FILE] [--limit N]
-//   node scripts/session-index.mjs stats [--out FILE]
+//   node scripts/session-index.mjs build  [--out FILE] [--sessions DIR] [--text] [--incremental]
+//   node scripts/session-index.mjs find   <term> [--out FILE] [--limit N]
+//   node scripts/session-index.mjs search <phrase> [--out FILE] [--limit N]
+//   node scripts/session-index.mjs stats  [--out FILE]
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -62,6 +69,12 @@ CREATE TABLE IF NOT EXISTS messages(
   text TEXT, reasoning TEXT, shadowed INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS tool_calls(session_id TEXT NOT NULL, call_id TEXT, name TEXT, args TEXT);
+-- WHAT THIS STORE ACTUALLY HOLDS. 'text_indexed' is a MODE receipt: a build without text and a build with it are
+-- different stores, and searching the second as if it were the first would report "no matches" for text that was
+-- never stored. Same rule as the schema version: a receipt must cover the mode, not only the file.
+-- (NO BACKTICKS IN THIS BLOCK: the schema is a JavaScript template literal, and a backtick in a SQL comment ends it.
+-- Cost two syntax errors to learn.)
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS tool_results(session_id TEXT NOT NULL, call_id TEXT, text TEXT, chars INTEGER NOT NULL DEFAULT 0, is_error INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS results_by_session ON tool_results(session_id);
 CREATE INDEX IF NOT EXISTS messages_by_session ON messages(session_id);
@@ -223,14 +236,17 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     const schemaMoved = heldVersion !== SCHEMA_VERSION
     if (schemaMoved) {
         db.exec('DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS tool_calls; '
-            + 'DROP TABLE IF EXISTS tool_results; DROP TABLE IF EXISTS titles_fts;')
+            + 'DROP TABLE IF EXISTS tool_results; DROP TABLE IF EXISTS titles_fts; DROP TABLE IF EXISTS meta;')
     }
     db.exec(SCHEMA)
-    if (!incremental || schemaMoved) {
+    const heldText = db.prepare("SELECT value FROM meta WHERE key = 'text_indexed'").get()?.value ?? ''
+    const modeChanged = (heldText === '1') !== withText
+    const receiptsUsable = incremental && !schemaMoved && !modeChanged
+    if (!receiptsUsable) {
         db.exec('DELETE FROM sessions; DELETE FROM messages; DELETE FROM tool_calls; DELETE FROM tool_results;')
     }
     const known = new Map()
-    if (incremental && !schemaMoved) {
+    if (receiptsUsable) {
         for (const held of db.prepare('SELECT id, mtime, bytes FROM sessions').all()) known.set(held.id, held)
     }
     // COLUMNS ARE NAMED, not positional: `mtime` was added to an existing store by ALTER, and a positional INSERT
@@ -283,11 +299,15 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // run saw "same version", kept the old tables, and failed on a column that did not exist. A crash must leave the
     // version BEHIND the schema so the following run rebuilds.
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+    const stamp = db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+    stamp.run('text_indexed', withText ? '1' : '0')
+    stamp.run('built_at', new Date().toISOString())
+    stamp.run('sessions', String(readCounts(out).sessions))
     db.close()
     // THE SUMMARY IS READ BACK FROM THE STORE, not accumulated during the walk: in an incremental run most rows were
     // never walked, so a running counter would describe the refold rather than the index.
     const counts = readCounts(out)
-    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, titled: counts.titled, untitled: counts.sessions - counts.titled, out }
+    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
 /**
@@ -297,6 +317,87 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
  * exactly the guard the harness's own search performs for us ("interpreted as data, never executable FTS syntax"). At
  * this size it is also faster than nothing.
  */
+/** What the store says about itself: `text_indexed`, `built_at`, `sessions`. */
+export function metaOf(out = DEFAULT_INDEX) {
+    const db = new DatabaseSync(out, { readOnly: true })
+    const meta = {}
+    for (const row of db.prepare('SELECT key, value FROM meta').all()) meta[row.key] = row.value
+    db.close()
+    return meta
+}
+
+/**
+ * WHERE A PHRASE CAN LIVE, and the list is not just messages.
+ *
+ * `lib/host/session-format.js` and the harness's own `extractSessionEventText` both treat TOOL TRAFFIC as searchable
+ * text -- a call's arguments and a result's output -- and a search that only read messages would answer "not in this
+ * library" for a phrase that is sitting in a tool result. Measured while writing this: the fixture's phrase was in
+ * `tool_results`, not in any message, and the first version of this function reported no matches.
+ */
+function textHits(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
+    const db = new DatabaseSync(out, { readOnly: true })
+    const like = `%${String(term)}%`
+    const snippet = (column) => `MIN(substr(COALESCE(${column},''), max(1, instr(lower(COALESCE(${column},'')), lower(?)) - 60), 160))`
+    const queries = [
+        ['text', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('m.text')} AS snippet
+                  FROM sessions s JOIN messages m ON m.session_id = s.id
+                  WHERE m.text LIKE ? GROUP BY s.id`],
+        ['reasoning', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('m.reasoning')} AS snippet
+                  FROM sessions s JOIN messages m ON m.session_id = s.id
+                  WHERE m.reasoning LIKE ? GROUP BY s.id`],
+        ['tool-result', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('t.text')} AS snippet
+                  FROM sessions s JOIN tool_results t ON t.session_id = s.id
+                  WHERE t.text LIKE ? GROUP BY s.id`],
+        ['tool-call', `SELECT s.id, s.title, s.cwd, s.created_at, COUNT(*) AS hits, ${snippet('c.args')} AS snippet
+                  FROM sessions s JOIN tool_calls c ON c.session_id = s.id
+                  WHERE c.args LIKE ? GROUP BY s.id`],
+    ]
+    const byId = new Map()
+    for (const [source, sql] of queries) {
+        let rows = []
+        try { rows = db.prepare(sql + ' ORDER BY hits DESC LIMIT ?').all(String(term), like, limit) } catch { rows = [] }
+        for (const row of rows) {
+            const held = byId.get(row.id) ?? { id: row.id, title: row.title, cwd: row.cwd, created_at: row.created_at, hits: 0, sources: [], snippet: '' }
+            held.hits += row.hits
+            held.sources.push(source)
+            if (held.snippet === '' && typeof row.snippet === 'string' && row.snippet !== '') held.snippet = row.snippet
+            byId.set(row.id, held)
+        }
+    }
+    db.close()
+    return [...byId.values()].sort((a, b) => b.hits - a.hits || (b.created_at ?? 0) - (a.created_at ?? 0))
+}
+
+/**
+ * TEXT SEARCH, and title/cwd/id matching, in ONE answer.
+ *
+ * `textIndexed` is reported rather than assumed: a store built without `--text` holds no message text at all, and
+ * answering that query as though it had searched the text would read as "the phrase is not in the library".
+ */
+export function searchSessions(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
+    const meta = metaOf(out)
+    const textIndexed = meta.text_indexed === '1'
+    const rows = new Map()
+    for (const row of findSessions(term, { out, limit })) {
+        rows.set(row.id, { id: row.id, title: row.title, cwd: row.cwd, created_at: row.created_at, hits: 0, matchedIn: 'title/cwd/id' })
+    }
+    if (textIndexed) {
+        for (const hit of textHits(term, { out, limit })) {
+            const matchedIn = hit.sources.join('+')
+            const held = rows.get(hit.id)
+            if (held === undefined) {
+                rows.set(hit.id, { id: hit.id, title: hit.title, cwd: hit.cwd, created_at: hit.created_at, hits: hit.hits, matchedIn, snippet: hit.snippet ?? '' })
+            } else {
+                held.hits = hit.hits
+                held.matchedIn = held.matchedIn + '+' + matchedIn
+                held.snippet = hit.snippet ?? ''
+            }
+        }
+    }
+    const ordered = [...rows.values()].sort((a, b) => b.hits - a.hits || (b.created_at ?? 0) - (a.created_at ?? 0))
+    return { term: String(term), textIndexed, rows: ordered.slice(0, limit), total: ordered.length }
+}
+
 export function findSessions(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
     const db = new DatabaseSync(out, { readOnly: true })
     const like = `%${String(term)}%`
@@ -336,7 +437,10 @@ function main(argv) {
             incremental: rest.includes('--incremental'),
             onProgress: (done, total) => process.stderr.write(`  ${done}/${total}\r`),
         })
-        console.log(`${result.sessions} session(s) in the store; refolded ${result.refolded}, skipped ${result.skipped} unchanged${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}, in ${ms(started)} -> ${result.out}`)
+        console.log(`${result.sessions} session(s) in the store; refolded ${result.refolded}, skipped ${result.skipped} unchanged`
+            + `${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}`
+            + `${result.modeChanged && !result.schemaMoved ? ' (the TEXT MODE changed, so every receipt was void)' : ''}`
+            + `, in ${ms(started)} -> ${result.out}`)
         console.log(`  with a session/title event: ${result.titled} | without: ${result.untitled}` +
             (result.untitled > 0 ? ' (those are the ones a title service must fold per request)' : ''))
         console.log(`  size: ${(statSync(out).size / 1048576).toFixed(1)} MB`)
@@ -356,13 +460,31 @@ function main(argv) {
         }
         return 0
     }
+    if (command === 'search') {
+        const term = rest.find((a) => !a.startsWith('--') && a !== flag('out', null) && a !== flag('limit', null))
+        if (term === undefined) { console.error('search needs a term'); return 2 }
+        const started = process.hrtime.bigint()
+        const found = searchSessions(term, { out, limit: Number(flag('limit', 20)) })
+        console.log(`${found.total} session(s) matching ${JSON.stringify(found.term)} in ${ms(started)}`
+            + (found.textIndexed
+                ? ' (message text, reasoning, tool results and tool arguments are indexed)'
+                : ' -- CONVERSATION TEXT IS NOT INDEXED in this store, so only titles, ids and directories were compared; rebuild with --text to search what was said and what tools returned'))
+        for (const row of found.rows) {
+            console.log(`  ${row.id}`)
+            console.log(`    title: ${row.title === null || row.title === undefined ? '(none)' : row.title}`)
+            console.log(`    cwd:   ${row.cwd ?? '?'}`)
+            console.log(`    matched in: ${row.matchedIn}${row.hits > 0 ? ` (${row.hits} message(s))` : ''}`)
+            if (row.snippet !== undefined && row.snippet !== '') console.log(`    …${row.snippet.split('\n').join(' ')}…`)
+        }
+        return 0
+    }
     if (command === 'stats') {
         const one = readCounts(out)
         const size = (statSync(out).size / 1048576).toFixed(1)
         console.log(`${one.sessions} session(s), ${one.titled} titled, ${one.asks} asks, ${one.shadowed} shadowed message(s), ${size} MB`)
         return 0
     }
-    console.error('usage: session-index.mjs build|find|stats [--out FILE] [--sessions DIR] [--text] [--limit N]')
+    console.error('usage: session-index.mjs build|find|search|stats [--out FILE] [--sessions DIR] [--text] [--incremental] [--limit N]')
     return 2
 }
 

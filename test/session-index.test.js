@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildIndex, findSessions, foldSession, readCounts, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
+import { buildIndex, findSessions, foldSession, metaOf, readCounts, searchSessions, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
 
 /** A fixture session: header at the RECORD level, a title event whose `source` is an object, and a replace op. */
 function fixture() {
@@ -111,6 +111,56 @@ test('a second build refolds only what CHANGED, so the warm-up is paid once', ()
         assert.equal(third.refolded, 1, 'the appended file is refolded')
         assert.equal(third.skipped, 0)
         assert.equal(readCounts(out).sessions, 1, 'and it REPLACES its row rather than duplicating it')
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('search finds a phrase inside a CONVERSATION when the store was built with --text', () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out, withText: true })
+        const found = searchSessions('pushed', { out })
+        assert.equal(found.textIndexed, true)
+        assert.equal(found.rows.length, 1)
+        assert.equal(found.rows[0].id, f.id)
+        assert.equal(found.rows[0].hits, 1)
+        // the phrase was in a TOOL RESULT -- the source is named, so a reader knows where the match came from
+        assert.equal(found.rows[0].matchedIn, 'tool-result')
+        assert.match(found.rows[0].snippet, /pushed/)
+        // and a phrase in a MESSAGE is found by the other source, so neither path shadows the other
+        const inMessage = searchSessions('summary of the above', { out })
+        assert.equal(inMessage.rows[0].id, f.id)
+        assert.match(inMessage.rows[0].matchedIn, /text/)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('search SAYS SO when the store holds no message text, rather than reporting no matches', () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out })           // no --text
+        assert.equal(metaOf(out).text_indexed, '0')
+        const found = searchSessions('pushed', { out })
+        assert.equal(found.textIndexed, false, 'a store with no text cannot have searched any')
+        assert.equal(found.rows.length, 0, 'and the phrase really is absent from titles, ids and directories')
+        // the title path still works from the same store
+        assert.equal(searchSessions('GitHub account', { out }).rows[0].id, f.id)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('changing the TEXT MODE voids the receipts, because a receipt must cover the mode', () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out })
+        const withText = buildIndex({ sessionsDir: f.root, out, incremental: true, withText: true })
+        assert.equal(withText.modeChanged, true)
+        assert.equal(withText.refolded, 1, 'every session is refolded so the text is actually stored')
+        assert.equal(metaOf(out).text_indexed, '1')
+        // and the reverse move re-refolds too, rather than leaving text behind that a later search would trust
+        const back = buildIndex({ sessionsDir: f.root, out, incremental: true })
+        assert.equal(back.modeChanged, true)
+        assert.equal(searchSessions('pushed', { out }).textIndexed, false)
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 

@@ -828,6 +828,11 @@ core never reads a log.
    AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
 2. **The offset-level refresh** — makes a LIVING session cost its last frame instead of its whole life (today: 26.5 s
    per append on a 33 MB log, growing). Design in `docs/adapters-and-standards.md`.
+   **And the store now carries SESSION SEARCH, hand-rolled, because the native route was tried and reverted**: enabling
+   `@deepseek-ai/dsh-session-query-sqlite` in this profile made `api-session-controller` fail to start, the cause was
+   never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`
+   therefore gained `search`, a `meta` table recording `text_indexed` as a MODE receipt, and coverage of message text,
+   reasoning, tool results and tool-call arguments.
 3. **The subagent distinction** — **318 of 498 sessions are subagent runs**, and the index cannot yet filter them out
    while `observeSubagents` (default OFF) already encodes that policy for the live path.
 4. **The pi reader** — the second adapter, and the test of the interface: pi shares DSH's store layout and 183 of its
