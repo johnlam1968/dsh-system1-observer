@@ -13,6 +13,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
+import { Context } from '@deepseek-ai/cordis'
 import { OBSERVER_SERVICE } from '../lib/service.js'
 
 const accessor = (read) => ({ get: read })
@@ -39,6 +40,11 @@ test('the service reports a LIVE provider, model and hook set -- not the mount s
       if (Array.isArray(deps) && deps.includes('tools')) callback({ get: () => ({ register: () => () => {} }) })
     },
     provide(name, value) { providers.set(name, value); return () => {} },
+    // the host's mount, simulated: the class constructor runs on a real Context and the service is captured (F107)
+    plugin(Klass, deps) {
+      providers.set(OBSERVER_SERVICE, new Klass(new Context(), deps))
+      return { dispose() {} }
+    },
     get: () => undefined,
     agents: { currentInitiator: () => ({ id: 'agent-1' }) },
   }

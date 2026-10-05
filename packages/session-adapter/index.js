@@ -24,6 +24,7 @@ export { currentSurfaceSeqs } from './lib/surface-authority.js'
 /** The row's name, for the Loader and for the plugin manager. */
 const name = 'session-adapter'
 
+import { Service } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { currentSurfaceSeqs } from './lib/surface-authority.js'
 import {
@@ -70,10 +71,29 @@ export function createSessionAdapter({ getQuery = () => undefined } = {}) {
     }
 }
 
+/**
+ * THE HOST SERVICES THIS PLUGIN REACHES, declared rather than discovered: a compliance audit (F107) asks for the
+ * inventory, and one name is the whole of it. `test/session-adapter-plugin.test.js` checks this against the source.
+ */
+export const HOST_SERVICES = ['sessionQuery']
+
+/**
+ * THE SERVICE, IN THE DOCUMENTED FORM (`services-events.md` 2.1). It was a plain `ctx.provide` object, which the audit
+ * measured as absent from the live Service catalogue -- reachable by injection, invisible to `listService`. The class
+ * delegates to the same factory, so the capability and the late-mounting read are unchanged.
+ */
+export class SessionAdapter extends Service {
+    constructor(ctx) {
+        super(ctx, SESSION_ADAPTER_SERVICE)
+        Object.assign(this, createSessionAdapter({
+            getQuery: () => (typeof ctx.get === 'function' ? ctx.get('sessionQuery') : undefined),
+        }))
+    }
+}
+
 function apply(ctx, _config) {
-    ctx.provide(SESSION_ADAPTER_SERVICE, createSessionAdapter({
-        getQuery: () => (typeof ctx.get === 'function' ? ctx.get('sessionQuery') : undefined),
-    }))
+    // MOUNTED, NOT PROVIDED: the constructor registers the service under its key.
+    ctx.plugin(SessionAdapter)
 }
 
 export { name, Config, apply }

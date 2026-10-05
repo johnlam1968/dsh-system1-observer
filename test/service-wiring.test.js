@@ -8,6 +8,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
+import { Context } from '@deepseek-ai/cordis'
 import { OBSERVER_SERVICE } from '../lib/service.js'
 
 const accessor = (value) => ({ get: () => value })
@@ -22,6 +23,14 @@ function recordingCtx() {
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
     inject() {},
     provide(name, value) { provided.set(name, value); return () => provided.delete(name) },
+    // THE HOST'S OWN MOUNT, SIMULATED FAITHFULLY: `ctx.plugin(Class, deps)` runs the constructor on a Cordis Context,
+    // and the class form is what the audit asked for (F107). A stand-in that only RECORDED the call would leave these
+    // assertions reading a service that no longer exists under that name.
+    plugin(Klass, deps) {
+      const service = new Klass(new Context(), deps)
+      provided.set(OBSERVER_SERVICE, service)
+      return { dispose() {} }
+    },
     agents: { currentInitiator: () => ({ id: 'agent-1' }) },
   }
 }
@@ -41,7 +50,10 @@ test('apply provides the observer service, with its readers, the derived signals
 
   const service = ctx.provided.get(OBSERVER_SERVICE)
   assert.notEqual(service, undefined, 'the row must provide the service under its declared name')
-  assert.deepEqual(Object.keys(service).sort(), ['config', 'label', 'questionSets', 'read', 'replay', 'runs', 'sessions', 'storedSessions', 'subject'])
+    // `ctx` and `name` are the Service BASE's own fields, not this service's data: the class form adds them
+  // (F107), and what must not leak is the storage -- so the enumeration excludes exactly those two.
+  const capabilityKeys = Object.keys(service).filter((k) => k !== 'ctx' && k !== 'name')
+assert.deepEqual(capabilityKeys.sort(), ['config', 'label', 'questionSets', 'read', 'replay', 'runs', 'sessions', 'storedSessions', 'subject'])
   assert.equal(Object.isFrozen(service), true, 'a consumer must not be handed something it can mutate')
   // The readers answer rather than throw, which is the property a consumer depends on.
   assert.equal(Array.isArray(service.read({}).events), true)

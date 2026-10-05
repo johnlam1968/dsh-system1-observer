@@ -30,13 +30,21 @@ function fakeQuery() {
   }
 }
 
-test('the adapter is a PLUGIN: it names itself, declares a config, and provides the service', () => {
+test('the adapter is a PLUGIN, and the service is registered as a CLASS', async () => {
   assert.equal(name, 'session-adapter')
   assert.equal(SESSION_ADAPTER_SERVICE, 'sessionAdapter')
-  const ctx = fakeCtx({ query: fakeQuery() })
-  apply(ctx, {})
-  const service = ctx.provided.get(SESSION_ADAPTER_SERVICE)
-  assert.ok(service !== undefined, 'the service is provided under its documented name')
+  const { Context, Service } = await import('@deepseek-ai/cordis')
+  // WHAT `apply` MOUNTS: a class, and one the harness recognises as a service.
+  const mounted = []
+  apply({ plugin: (plugin) => { mounted.push(plugin); return { dispose() {} } }, get: () => undefined }, {})
+  assert.equal(mounted.length, 1, 'apply mounts exactly one thing')
+  assert.equal(typeof mounted[0], 'function', 'and it is a class, not a plain object')
+  assert.ok(mounted[0].prototype instanceof Service, 'which IS a Service subclass -- what the catalogue needs (F107)')
+  // AND REGISTRATION, on a real Context: the constructor is what puts it under its documented name.
+  const ctx = new Context()
+  new (mounted[0])(ctx)
+  const service = ctx.get(SESSION_ADAPTER_SERVICE)
+  assert.ok(service !== undefined, 'registered under its documented name')
   for (const method of ['readSession', 'listSessions', 'currentSurfaceSeqs', 'search', 'available']) {
     assert.equal(typeof service[method], 'function', method + ' is part of the capability')
   }
@@ -44,6 +52,11 @@ test('the adapter is a PLUGIN: it names itself, declares a config, and provides 
   for (const member of ['SUBJECT_KINDS', 'DEFAULT_KINDS', 'eventTypesOf', 'sliceEvents', 'coverageOf']) {
     assert.ok(service[member] !== undefined, member + ' travels with the service')
   }
+  // AND THE INVENTORY IS TRUE OF THE SOURCE: the services this package reaches are the ones it declares.
+  const { HOST_SERVICES } = await import('dsh-session-adapter')
+  const source = await (await import('node:fs/promises')).readFile(new URL('../packages/session-adapter/index.js', import.meta.url), 'utf8')
+  const reached = [...source.matchAll(/ctx\.get\('([A-Za-z]+)'\)/g)].map((m) => m[1])
+  assert.deepEqual([...new Set(reached)].sort(), [...HOST_SERVICES].sort(), 'HOST_SERVICES is exactly what the source reaches')
 })
 
 test('every method delegates to the host, read AT CALL TIME', async () => {

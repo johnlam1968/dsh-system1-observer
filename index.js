@@ -48,6 +48,7 @@ import { createTraceTool } from './lib/tool.js'
 import { asToolDefinition } from './lib/tool-definition.js'
 import { readTraceWindow, runIds } from './lib/trace-report.js'
 import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
+import { Service } from '@deepseek-ai/cordis'
 import { createDecideTool } from './lib/decide-tool.js'
 import { createConfigTool } from './lib/config-tool.js'
 import { createConfigWriter } from './lib/config-writer.js'
@@ -56,6 +57,22 @@ import { createTurnListener } from './lib/turn-listener.js'
 import { registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
 
 const name = 'system1-observer'
+
+/**
+ * THE OBSERVER AS A SERVICE, in the documented form (`services-events.md` 2.1). The row used to `ctx.provide` a plain
+ * object: reachable by `ctx.get`, and absent from the live Service catalogue a compliance audit measured (F107). The
+ * class delegates to the same factory, so nothing about what the service records changes.
+ */
+export class ObserverService extends Service {
+    constructor(ctx, deps) {
+        super(ctx, OBSERVER_SERVICE)
+        Object.assign(this, createObserverService(deps))
+        // FROZEN, BECAUSE IT WAS: the factory's service is frozen so that a consumer cannot mutate what this row
+        // recorded. The class form puts the same values on an instance, and the freeze has to be re-applied -- the base
+        // class's own fields (`ctx`, `name`) are already set by `super`.
+        Object.freeze(this)
+    }
+}
 
 /**
  * This package's own version, read from its manifest rather than restated -- a constant would drift from it.
@@ -763,7 +780,15 @@ async function apply(ctx, config) {
   // readers. Registered with `ctx.provide` -- NOT `ctx.set`, which only replaces an already-provided value and
   // throws otherwise -- and needing no import of cordis, so it costs no dependency. Every method closes over a
   // reader and returns its result, so there is no mutator here by construction; the test asserts the freeze.
-  ctx.provide(OBSERVER_SERVICE, createObserverService({
+  // THE SERVICE IS MOUNTED AS THE DOCUMENTED CLASS (F107): a plain `ctx.provide` object is reachable by injection and
+  // absent from the live Service catalogue, where the harness's own services are listed. A host WITHOUT `ctx.plugin`
+  // -- a test stand-in that only records `provide` -- still gets the same capability under the same name, which is the
+  // same capability check the guards on `ctx.get` above make.
+  // THE SERVICE IS MOUNTED AS THE DOCUMENTED CLASS (F107): a plain `ctx.provide` object is reachable by injection and
+  // absent from the live Service catalogue, where the harness's own services are listed. A host WITHOUT `ctx.plugin`
+  // -- a test stand-in that only records `provide` -- still gets the same capability under the same name, which is the
+  // same capability check the guards on `ctx.get` above make.
+  const serviceDeps = {
     // THE NUDGE VOCABULARY, read live: it decides what the derived label MEANS, and the label is the ground
     // truth every calibration in the report is measured against.
     vocabulary: () => ({
@@ -806,7 +831,9 @@ async function apply(ctx, config) {
       turnEveryNTurns: readConfigValue(liveConfig().turnEveryNTurns) ?? 0,
       pricePerMTokInput: readConfigValue(liveConfig().pricePerMTokInput) ?? null,
     }),
-  }))
+  }
+  if (typeof ctx.plugin === 'function') ctx.plugin(ObserverService, serviceDeps)
+  else ctx.provide(OBSERVER_SERVICE, createObserverService(serviceDeps))
 
   // THE SERVICE, IF THE PROFILE MOUNTS ONE. Read through `ctx.inject` and never captured: the callback runs
   // when the service arrives, which may be after this row mounts. Everything it needs is read from `config` and
