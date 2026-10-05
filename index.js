@@ -43,6 +43,7 @@ import { BINS } from './lib/calibrate.js'
 import { createModel } from './lib/model/client.js'
 import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
+import { instrumentInput, questionGroup, redactionGroup } from './lib/instrument-input.js'
 import { createObserver } from './lib/observe.js'
 import { createTraceTool } from './lib/tool.js'
 import { asToolDefinition } from './lib/tool-definition.js'
@@ -344,7 +345,7 @@ async function apply(ctx, config) {
   const here = dirname(fileURLToPath(import.meta.url))
   // THE MOUNT-BOUND FIELDS, READ ONCE. `hooks` decides which listeners exist, and a transport binds
   // when its client is built, so neither can change under a running row; unwrapping them once is
-  // correct. The VOLATILE fields are deliberately NOT taken from here -- see `readConfig` below.
+  // correct. The VOLATILE fields are deliberately NOT taken from here -- see `readInput` below.
   const mount = plainConfig(config)
   // THE LIVE EVENT FEED: the holder for what the harness commits. It is read by `readEvents` below and is empty
   // until something fills it, which is the next commit -- an empty feed is exactly the previous behaviour.
@@ -384,7 +385,7 @@ async function apply(ctx, config) {
 
   /** The selected set's content hash, or the empty string when the row asks its inline questions. */
   const setHashOf = (config) => {
-    const settings = setSettings(config)
+    const settings = setSettings(questionGroup(config).sets)
     return readSelectedSet(settings.dir, settings.name).hash
   }                        // a typo refuses the mount, naming the seam
 
@@ -400,7 +401,7 @@ async function apply(ctx, config) {
   const evidence = createEvidence({
     defaultPath: resolveTracePath(mount, here),
     envVar: 'SYSTEM1_OBSERVER_TRACE',
-    policy: liveConfig,
+    policy: () => redactionGroup(liveConfig()),
     maxBytes: () => readConfigValue(liveConfig().maxTraceBytes),
   })
   // THE TRANSPORT IS BUILT FROM THE LIVE CONFIG, NOT FROM THE MOUNT SNAPSHOT. `provider`, `model` and `timeoutMs`
@@ -453,7 +454,7 @@ async function apply(ctx, config) {
         // whatever the config said, so the moment a per-seam question existed the mount line would have
         // named a question the row never asked. It is an apply-time snapshot, like `hooks` beside it: the
         // mount line is written once, and a later save is deliberately not re-applied.
-        questionIds: configuredQuestionIds(mount),
+        questionIds: configuredQuestionIds(questionGroup(mount)),
         ...(scopeNote === null ? {} : { scopeNote }),
         // THE INSTRUMENT'S IDENTITY. The probe's question text was authored by intuition, so a run with edited
         // instructions is a NEW MEASUREMENT and not a comparison. Without this, two runs are silently averaged
@@ -461,7 +462,7 @@ async function apply(ctx, config) {
         // THE HASH IS OVER THE QUESTION ACTUALLY IN FORCE, so a row that rewords the probe records a different
         // instrument and no reader has to be told: `instrument` in `lib/compare.js` then refuses to compare its runs
         // with a row that asked the built-in question. That is the constraint working rather than a warning.
-        probeHash: probeFingerprint(probeOf(mount).instructions),
+        probeHash: probeFingerprint(probeOf(questionGroup(mount)).instructions),
         // THE DECLARED AXES, as the run STARTED (the same snapshot rule `hooks` follows). Omitted when nothing is
         // declared, so an unlabelled run says so by absence rather than by a hash of the empty string.
         ...(labelHash(mount.harnessLabel) === '' ? {} : { harnessHash: labelHash(mount.harnessLabel) }),
@@ -473,7 +474,7 @@ async function apply(ctx, config) {
         // The DEVIANT set, because "nothing is off" is the common case and a list of nine booleans buries it --
         // and the two seams that carry no text are excluded, because they are not switched off, they are
         // inapplicable, and a line that cannot tell those apart reports a decision nobody made.
-        seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live, seam)),
+        seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live.seamEnabled, seam)),
         // A BOUND NOBODY CAN READ IS NOT A BOUND. The cap that rotates this file is only auditable if the
         // record says how often it fired and how much moved, and the mount line is where a run's scope lives.
         rotated: evidence.rotations(),
@@ -492,7 +493,7 @@ async function apply(ctx, config) {
           includeNonOperatorFacing: readConfigValue(live.includeNonOperatorFacing) === true,
           sessions: readSessions(live),
           hooks,
-          seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live, seam)),
+          seamsOff: PROBE_SEAMS.filter(seam => !TEXTLESS_SEAMS.includes(seam) && !seamCallsEnabled(live.seamEnabled, seam)),
         }),
         // The list as written: `['*']` is every session and `[]` is none, so REWRITING it would destroy the
         // only distinction this field has.
@@ -572,7 +573,7 @@ async function apply(ctx, config) {
       idleGap: () => readConfigValue(liveConfig().idleGapMs),
       compareLanes: () => readConfigValue(liveConfig().maxCompareLanes),
       calibrationBins: () => readConfigValue(liveConfig().calibrationBins),
-      probe: () => probeOf(liveConfig()).instructions,
+      probe: () => probeOf(questionGroup(liveConfig())).instructions,
     }))
       // SYSTEM1_RESULTS: the trace read as MEASUREMENTS rather than as a chronology (ROADMAP 13.3 item 1). It
       // shares the trace tool's path, and it exists because the question an agent asks before changing a setting
@@ -591,7 +592,7 @@ async function apply(ctx, config) {
       // `replace`, and answers with the composition hash read back from disk -- so an agent can say which
       // instrument it just created rather than which one it intended to.
       register(createQuestionsTool({
-        dir: () => setSettings(liveConfig()).dir,
+        dir: () => setSettings(questionGroup(liveConfig()).sets).dir,
       }))
       // SYSTEM1_SESSIONS: the agent-facing half of the session story. DSH gives an agent live peers and a plugin
       // the whole corpus; nothing let an agent NAME a stored session, which is why every historical read here was a
@@ -603,8 +604,8 @@ async function apply(ctx, config) {
       // `experiment` line rather than a reading: an accuracy on five fabricated cases must not sit in a table of
       // judgements about somebody's real conversation.
       register(createBatteryTool({
-        dir: () => setSettings(liveConfig()).dir,
-        setsDir: () => setSettings(liveConfig()).dir,
+        dir: () => setSettings(questionGroup(liveConfig()).sets).dir,
+        setsDir: () => setSettings(questionGroup(liveConfig()).sets).dir,
         decide: (request, options) => decide(request, options),
         record: (line) => {
           const { event, ...fields } = line
@@ -693,7 +694,7 @@ async function apply(ctx, config) {
         const named = typeof asked.set === 'string' && asked.set.trim() !== '' ? asked.set.trim() : null
         if (named !== null) {
           const scope = typeof asked.scope === 'string' && asked.scope.trim() !== '' ? asked.scope.trim() : SESSION_HOOK
-          const built = buildQuestions(Object.assign({}, liveConfig(), { questionSet: named, seamEnabled: { [scope]: true } }), scope)
+          const built = buildQuestions(questionGroup(Object.assign({}, liveConfig(), { questionSet: named })), scope)
           if ((built.problems ?? []).length > 0) return built
           if (Object.keys(built.questions ?? {}).length > 0) return built
           return { questions: {}, problems: ['the set "' + named + '" declares no "' + scope + '" scope, so a judgement at it would have nothing to answer -- it declares: ' + 'none' ] }
@@ -707,13 +708,13 @@ async function apply(ctx, config) {
         const config = liveConfig()
         // A SESSION HAS ITS OWN SCOPE. Before this it asked the TURN questions, which is the gap the three-scope
         // taxonomy exposed: a conversation judged with questions written about one exchange.
-        const atSession = buildQuestions(Object.assign({}, config, { seamEnabled: { [SESSION_HOOK]: true } }), SESSION_HOOK)
+        const atSession = buildQuestions(questionGroup(config), SESSION_HOOK)
         if ((atSession.problems ?? []).length > 0) return atSession
         if (Object.keys(atSession.questions ?? {}).length > 0) return atSession
         // THE FALLBACK IS DELIBERATE AND PRESERVES BEHAVIOUR -- and it is applied to the EFFECTIVE questions rather
         // than to the inline map, so a row with no session questions keeps asking the aggregate set it already
         // asked, whether those turn questions were written inline or come from a selected set.
-        const atTurn = buildQuestions(Object.assign({}, config, { seamEnabled: { [TURN_HOOK]: true } }), TURN_HOOK)
+        const atTurn = buildQuestions(questionGroup(config), TURN_HOOK)
         if ((atTurn.problems ?? []).length > 0) return atTurn
         if (Object.keys(atTurn.questions ?? {}).length > 0) return atTurn
         // ASKING NOTHING IS NOT AN ANSWER. An empty map would send the model a whole conversation with no question
@@ -723,7 +724,7 @@ async function apply(ctx, config) {
         // measures BOTH dimensions. The two rungs above are unchanged and deliberate: a row's session questions, then
         // the aggregate set it already asked. This rung is what removes the row from the list of things a measurement
         // NEEDS. Three rungs, in order: the caller's `set`, the row's config, the plugin's `session@1`.
-        const bundled = buildQuestions(Object.assign({}, config, { questionSet: DEFAULT_SESSION_SET, seamEnabled: { [SESSION_HOOK]: true } }), SESSION_HOOK)
+        const bundled = buildQuestions(questionGroup(Object.assign({}, config, { questionSet: DEFAULT_SESSION_SET })), SESSION_HOOK)
         if ((bundled.problems ?? []).length === 0 && Object.keys(bundled.questions ?? {}).length > 0) return bundled
         return {
           questions: {},
@@ -755,7 +756,7 @@ async function apply(ctx, config) {
       schema: () => Config.dict,
       // THE SETS A MODEL CAN CHOOSE FROM, listed live: a model should not have to guess a filename, and a broken
       // file must be visible as a named problem rather than as an absent option.
-      sets: () => listSets(setSettings(liveConfig()).dir),
+      sets: () => listSets(setSettings(questionGroup(liveConfig()).sets).dir),
       record: (line) => {
         const { event, ...fields } = line
         evidence.trace(event, fields)
@@ -825,7 +826,7 @@ async function apply(ctx, config) {
       // left this out, so a consumer could see that calls were recorded but not WHAT was asked -- and a count of
       // answers is not interpretable without the questions they answer. Read through the same reader the mount line
       // uses, so the two cannot disagree about what the row is configured to ask.
-      questionIds: configuredQuestionIds(liveConfig()),
+      questionIds: configuredQuestionIds(questionGroup(liveConfig())),
       provider: readConfigValue(liveConfig().provider) ?? null,
       model: readConfigValue(liveConfig().model) ?? null,
       turnEveryNTurns: readConfigValue(liveConfig().turnEveryNTurns) ?? 0,
@@ -848,7 +849,7 @@ async function apply(ctx, config) {
     // `attributes` is a string map that can carry a path or a credential shape as easily as the body can --
     // `sanitizeJson` also redacts by KEY, so an attribute NAMED `token` loses its value too. It deep-clones, which
     // is what the waterfall requires: the record handed over must not be mutated.
-    scrub: (record) => sanitizeJson(record, redactPolicy(liveConfig())),
+    scrub: (record) => sanitizeJson(record, redactPolicy(redactionGroup(liveConfig()))),
   })
 
   // THE CONFIG EDITOR, captured rather than reached for, for the same reason as the service: it may arrive after
@@ -885,17 +886,17 @@ async function apply(ctx, config) {
   // THE VOLATILE FIELDS COME FROM THE SPREAD, `provider` AND `model` INCLUDED. They used to be overridden with the
   // mount snapshot here, because they were not volatile and the spread would have supplied `undefined`; with them
   // volatile the override is what would freeze them, so it is gone.
-  const readConfig = () => ({
-    ...plainConfig(config),
-    transport: transport.kind,
-  })
+  // THE INPUT OBJECT, BUILT PER FIRING. `liveConfig()` unwraps every `Volatile`, and `lib/instrument-input.js` maps
+  // the row's keys into the instrument's groups -- so the observer below reads no setting of ours, and a saved value
+  // reaches the next line without a re-apply.
+  const readInput = (point) => instrumentInput(liveConfig(), { point, transport: transport.kind })
   // THE HOOK SET, READ AT EACH FIRING. Tolerant where `readHooks` is strict: a typo is a mount error (that call
   // throws at load), but a value edited while running must not be able to break the loop, and a hook nobody
   // configured is a hook that does not fire -- so a malformed live value falls back to the defaults.
   const liveHooks = () => {
     try { return readHooks(liveConfig()) } catch { return readHooks({}) }
   }
-  const observer = createObserver({ decide: (request, options) => decide(request, options), trace: evidence.trace, readConfig })
+  const observer = createObserver({ decide: (request, options) => decide(request, options), trace: evidence.trace, readInput })
 
   // THE TURN TRIGGER. It fires on `agent/pre-step` -- the event the `admit` seam maps to -- because an admit ENDS
   // the turn before it, so the exchange being judged has closed by the time this runs.
@@ -1322,7 +1323,9 @@ async function apply(ctx, config) {
     // including when the first event of a run is a subagent's `skip`.
     observe: (hook, text, meta) => { writeMount(); return observer.observe(hook, text, meta) },
     skip: (hook, meta, reason) => { writeMount(); return observer.skip(hook, meta, reason) },
-    readConfig,
+    // THE ROW, PLAIN, for the two listener-level gates (`observeSubagents`, `includeNonOperatorFacing`): they are
+    // decided before the instrument is asked anything, so they read the config directly rather than an input object.
+    readConfig: () => liveConfig(),
     hookEnabled: (seam) => liveHooks().includes(seam),
     // THE AGENT, NOT ITS ID: the `draft` seam reads both `agent.id` and the session origin from this one
     // object, and `isSubagent` needs the latter.

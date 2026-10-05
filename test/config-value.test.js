@@ -18,6 +18,7 @@ import { plainConfig, readConfigValue } from '../lib/config-value.js'
 import { readHooks } from '../lib/register.js'
 import { buildQuestions } from '../lib/questions.js'
 import { createObserver } from '../lib/observe.js'
+import { instrumentInput, questionGroup } from '../lib/instrument-input.js'
 
 const accessor = (value) => ({ get: () => value })
 const fakeCtx = () => {
@@ -71,14 +72,18 @@ test('the mount-bound fields are unwrapped where they are used', () => {
   assert.doesNotMatch(blank, /^\/pkg/)
 })
 
-test('the call-time fields are unwrapped where they are read', () => {
-  const questions = buildQuestions({ question: accessor('  Does this look complete?  ') }, 'admit').questions
+test('the call-time fields are unwrapped where the INPUT is built', () => {
+  // THE UNWRAP MOVED, AND IT MOVED TO ONE PLACE. These fields used to be unwrapped inside the instrument, which is
+  // why the instrument could not be extracted; now `lib/instrument-input.js` is the only bridge, and the test asserts
+  // the same property one step earlier: a Cordis accessor handed to the ROW reaches the instrument as a value.
+  const group = (raw) => questionGroup(plainConfig(raw))
+  const questions = buildQuestions(group({ question: accessor('  Does this look complete?  ') }), 'admit').questions
   assert.equal(questions.probe.type, 'noul')
   assert.equal(questions.probe.instructions, 'Does this look complete?')
-  assert.equal(buildQuestions({ question: accessor('') }, 'admit').questions.probe.type, 'choice', 'an empty accessor falls back to the probe')
+  assert.equal(buildQuestions(group({ question: accessor('') }), 'admit').questions.probe.type, 'choice', 'an empty accessor falls back to the probe')
   // `questions` is volatile too, so it arrives as an accessor: read as a plain value the object would be
   // one opaque field and the per-seam map would never be seen.
-  const perSeam = buildQuestions({ questions: accessor({ admit: [{ id: 'q', type: 'noul', instructions: 'Is this the operator?' }] }) }, 'admit').questions
+  const perSeam = buildQuestions(group({ questions: accessor({ admit: [{ id: 'q', type: 'noul', instructions: 'Is this the operator?' }] }) }), 'admit').questions
   assert.deepEqual(Object.keys(perSeam), ['q'])
   assert.equal(perSeam.q.instructions, 'Is this the operator?')
 
@@ -88,7 +93,7 @@ test('the call-time fields are unwrapped where they are read', () => {
     trace: (event, fields) => lines.push({ event, ...(typeof fields === 'function' ? fields() : fields) }),
     // A SESSION MUST BE NAMED or every firing is a `session not observed` skip and this never reaches the
     // excerpt it is about -- observation is opt-in.
-    readConfig: () => ({ maxFieldChars: accessor(10), transport: 'service', sessions: accessor(['session-a']) }),
+    readInput: (point) => instrumentInput(plainConfig({ maxFieldChars: accessor(10), transport: 'service', sessions: accessor(['session-a']) }), { point, transport: 'service' }),
   })
   return observer.observe('draft', 'x'.repeat(50), { agentId: 'session-a' }).then(() => {
     assert.equal(lines[0].excerpt.length, 10, 'a maxFieldChars accessor must bound the excerpt')

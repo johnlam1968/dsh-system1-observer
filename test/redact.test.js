@@ -11,6 +11,7 @@ import {
   PATH_MODES, basenameOf, cutHeadTail, isRedactedKey, minimisePaths, redactPolicy, redactText, sanitizeField,
   sanitizeJson, sanitizeToolText, tokenizeKey,
 } from '../lib/redact.js'
+import { instrumentInput } from '../lib/instrument-input.js'
 
 const ON = redactPolicy({})
 const OFF = redactPolicy({ redactEnabled: false })
@@ -230,7 +231,7 @@ test('minimisation never touches the MODEL’s copy, which is the whole design',
   const observer = createObserver({
     decide: async (request) => { handed = request; return { kind: 'answers', answers: {} } },
     trace: (event, fields) => lines.push({ event, ...(typeof fields === 'function' ? fields() : fields) }),
-    readConfig: () => ({ transport: 'service', provider: 'p', model: 'm', maxFieldChars: 5000, sessions: ['session-test'], pathMode: 'omit' }),
+    readInput: (point) => instrumentInput({ transport: 'service', provider: 'p', model: 'm', maxFieldChars: 5000, sessions: ['session-test'], pathMode: 'omit' }, { point, transport: 'service' }),
   })
   await observer.observe('pre_execute', 'bash {"cmd":"cat /home/john/private/notes.txt"}', { agentId: 'session-test' })
   assert.match(handed.state.text, /\/home\/john\/private\/notes\.txt/, 'the judge still sees the real path')

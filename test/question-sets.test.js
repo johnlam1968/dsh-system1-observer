@@ -10,6 +10,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledSetsDir, SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../lib/question-sets.js'
+import { plainConfig } from '../lib/config-value.js'
+import { questionGroup } from '../lib/instrument-input.js'
 import { QUESTION_SCOPES, buildQuestions } from '../lib/questions.js'
 
 const dirWith = (files) => {
@@ -87,14 +89,17 @@ test('a directory that is missing or is not a directory is a named problem', () 
   assert.match(String(listedEmpty.sets[0].problem), /no scope files/)
 })
 
-test('the settings are read live, in the volatile accessor shape a running row passes', () => {
+test('the set location comes from the row, unwrapped by the APPLICATION before it arrives', () => {
   // NO ROW DIRECTORY IS NO LONGER AN ERROR: the bundled `criteria/` answers, so measuring a session does not depend
   // on the row naming a directory (and a row that names one still wins -- asserted on the next line).
   assert.deepEqual(setSettings({}), { dir: bundledSetsDir(), name: '' })
   assert.equal(setSettings({}).dir.endsWith('/criteria'), true)
-  assert.deepEqual(setSettings({ questionSetsDir: { get: () => ' /tmp/sets ' }, questionSet: { get: () => ' house ' } }), { dir: '/tmp/sets', name: 'house' })
+  // THE VOLATILE SHAPE A RUNNING ROW PASSES is unwrapped by `plainConfig` and mapped by `questionGroup` -- both the
+  // application's -- so the instrument is handed plain strings and has no reader of its own (F110).
+  const row = plainConfig({ questionSetsDir: { get: () => ' /tmp/sets ' }, questionSet: { get: () => ' house ' } })
+  assert.deepEqual(setSettings(questionGroup(row).sets), { dir: '/tmp/sets', name: 'house' })
   // A JUNK VALUE IS THE EMPTY SELECTION, not a path built from a number: the fallback is the inline questions.
-  assert.deepEqual(setSettings({ questionSetsDir: 42, questionSet: null }), { dir: bundledSetsDir(), name: '' })
+  assert.deepEqual(setSettings({ dir: 42, name: null }), { dir: bundledSetsDir(), name: '' })
 })
 
 test('EVERY shipped set compiles clean for every scope it keys, and names only declared scopes', async () => {

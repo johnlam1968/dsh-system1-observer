@@ -155,9 +155,12 @@ test('events: every declared event is in the generated catalogue, with its mode'
 })
 
 test('events: every catalogue name this plugin relies on appears in the sources', () => {
-  const sources = read('index.js') + read('lib/seams.js')
+  // THE ROW, THE INSTRUMENT'S POINT TABLE, AND THE APPLICATION'S EVENT MAP. The event names used to live in
+  // `lib/seams.js`; they moved to `lib/host-events.js` so the instrument names no harness event at all (F110), and a
+  // scan that did not follow them would report every one of them missing.
+  const sources = read('index.js') + read('lib/seams.js') + read('lib/host-events.js')
   for (const name of Object.keys(CATALOGUE)) {
-    assert.ok(sources.includes(`'${name}'`), `${name} is in the checksum but nowhere in the row or the seam table`)
+    assert.ok(sources.includes(`'${name}'`), `${name} is in the checksum but nowhere in the row, the point table or the event map`)
   }
 })
 

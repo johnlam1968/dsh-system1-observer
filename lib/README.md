@@ -124,6 +124,11 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `egress.js` — what leaves the process, and where it goes
 * `telemetry.js` — the harness's own outbound telemetry, which is unredacted
 * `config-value.js` — reading a config field, when the field may be an accessor
+* `instrument-input.js` — THE BRIDGE: the row's settings -> the instrument's one input object (`point`, `callsEnabled`,
+  `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport`). The only place a plain read of a setting is
+  allowed besides `readConfigValue`, because it is where every `Volatile` is unwrapped before the instrument sees it
+* `host-events.js` — which dsh event each point attaches to: the APPLICATION's half of the point descriptor, split out
+  of `seams.js` so the instrument names no harness event
 * `config-writer.js` — the write, as a module, so the dangerous part is tested
 * `service.js` — the observer as a service, so another row can read what this one measured
 

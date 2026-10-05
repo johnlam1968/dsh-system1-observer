@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildQuestions, questionCap, configuredQuestionIds, hasSpecs, readQuestionConfig } from '../lib/questions.js'
+import { questionGroup } from '../lib/instrument-input.js'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -259,7 +260,9 @@ test('a SELECTED SET is the row\u2019s questions, and one that cannot be read re
   writeFileSync(join(dir, 'house.json'), JSON.stringify({
     admit: [{ id: 'go', type: 'noul', instructions: 'did that go well?' }],
   }))
-  const withSet = { questionSetsDir: dir, questionSet: 'house', question: 'the inline legacy question' }
+  // THE ROW BECOMES THE INSTRUMENT'S QUESTION GROUP FIRST. `buildQuestions` reads the group, and
+  // `questionGroup` is the application's bridge; a row-shaped object here would test a shape nothing passes.
+  const withSet = questionGroup({ questionSetsDir: dir, questionSet: 'house', question: 'the inline legacy question' })
   const built = buildQuestions(withSet, 'admit')
   assert.deepEqual(built.problems, [], 'a readable set builds without problems: ' + JSON.stringify(built))
   assert.deepEqual(Object.keys(built.questions), ['go'], 'the SET question is asked, not the inline one: ' + JSON.stringify(Object.keys(built.questions)))
@@ -270,12 +273,12 @@ test('a SELECTED SET is the row\u2019s questions, and one that cannot be read re
   assert.deepEqual(buildQuestions(withSet, 'draft').questions, {}, 'per-seam mode: an unnamed seam asks nothing')
   // A SET THAT CANNOT BE READ IS A NAMED PROBLEM AND NO QUESTION: falling back would measure something else under the
   // name of the set, which is the failure this register keeps recording.
-  const missing = buildQuestions({ questionSetsDir: dir, questionSet: 'absent' }, 'admit')
+  const missing = buildQuestions(questionGroup({ questionSetsDir: dir, questionSet: 'absent' }), 'admit')
   assert.deepEqual(missing.questions, {}, 'no question is asked when the set is missing')
   assert.equal(missing.problems.length, 1)
   assert.match(missing.problems[0], /cannot read/, 'and the reason names the file')
   // A SET SELECTED WITH NOWHERE TO LOOK is the same refusal rather than a silent return to the inline questions.
-  const nowhere = buildQuestions({ questionSet: 'house' }, 'admit')
+  const nowhere = buildQuestions(questionGroup({ questionSet: 'house' }), 'admit')
   assert.deepEqual(nowhere.questions, {})
   // AND A SET WITH NO ROW DIRECTORY IS LOOKED FOR IN THE BUNDLED ONE, so the refusal names the file it could not read
   // rather than reporting a missing directory. The refusal is the point; where it looked is now a default, not a row.

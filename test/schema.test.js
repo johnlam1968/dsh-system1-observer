@@ -165,11 +165,18 @@ test('every volatile setting is read somewhere, or is named in the exception lis
   // THE PATTERN IS DELIBERATELY NARROW: the field name must appear INSIDE a `readConfigValue(...)` call, because the
   // name alone appears in the schema itself and a loose scan would pass on the very definition it polices.
   const readSomewhere = (field) => new RegExp('readConfigValue\\([^\\n]*\\.' + field + '\\b').test(source)
+  // THE SECOND LEGAL ROUTE, AND IT IS ONE NAMED FILE. `lib/instrument-input.js` is the bridge that turns the row into
+  // the instrument's input object, so the settings IT reads are plain by construction (it is handed `plainConfig`),
+  // and a scan that knew only `readConfigValue` reported every one of them unread -- measured: seven fields, all of
+  // them read, on the first run after the instrument stopped unwrapping its own config (`F110`). The bridge is NAMED
+  // rather than "any file": a read that appears anywhere else is still a failure.
+  const bridge = readFileSync('lib/instrument-input.js', 'utf8')
+  const isRead = (field) => readSomewhere(field) || new RegExp('\\.' + field + '\\b').test(bridge)
   // THE EXCEPTIONS, each with the reason it needs none: these are read as objects through `plainConfig`, which
   // unwraps every volatile accessor at once. Asserted volatile below, so the list cannot outlive its members.
   const VIA_PLAIN_CONFIG = ['hooks', 'questions', 'seamEnabled']
   const volatile = Object.keys(dict).filter((field) => dict[field].meta?.volatile === true)
-  const unread = volatile.filter((field) => !readSomewhere(field) && !VIA_PLAIN_CONFIG.includes(field))
+  const unread = volatile.filter((field) => !isRead(field) && !VIA_PLAIN_CONFIG.includes(field))
   assert.deepEqual(unread, [], 'these settings are writable and nothing reads them: ' + unread.join(', '))
   for (const field of VIA_PLAIN_CONFIG) {
     assert.equal(dict[field]?.meta?.volatile, true, field + ' is listed as read via plainConfig, so it must be volatile')

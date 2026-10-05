@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createObserver } from '../lib/observe.js'
 import { exitCodeOf } from '../lib/seams.js'
 import { labelHash } from '../lib/label-hash.js'
+import { instrumentInput } from '../lib/instrument-input.js'
 
 function recorder() {
   const lines = []
@@ -21,10 +22,20 @@ function observed(observer, hook, text, meta = {}) {
   return observer.observe(hook, text, { turn: 1, step: 2, ...meta, agentId: TEST_SESSION })
 }
 
+// A FIXTURE IS STILL A CONFIG. The observer reads the instrument's INPUT now (`readInput`), and the bridge from a
+// row's config to that input is the application's own function -- so these tests keep describing a config and let
+// `lib/instrument-input.js` do the mapping, rather than hand-building an object the application may not build.
+// It takes a config OR an accessor for one: `readInput` is read at the point of use, so a test about a setting that
+// changes while the row runs has to keep the accessor rather than a snapshot.
+const inputOf = (values) => (point) => {
+  const config = typeof values === 'function' ? values() : values
+  return instrumentInput(config, { point, transport: config?.transport })
+}
+
 test('a successful call is traced with both halves of the exchange', async () => {
   const { lines, trace } = recorder()
   const answer = { kind: 'answers', answers: { probe: { type: 'choice', label: 'model_output', confidence: 0.9 } } }
-  const observer = createObserver({ decide: async () => answer, trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => answer, trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'hello', { agentId: 'a1', turn: 1, step: 2, purpose: null })
   assert.equal(lines.length, 1)
   assert.equal(lines[0].event, 'call')
@@ -47,7 +58,7 @@ test('a successful call is traced with both halves of the exchange', async () =>
 
 test('a failing decide is traced as an error, never thrown, and never reaches the loop', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => { throw new Error('boom') }, trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => { throw new Error('boom') }, trace, readInput: inputOf(config)})
   await observed(observer, 'pre_execute', 'bash {"command":"ls"}', { agentId: 'a1' })
   assert.equal(lines.length, 1)
   assert.equal(lines[0].event, 'error')
@@ -68,7 +79,7 @@ test('a call records requested and executed from the result envelope at the top 
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {}, envelope }),
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'draft', 'hi', { agentId: 'a1' })
   assert.equal(lines[0].event, 'call')
@@ -84,7 +95,7 @@ test('a wire-shaped result projects requested as null and executed from the enve
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {}, worstCase: 0, envelope, rawAnswers: {} }),
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'draft', 'hi', { agentId: 'a1' })
   assert.equal(lines[0].requested, null)
@@ -98,7 +109,7 @@ test('a top-level requested/executed is not projected: the envelope is the only 
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {}, requested: { provider: 't' }, executed: { provider: 't' } }),
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'draft', 'hi', { agentId: 'a1' })
   assert.equal(lines[0].requested, null)
@@ -114,7 +125,7 @@ test('a returned error result is written as an error line with its reason, and n
   const observer = createObserver({
     decide: async () => ({ kind: 'error', reason: 'the request timed out after 8000 ms' }),
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'draft', 'hi', { agentId: 'a1' })
   assert.equal(lines.length, 1, 'an error result must not also write a call line')
@@ -127,7 +138,7 @@ test('a returned error result is written as an error line with its reason, and n
 
 test('a returned error result with no reason still writes an error line', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'error' }), trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => ({ kind: 'error' }), trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'hi', {})
   assert.equal(lines.length, 1)
   assert.equal(lines[0].event, 'error')
@@ -139,7 +150,7 @@ test('a result that is neither answers nor an error is still recorded as a call'
   // The error branch must not swallow every unreadable result: a result of any other kind keeps the `call`
   // line, which is what today's behaviour does and what the spec's `call` line is for.
   const odd = { kind: 'something-else', detail: 'kept' }
-  const observer = createObserver({ decide: async () => odd, trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => odd, trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'hi', {})
   assert.equal(lines.length, 1)
   assert.equal(lines[0].event, 'call')
@@ -148,7 +159,7 @@ test('a result that is neither answers nor an error is still recorded as a call'
 
 test('a state longer than maxFieldChars is truncated and marked', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => ({ ...config, maxFieldChars: 10 }) })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf({ ...config, maxFieldChars: 10 })})
   await observed(observer, 'draft', 'x'.repeat(50), {})
   assert.equal(lines[0].excerpt.length, 10)
   assert.equal(lines[0].truncated, true)
@@ -160,7 +171,7 @@ test('a seam with no text is recorded as a skip and never reaches the model', as
   const observer = createObserver({
     decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'close', '', { agentId: 'a1' })
   await observed(observer, 'request', '   ', { agentId: 'a1' })
@@ -176,7 +187,7 @@ test('a throwing trace cannot fail the turn', async () => {
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {} }),
     trace: () => { throw new Error('the disk is gone') },
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await assert.doesNotReject(() => observed(observer, 'draft', 'hi', {}))
 })
@@ -198,7 +209,7 @@ test('a configured seam asks its own question, under its own id', async () => {
   const observer = createObserver({
     decide: async (request) => { seen.push(request); return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => configuredWith('draft', [{ id: 'purpose', type: 'noul', instructions: 'Is this the reply?' }]),
+    readInput: inputOf(configuredWith('draft', [{ id: 'purpose', type: 'noul', instructions: 'Is this the reply?' }])),
   })
   await observed(observer, 'draft', 'hello', {})
   assert.equal(lines.length, 1)
@@ -215,7 +226,7 @@ test('a seam with no configured question is a skip and never reaches the model',
   const observer = createObserver({
     decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => configuredWith('admit', [{ id: 'opening', type: 'noul', instructions: 'Is this the operator?' }]),
+    readInput: inputOf(configuredWith('admit', [{ id: 'opening', type: 'noul', instructions: 'Is this the operator?' }])),
   })
   await observed(observer, 'draft', 'hello', { agentId: 'a1' })
   assert.equal(called, 0, 'a seam with no question must not reach the model')
@@ -231,7 +242,7 @@ test('a broken spec is a skip that names the problem, and never a throw', async 
   const observer = createObserver({
     decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => configuredWith('admit', [{ id: 'q', type: 'choice', instructions: 'x', options: [{ label: 'a', criterion: 'b', abstain: true }] }]),
+    readInput: inputOf(configuredWith('admit', [{ id: 'q', type: 'choice', instructions: 'x', options: [{ label: 'a', criterion: 'b', abstain: true }] }])),
   })
   await assert.doesNotReject(() => observed(observer, 'admit', 'hello', {}))
   assert.equal(called, 0)
@@ -246,10 +257,10 @@ test('a partly broken config still asks the good question and records the proble
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {} }),
     trace,
-    readConfig: () => configuredWith('admit', [
+    readInput: inputOf(configuredWith('admit', [
       { id: 'good', type: 'noul', instructions: 'Is this the operator?' },
       { id: 'bad', type: 'score', instructions: 'x', levels: ['one'] },
-    ]),
+    ])),
   })
   await observed(observer, 'admit', 'hello', {})
   assert.equal(lines[0].event, 'call')
@@ -260,7 +271,7 @@ test('a partly broken config still asks the good question and records the proble
 
 test('an unconfigured row keeps asking the probe question -- the upgrade path', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'hello', {})
   assert.equal(lines[0].event, 'call')
   assert.deepEqual(Object.keys(lines[0].questions), ['probe'])
@@ -275,7 +286,7 @@ test('callsEnabled false records a skip at every seam and makes no request', asy
   const observer = createObserver({
     decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, callsEnabled: false, questions: configuredWith('draft', [{ id: 'q', type: 'noul', instructions: 'x' }]).questions }),
+    readInput: inputOf({ ...config, callsEnabled: false, questions: configuredWith('draft', [{ id: 'q', type: 'noul', instructions: 'x' }]).questions }),
   })
   await observed(observer, 'draft', 'hello', { agentId: 'a1' })
   await observed(observer, 'admit', 'hello', { agentId: 'a1' })
@@ -288,14 +299,14 @@ test('callsEnabled false records a skip at every seam and makes no request', asy
 })
 
 test('an absent callsEnabled leaves the observer ON, and true is on too', async () => {
-  for (const readConfig of [
-    () => config,                                    // the field has never been written
-    () => ({ ...config, callsEnabled: true }),
-    () => ({ ...config, callsEnabled: 'yes' }),      // not exactly false, so not off
+  for (const readInput of [
+    inputOf(config),                                 // the field has never been written
+    inputOf({ ...config, callsEnabled: true }),
+    inputOf({ ...config, callsEnabled: 'yes' }),     // not exactly false, so not off
   ]) {
     const { lines, trace } = recorder()
     let called = 0
-    const observer = createObserver({ decide: async () => { called += 1; return { kind: 'answers', answers: {} } }, trace, readConfig })
+    const observer = createObserver({ decide: async () => { called += 1; return { kind: 'answers', answers: {} } }, trace, readInput })
     await observed(observer, 'draft', 'hello', {})
     assert.equal(called, 1, 'only an explicit false may disable the calls')
     assert.equal(lines[0].event, 'call')
@@ -309,7 +320,7 @@ test('the switch is read at the point of use, so flipping it does not need a re-
   const observer = createObserver({
     decide: async () => { called += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, callsEnabled: enabled }),
+    readInput: inputOf(() => ({ ...config, callsEnabled: enabled })),
   })
   await observed(observer, 'draft', 'hello', {})
   enabled = false
@@ -328,7 +339,7 @@ test('a seam switched off records its own reason and leaves the other seams alon
   const observer = createObserver({
     decide: async (request) => { called.push(request.state.hook); return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, seamEnabled: { draft: false } }),
+    readInput: inputOf({ ...config, seamEnabled: { draft: false } }),
   })
   await observed(observer, 'draft', 'hello', {})
   await observed(observer, 'admit', 'hello', {})
@@ -348,7 +359,7 @@ test('an unset or absent seam switch means ON -- the upgrade path', async () => 
   ]) {
     const { lines, trace } = recorder()
     let calls = 0
-    const observer = createObserver({ decide: async () => { calls += 1; return { kind: 'answers', answers: {} } }, trace, readConfig: () => ({ ...config, seamEnabled }) })
+    const observer = createObserver({ decide: async () => { calls += 1; return { kind: 'answers', answers: {} } }, trace, readInput: inputOf({ ...config, seamEnabled })})
     await observed(observer, 'draft', 'hello', {})
     assert.equal(lines[0].event, 'call', `seamEnabled ${JSON.stringify(seamEnabled)} must leave the seam ON`)
     assert.equal(calls, 1)
@@ -361,7 +372,7 @@ test('the master switch wins over a seam switch that is on', async () => {
   const observer = createObserver({
     decide: async () => { calls += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, callsEnabled: false, seamEnabled: { draft: true } }),
+    readInput: inputOf({ ...config, callsEnabled: false, seamEnabled: { draft: true } }),
   })
   await observed(observer, 'draft', 'hello', {})
   assert.equal(lines[0].reason, 'calls disabled', 'a paused row says so once, not per seam')
@@ -377,7 +388,7 @@ test('a firing from another session is a skip with its own reason', async () => 
   const observer = createObserver({
     decide: async (request) => { called.push(request.state.hook); return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, sessions: ['session-target'] }),
+    readInput: inputOf({ ...config, sessions: ['session-target'] }),
   })
   await observer.observe('draft', 'hello', { agentId: 'session-other-1' })
   await observer.observe('draft', 'hello', { agentId: 'session-target-abc' })
@@ -391,7 +402,7 @@ test('a firing from another session is a skip with its own reason', async () => 
 test('an empty session list observes NOTHING -- opt-in, and off until a session is named', async () => {
   const { lines, trace } = recorder()
   let calls = 0
-  const observer = createObserver({ decide: async () => { calls += 1; return { kind: 'answers', answers: {} } }, trace, readConfig: () => ({ ...config, sessions: [] }) })
+  const observer = createObserver({ decide: async () => { calls += 1; return { kind: 'answers', answers: {} } }, trace, readInput: inputOf({ ...config, sessions: [] })})
   await observer.observe('draft', 'hello', { agentId: 'session-anything' })
   assert.equal(lines[0].event, 'skip')
   assert.equal(lines[0].reason, 'session not observed')
@@ -405,7 +416,7 @@ test('the session gate is decided before the seam gate', async () => {
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: {} }),
     trace,
-    readConfig: () => ({ ...config, sessions: ['session-target'], seamEnabled: { draft: false } }),
+    readInput: inputOf({ ...config, sessions: ['session-target'], seamEnabled: { draft: false } }),
   })
   await observer.observe('draft', 'hello', { agentId: 'session-other' })
   assert.equal(lines[0].reason, 'session not observed', 'who comes before what')
@@ -419,7 +430,7 @@ test('the master switch still outranks the session gate', async () => {
   const observer = createObserver({
     decide: async () => { calls += 1; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, callsEnabled: false, sessions: ['session-target'] }),
+    readInput: inputOf({ ...config, callsEnabled: false, sessions: ['session-target'] }),
   })
   await observer.observe('draft', 'hello', { agentId: 'session-other' })
   assert.equal(lines[0].reason, 'calls disabled', 'a paused row is paused everywhere, whatever the target')
@@ -436,13 +447,13 @@ test('the model that produced the text is recorded on call lines and skip lines 
   const observer = createObserver({
     decide: async () => ({ kind: 'answers', answers: { probe: { type: 'choice', label: 'model_output', confidence: 0.9 } } }),
     trace,
-    readConfig: () => config,
+    readInput: inputOf(config),
   })
   await observed(observer, 'draft', 'hello', { subject })
   assert.deepEqual(lines[0].subject, subject, 'a call says who wrote the text')
 
   const { lines: skips, trace: traceSkip } = recorder()
-  const quiet = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace: traceSkip, readConfig: () => config })
+  const quiet = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace: traceSkip, readInput: inputOf(config)})
   await observed(quiet, 'draft', '', { subject })
   assert.equal(skips[0].event, 'skip')
   assert.deepEqual(skips[0].subject, subject, 'and so does a skip')
@@ -450,7 +461,7 @@ test('the model that produced the text is recorded on call lines and skip lines 
 
 test('a line with no subject omits the field rather than writing null', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'hello')
   assert.equal(Object.hasOwn(lines[0], 'subject'), false, 'an unreadable field is worse than none')
 })
@@ -466,7 +477,7 @@ test('the model is handed the RAW secret while the recorded line does not contai
   const observer = createObserver({
     decide: async (request) => { handed = request; return { kind: 'answers', answers: {} } },
     trace,
-    readConfig: () => ({ ...config, redactEnabled: true }),
+    readInput: inputOf({ ...config, redactEnabled: true }),
   })
   await observed(observer, 'pre_execute', `bash {"api_key":"${secret}","cmd":"ls"}`, {})
 
@@ -480,7 +491,7 @@ test('the model is handed the RAW secret while the recorded line does not contai
 
 test('a secret longer than the budget is redacted before it is cut, so no prefix survives', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => ({ ...config, maxFieldChars: 18 }) })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf({ ...config, maxFieldChars: 18 })})
   await observed(observer, 'draft', `${'x'.repeat(15)} ghp_abcdefghijklmnopqrstuvwxyz012345`, {})
   assert.doesNotMatch(lines[0].excerpt, /ghp_/, 'the partial token is the whole reason the order matters')
   assert.equal(lines[0].excerpt.length, 18)
@@ -492,7 +503,7 @@ test('an error line is redacted and bounded too', async () => {
   const observer = createObserver({
     decide: async () => { throw new Error('401 at https://x/?token=SECRETVALUE') },
     trace,
-    readConfig: () => ({ ...config, redactEnabled: true }),
+    readInput: inputOf({ ...config, redactEnabled: true }),
   })
   await observed(observer, 'draft', 'hello', {})
   assert.equal(lines[0].event, 'error')
@@ -503,7 +514,7 @@ test('an error line is redacted and bounded too', async () => {
 test('redactEnabled false lets the secret through but keeps truncation', async () => {
   const { lines, trace } = recorder()
   const secret = 'ghp_abcdefghijklmnopqrstuvwxyz012345'
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => ({ ...config, redactEnabled: false, maxFieldChars: 20 }) })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf({ ...config, redactEnabled: false, maxFieldChars: 20 })})
   await observed(observer, 'draft', secret, {})
   assert.match(lines[0].excerpt, /^ghp_/, 'the secret survives on purpose')
   assert.equal(lines[0].excerpt.length, 20, 'and the size cap is untouched')
@@ -516,7 +527,7 @@ test('redactEnabled false lets the secret through but keeps truncation', async (
 // text on its first space is a heuristic.
 test('a tool seam records the tool’s name, and a non-tool seam does not pretend to', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf(config)})
   await observed(observer, 'post_execute', 'the result\nexit code: 1', { toolName: 'bash' })
   await observed(observer, 'draft', 'prose', {})
   assert.equal(lines[0].tool, 'bash')
@@ -527,7 +538,7 @@ test('a tool seam records the tool’s name, and a non-tool seam does not preten
 // -- or a whitespace collapse merging it into the body -- destroys it before any reader sees it.
 test('the exit code is parsed from the untruncated text, and the tail survives a real budget', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => ({ ...config, maxFieldChars: 2000 }) })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf({ ...config, maxFieldChars: 2000 })})
   const output = `${'build noise '.repeat(200)}\nexit code: 137`
   await observed(observer, 'result', output, { toolName: 'bash' })
   assert.equal(lines[0].truncated, true, 'the text was cut')
@@ -537,7 +548,7 @@ test('the exit code is parsed from the untruncated text, and the tail survives a
 
 test('a budget too small for a tail still reports the code it read from the full text', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => ({ ...config, maxFieldChars: 40 }) })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf({ ...config, maxFieldChars: 40 })})
   await observed(observer, 'result', `${'build noise '.repeat(20)}\nexit code: 137`, { toolName: 'bash' })
   assert.equal(lines[0].excerpt.length, 40, 'head-only, because 40 cannot hold a meaningful tail')
   assert.doesNotMatch(lines[0].excerpt, /exit code/, 'the tail is genuinely absent from the record')
@@ -557,7 +568,7 @@ test('the parser accepts the shapes a wrapper actually appends, and invents noth
 
 test('a non-tool seam never carries an exit code, even when its text ends in one', async () => {
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readConfig: () => config })
+  const observer = createObserver({ decide: async () => ({ kind: 'answers', answers: {} }), trace, readInput: inputOf(config)})
   await observed(observer, 'draft', 'the model said\nexit code: 1', {})
   assert.equal(lines[0].toolExit, null)
   assert.equal(lines[0].tool, null)
@@ -569,7 +580,7 @@ test('a declared technique and operator ride every line as hashes, and only when
 
   // (a) DECLARED: the hashes are on the call line, and the text is nowhere on it.
   const { lines, trace } = recorder()
-  const observer = createObserver({ decide: async () => answer, trace, readConfig: () => labelled })
+  const observer = createObserver({ decide: async () => answer, trace, readInput: inputOf(labelled)})
   await observed(observer, 'draft', 'hello')
   assert.equal(lines[0].harnessHash, labelHash('v3 concise-directed'))
   assert.equal(lines[0].userHash, labelHash('operator-a'))
@@ -578,7 +589,7 @@ test('a declared technique and operator ride every line as hashes, and only when
 
   // ...and on a SKIP line, because "which technique was in force when nothing was asked" is a question too -- and a
   // trace where only some lines carry the axis is a trace you must cross-check against itself.
-  const skipped = createObserver({ decide: async () => answer, trace, readConfig: () => ({ ...labelled, callsEnabled: false }) })
+  const skipped = createObserver({ decide: async () => answer, trace, readInput: inputOf({ ...labelled, callsEnabled: false })})
   await observed(skipped, 'draft', 'hello')
   const last = lines[lines.length - 1]
   assert.equal(last.event, 'skip')
@@ -587,7 +598,7 @@ test('a declared technique and operator ride every line as hashes, and only when
   // (b) UNDECLARED: absent rather than a hash of the empty string, so "no label" and "an empty label" can never be
   // the same value on a line.
   const bare = recorder()
-  const plain = createObserver({ decide: async () => answer, trace: bare.trace, readConfig: () => config })
+  const plain = createObserver({ decide: async () => answer, trace: bare.trace, readInput: inputOf(config)})
   await observed(plain, 'draft', 'hello')
   assert.equal('harnessHash' in bare.lines[0], false)
   assert.equal('userHash' in bare.lines[0], false)
@@ -595,7 +606,7 @@ test('a declared technique and operator ride every line as hashes, and only when
   // (c) READ LIVE, so a label changed while the row runs splits the lines instead of relabelling history.
   let live = { ...config, harnessLabel: 'v1' }
   const second = recorder()
-  const liveObserver = createObserver({ decide: async () => answer, trace: second.trace, readConfig: () => live })
+  const liveObserver = createObserver({ decide: async () => answer, trace: second.trace, readInput: inputOf(() => live)})
   await observed(liveObserver, 'draft', 'hello')
   live = { ...config, harnessLabel: 'v2' }
   await observed(liveObserver, 'draft', 'hello')
