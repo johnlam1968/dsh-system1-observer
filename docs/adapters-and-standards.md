@@ -304,6 +304,34 @@ A bonus found in the same read: those search documents carry a per-event **`surf
 `log-only`), so the harness's own index already distinguishes what the model saw — further evidence that `filterEvents`
 with `{kind: 'surface', values: ['current']}` is the authoritative form of the fold this plugin approximates.
 
+**AND THIS IS WHERE AN INDEX ADDS A CAPABILITY RATHER THAN SPEED.** A title is a column, so:
+
+```sql
+-- a title match and a text match in ONE question, with the title ranked first
+SELECT s.id, s.title, 0 AS matched_in FROM sessions s WHERE s.title LIKE '%' || ? || '%'
+UNION
+SELECT s.id, s.title, 1 FROM sessions s JOIN messages_fts f ON f.session_id = s.id
+WHERE messages_fts MATCH ?
+ORDER BY matched_in;
+```
+
+Three things follow, and they are worth separating from the speed argument:
+
+1. **Enumerating a title is not searching it.** The service can give us every title (one batched `readTitleSnapshots`
+   call), and our `list` then scans them — so a title search EXISTS today, as an O(n) scan of titles fetched per query.
+   What a table adds is the index: at 185 sessions the scan is nothing; at 10,000 it is 10,000 titles per question.
+2. **The real gain is composition, not lookup.** Title OR text, ranked against each other, in one statement — impossible
+   with two mechanisms that live in different calls and return different shapes. This is the same class as the other
+   entries on the list: not "faster", but "askable".
+3. **And a cost transfers to us with it.** The service takes the query *"interpreted as data, never executable FTS
+   syntax"*; a database we own means we own that escaping, and `MATCH` against user text is exactly where an unescaped
+   quote or operator becomes a syntax error or a different query. Whoever builds the index inherits the guard the
+   service performs for us today — worth stating plainly, because "easy" is true and incomplete.
+
+A bonus found in the same read: the search documents carry a per-event **`surface`** classification (defaulting to
+`log-only`), so the harness's own index already distinguishes what the model saw — further evidence that `filterEvents`
+with `{kind: 'surface', values: ['current']}` is the authoritative form of the fold this plugin approximates.
+
 ### So we hand-roll three things the service already offers
 
 | the service has | what this plugin does instead | verdict |
@@ -351,6 +379,7 @@ repository; none of it is a general preference for databases.
 | **A distribution to read a number against.** A reading means more beside the population it came from. | `dsh 4.21` against `pi 0.19` reasoning-to-visible — a cross-harness comparison nothing here can currently make, and `1.85 of 2` means little without other sessions' readings |
 | **The fidelity facts become addressable.** `shadowed`, attempts and turn-end reasons stop being re-derived per request. | **3,417 messages are shadowed** in one session, **8 attempts**, **541 turn-end reasons** — today only `surfaceEvents()` and the composer ever see them, and "which readings judged withdrawn text?" is not a question anyone can ask |
 | **The cost is small and known.** | **4.1 s** to build over 185 sessions and **103 MB**, which is the FTS mirroring the text; an asks-and-counts index is a fraction of it. A disposable index costs nothing to throw away |
+| **Title search, and any query that joins two fields.** The service searches EVENTS and a `SessionRecord` carries no title, so a title can only be ENUMERATED and compared, never searched or joined. | Today `list` `search` reads every title in one batched call and scans them; a title and a phrase cannot be asked for together, and neither can be ranked against the other. In a table both are one `WHERE`, and the two mechanisms the service keeps separate become one query |
 | **It is convergent practice, including by a harness vendor.** | mcode ships an ask index with **byte offsets and a `sha256` artifact revision**; zeroclaw ships **SQLite + FTS + import receipts**; cct and ccrecall do it for Claude Code; agent-eval streams transcripts with per-session diagnostics. A vendor shipping an index alongside its own log is evidence that the log alone is not enough to query |
 | **It collapses duplicated readers, which this repo has already paid for.** | `textOf` existed twice with different rules; `F78` had to be fixed twice; when they were finally unified the divergence turned out to be a **4.5× overstatement** of conversation (12,774,434 chars reported against 2,839,380 visible) |
 
