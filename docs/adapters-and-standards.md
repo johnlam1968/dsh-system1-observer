@@ -283,6 +283,27 @@ observe        observeSession(id, options)
 ORACLE that `lib/host/surface.js` is checked against (`test/surface-compare.test.js`), while the live path takes the
 surface from the session object instead.
 
+### What the service CANNOT do: match a TITLE
+
+Checked because it is the obvious next question after full text. Three declarations settle it:
+
+* **`SessionRecord` is `{ header, live, persisted }` — there is no title field.** That is why `listSessions()`
+  cannot return titles and a separate `readTitleSnapshots(ids)` call exists at all.
+* **`searchSessions` indexes EVENTS, not sessions**: the corpus is built by
+  `buildSessionEventSearchDocuments(sessionId, events)`, one document per event from `extractSessionEventText(event)`.
+* **`SessionResultFilter` is `{ id | cwd | created-at | parent | availability }`** — there is no title clause, so a
+  title cannot be filtered for either.
+
+So **a title can only be matched by listing sessions, reading their titles in one batched `readTitleSnapshots` call, and
+comparing** — which is exactly what `system1_sessions`'s `list` `search` argument already does. That makes the tool's two
+mechanisms **complementary rather than redundant**: a folded title may be a paraphrase whose words never appear in the
+messages, and a phrase inside the conversation never appears in a title. Neither argument covers the other, which is why
+both exist and why the description now points from one to the other.
+
+A bonus found in the same read: those search documents carry a per-event **`surface`** classification (defaulting to
+`log-only`), so the harness's own index already distinguishes what the model saw — further evidence that `filterEvents`
+with `{kind: 'surface', values: ['current']}` is the authoritative form of the fold this plugin approximates.
+
 ### So we hand-roll three things the service already offers
 
 | the service has | what this plugin does instead | verdict |
