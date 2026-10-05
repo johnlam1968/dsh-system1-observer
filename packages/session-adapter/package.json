@@ -30,6 +30,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "testedAgainst": {
+        "node": "25.3.0",
+        "dsh": "0.1.7-rc.2",
+        "note": "Re-run `npm run ci` after upgrading Node or DSH, and update these two versions only then."
+      }
     }
   }
 }

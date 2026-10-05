@@ -19,7 +19,6 @@
     },
     "client": {
       "platform": "web",
-      "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-primitives"
@@ -42,6 +41,7 @@
     "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:composition"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@deepseek-ai/schemastery": "3.18.4",
     "dsh-session-adapter": "file:packages/session-adapter",
     "dsh-session-index": "github:johnlam1968/dsh-session-index",
@@ -81,7 +81,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-loader": "1.0.5",
-    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@typesafe-ai/sdk": "^0.6.0"
   }
 }
