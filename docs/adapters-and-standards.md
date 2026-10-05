@@ -503,6 +503,74 @@ turns a one-off question from a script into a line of SQL — measured repeatedl
 Python scripts each existed to answer one such question — and it makes a reading **reproducible by query** rather than
 by trust, which is what `docs/measurement-depth.md` already asks of a package.
 
+## Two channels: in-band and out-of-band
+
+The operator's split — **work with the live session (mainly its seams) and with every non-live session, the second
+through a database** — is the right shape. One property is worth sharpening, because it decides what each channel may
+do:
+
+> **The cut is IN-BAND versus OUT-OF-BAND, not live versus stored.** A live session can be read out of band — this
+> plugin has been evaluating the running session all along, by id — and a stored session can be judged in neither.
+> What separates the channels is the DIRECTION of the data and what a result may change.
+
+| | channel 1: IN-BAND | channel 2: OUT-OF-BAND |
+|---|---|---|
+| data direction | the harness **pushes** events to us (`session/event`, `agent/pre-step`, `agent/turn-stopping`, `fs/observed`, `fs/*-intent`) | we **pull** (`sessionQuery.readSession`, or a store we built) |
+| what answers | the live session object: the surface seqs, the claimed inbox message, the mounted services | the durable log, projected into rows |
+| may it change a turn? | **yes** — a judgement here can refuse, or return an intent that owns a decision | **no** — a reading cannot change anything that already happened |
+| latency | constrained by the harness's own event modes | irrelevant |
+| code | `host/feed.js`, `host/fs-journal.js`, `host/surface.js`, `register.js`, `seams.js`, `observe.js`, `stream.js`, the `turn-*` path | the ingester, the schema, the queries, the per-harness readers |
+| covers other harnesses | **no, by construction** | **yes** — pi, mcode, Hermes |
+
+The constraints in `lib/host/index.js` are why channel 1 is a different engineering problem rather than a different
+data source: `agent/turn-stopping` is **serial**, so no O(surface) work may run inside it; `fs/write-intent` is
+**waterfall, single slot**, so the first returned intent owns a decision; `fs/observed` is `emit` but *a throw fails the
+tool call*. A store cannot be consulted inside those — which is why the two channels are not one channel with a cache.
+
+### What the channels SHARE, and why that is the real architectural move
+
+They must share **the selection semantics and the vocabulary**, or the same question gets two different instruments:
+
+```
+        channel 1 (in-band)                    channel 2 (out-of-band)
+   live events ──► normalized records      rows ──► normalized records
+                          └──────────┬──────────┘
+                                     ▼
+                    ONE instrument: G0/G1 selections, composition,
+                    segmentation, question sets, readings, packages
+```
+
+The normalized shape is the five concepts already derived — **an ask, an answer, the reasoning, tool traffic, a
+boundary** — plus the per-harness facts (`shadowed`, `interrupted`, `attempts`, the boundary label). `lib/host/session-format.js`
+is channel 1's reader of dsh's log; an ingester is channel 2's. **When both produce that shape, the same question set
+can be asked of a live seam judgement and of a corpus reading — and of pi's sessions through its own reader.** That,
+not the database, is what makes measuring another harness reachable.
+
+### Five rules, each from something measured here
+
+1. **Channel 1 never waits on channel 2.** No query inside a seam listener: `agent/turn-stopping` is serial and a throw
+   in `fs/observed` fails the tool call. The live path takes the surface from the session object, not from a store.
+2. **The index ingests only from the DURABLE log**, never from the live feed. A dropped subscription or a restart would
+   otherwise become a permanent hole in the index that looks like a gap in the session.
+3. **Every index reading carries the high-water `seq` it was built to.** A running session is being appended to as it is
+   read, so a reading without its receipt is a reading of an arbitrary past prefix — and this session has been measured
+   while running more than once.
+4. **The service stays the fallback and the oracle.** Where the index is absent the service answers; where the two
+   disagree, **the log wins** — the pattern already in `test/surface-compare.test.js`, which compares this plugin's fold
+   against `sessionQuery.readSurface` rather than trusting either alone.
+5. **The index is droppable.** Derived, rebuildable (4.1 s over 185 sessions), receipted, and never the source of truth
+   for a forensic question.
+
+### Open work, in the order the evidence supports
+
+1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces the fold (20 lines) with the authority,
+   a service call, no store needed.
+2. **The ingester**, built on `readStoredSubject` so nothing is duplicated, with the schema above and a receipt per
+   session.
+3. **A channel-agreement test**: the same turn composed from live events and from rows must produce the same state, or
+   the divergence is reported rather than averaged.
+4. **The pi reader**, since pi shares dsh's store layout and 183 of its sessions are on this disk.
+
 ## Status
 
 **Nothing here is built.** This file records what was read, so a decision can be made against evidence rather than
