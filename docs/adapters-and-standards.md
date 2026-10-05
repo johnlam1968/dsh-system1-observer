@@ -541,8 +541,11 @@ with `{kind: 'surface', values: ['current']}` is the authoritative form of the f
    measurement, a question, or a reading.
 6. **Cross-harness**: the service is dsh-only. pi, mcode and Hermes need their own readers.
 7. **The instrument**: asking system1 a question set and turning probabilities into readings.
-8. **The agent-facing tool**: `system1_sessions` exists because dsh's session plugins are UI-first and expose no host
-   tool — which is the reason this plugin built one.
+8. **The agent-facing tool, CORRECTED (`F97`)**: `system1_sessions` does NOT exist because the harness lacks
+   agent-facing session tools. `@deepseek-ai/dsh-tool-session-query` ships five of them (`session_search`,
+   `session_event_search`, `session_trace`, `session_event_trace`, `session_event_read`) — opt-in, not mounted in this
+   profile, and authorizing cross-session access only when the target's `cwd` exactly matches the caller's. What none
+   of the five does is **compose the subject** a judgement would see, which is why this plugin built a tool.
 
 ### The order this implies
 

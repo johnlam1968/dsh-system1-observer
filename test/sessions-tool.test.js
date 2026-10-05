@@ -1,6 +1,8 @@
-// THE GAP THIS CLOSES: an agent could not name a stored session. DSH's own agent-facing session tools reach LIVE
-// sessions in this process; `sessionQuery` reaches everything but is a SERVICE, so only a plugin can call it. Every
-// historical read in this repository had to be a shell script -- which is how three scans in a row were mis-read.
+// THE GAP THIS CLOSES: composing the SUBJECT a judgement would see, for a session named by id.
+// CORRECTION (F97): the claim that "DSH's own agent-facing session tools reach LIVE sessions in this process" was
+// WRONG. `@deepseek-ai/dsh-tool-session-query` exists -- five read-only agent tools (`session_search`,
+// `session_event_search`, `session_trace`, `session_event_trace`, `session_event_read`) -- and it is OPT-IN, not
+// mounted in this profile. None of the five composes a subject, which is the gap that remains.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionsTool, rowsOf, SESSIONS_TOOL_NAME, textOf } from '../lib/sessions-tool.js'

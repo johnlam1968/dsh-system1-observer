@@ -13,6 +13,12 @@ Optionally, read the source code (if source code is not available, git clone it)
   `~/.config/nvm/versions/node/v25.3.0/lib/node_modules/@deepseek-ai/dsh/`. Other harnesses whose session
   formats this repository reads are on this host as well: pi at `~/.pi`, minimax-code at `~/.minimax`,
   zeroclaw at `~/.zeroclaw*`, Hermes at `~/hermes-agent`.
+* **How to read the source so it ANSWERS** — a capability's *interface* is not its *implementation*. List the package
+  GROUP (`ls packages/<group>/`) and read that group's README: it names the backend and whether the component is
+  opt-in. Then check the deployment — `dsh --profile <name> --dump-config` shows which rows are mounted and what they
+  are configured to do — and treat a refusal or error message from the harness as a pointer: it usually NAMES the knob
+  or the package, so grep for that string instead of guessing. This habit exists because `F97`, `F96`, `F95`, `F89`
+  and `F79` are one error in five shapes: stopping at the part of the system that happened to be in front of me.
 * **Why** — a measurement says what happened; a type says what can. Three findings in `docs/findings.md`
   (`F79`, `F89`, `F95`) are the same mistake in the same direction: a claim about a system generalised from one
   sample of it, where reading the producer's own source would have answered it outright.
