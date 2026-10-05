@@ -223,6 +223,57 @@ executable FTS syntax"; `MATCH` has no such manners, so a phrase is quoted and i
 over (`ftsPhrase`). The test asserts the difference: `summary AND above` finds nothing (a phrase that is not in the
 text) while `summary of the above` finds the message — if the words were syntax, the first would have matched.
 
+### The tokenizer decides what a query MEANS, so it is chosen and recorded
+
+An FTS5 table's tokenizer is not a detail — it is the definition of the question a `MATCH` answers:
+
+| tokenizer | `MATCH` finds | store size | mirrored text | sample query |
+|---|---|---|---|---|
+| `trigram` (**default**) | **substrings**, exactly like the scan | **617.8 MB** | 121.5 MB | `oice-prox` → 2 sessions in **13 ms** |
+| `unicode61` | **words and phrases** only | 353.3 MB | 121.5 MB | `session-query-sqlite` → **9 ms**; `oice-prox` → **nothing** |
+| none (`--no-fts`) | the scan over the stored tables | 154.7 MB | — | everything, at 242 ms |
+
+Measured on this library: 499 sessions, **91,247 mirrored rows**, 121.5 MB of text. So the trigram index costs
+**about 3.8× the text it indexes** (≈464 MB for 121.5 MB) where the word index costs about 1.6× — and a query shorter
+than three characters is answered by the scan in either case (measured: `ci` at 264 ms).
+
+**The first attempt at this was wrong in a way worth keeping.** The rebuild reported `tokenize = 'trigram'` in `meta`
+while the table underneath was still `unicode61` — a receipt that had been absent when the previous build ran, so the
+drop was skipped — and the evidence was in the semantics: `MATCH "voice"` matched 4,172 rows and `MATCH "oice"`
+matched none, which no trigram index can do. The tokenizer is now read from `sqlite_master` rather than from `meta`,
+and a test asserts that changing the flag changes the TABLE and the semantics with it.
+
+**`trigram` is the default because it answers the question the store answered before FTS5 arrived.** `F99` recorded
+that switching to a word index silently changed the question — a query like `ervo` or `voice-prox` stopped finding
+anything — and there is no way to tell a reader that "no matches" means "not in the library" when it might mean "not a
+word". Trigram restores the LIKE semantics **with** an index, which is why it is worth its size.
+
+**The storage trade-off, stated plainly.** A trigram index stores every overlapping three-character run, so it is
+several times the size of the text it indexes, where a word index is a small fraction of it. The measured figures for
+this library are in the table above and in the build's own output — and the choice is a flag, not a migration:
+
+```bash
+node scripts/session-index.mjs build --text                       # trigram (substring search; largest)
+node scripts/session-index.mjs build --text --tokenizer unicode61 # word/phrase search; much smaller
+node scripts/session-index.mjs build --text --no-fts              # no mirror: the scan answers
+```
+
+**Three things the choice forces us to handle, all measured:**
+
+* **A trigram cannot answer a query shorter than three characters.** `ci` falls back to the scan, reports `like`, and
+  still finds the row — rather than returning a confident zero from a mirror that never stored it.
+* **The snippet window is counted in the tokenizer's tokens, and that unit differs.** 12 tokens is ~70 characters under
+  a word tokenizer and **~14 characters** under trigram: at 12 the window was `" ... mary of the ab ... "`, too narrow
+  even for the match markers, and at 24 it was `"[summary of the above]"`. The window is therefore per-mechanism, with
+  the trigram figure approximating the scan's 160-character window.
+* **A tokenizer change cannot be `ALTER`ed**, so it drops and rebuilds the mirror — from `messages`,
+  `tool_results` and `tool_calls`, never from the session files, so the cost is the mirror and not the corpus. The
+  swap is one transaction, so a reader sees the old mirror or the new one and never half of either.
+
+**Which mechanism ran is always reported**: `meta.tokenizer` and `meta.search_mode` are receipts in the store, the
+CLI prints them (`search: fts5 (trigram), N mirrored row(s)`), and the tool's provenance string carries them
+(`session-index (hand-rolled, read side, FTS5-TRIGRAM)`).
+
 ## Where the schema came from: derived from bytes, when the source declares it
 
 Asked directly, and the honest answer is **derived from real logs**, with the source read only for the parts being

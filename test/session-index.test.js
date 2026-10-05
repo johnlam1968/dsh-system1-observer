@@ -155,12 +155,14 @@ test('the FTS5 mirror answers, and the store says WHICH mechanism ran', async ()
     try {
         const built = buildIndex({ sessionsDir: f.root, out, withText: true })
         assert.equal(built.searchMode, 'fts5')
+        assert.equal(built.tokenizer, 'trigram', 'the default tokenizer is the one that SUBSTRING-matches')
         assert.ok(built.ftsRows > 0, 'the mirror holds the searchable rows')
         const meta = await metaOf(out)
         assert.equal(meta.search_mode, 'fts5')
+        assert.equal(meta.tokenizer, 'trigram')
         assert.equal(meta.fts_rows, String(built.ftsRows))
         const found = await searchSessions('summary of the above', { path: out })
-        assert.equal(found.searchMode, 'fts5')
+        assert.equal(found.searchMode, 'fts5-trigram')
         assert.equal(found.rows[0].id, f.id)
         // FTS5 marks the match inside its own snippet, so a reader can see WHAT matched
         assert.match(found.rows[0].snippet, /\[.*\]/)
@@ -176,6 +178,56 @@ test('the query is handed to FTS5 as a LITERAL PHRASE, never as executable synta
         // would be (both tokens are present), so this pair distinguishes the two readings.
         assert.equal((await searchSessions('summary of the above', { path: out })).rows.length, 1)
         assert.equal((await searchSessions('summary AND above', { path: out })).rows.length, 0)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('TRIGRAM RESTORES THE SUBSTRING QUESTION that FTS5 alone changed (F99), and unicode61 does not', async () => {
+    const f = fixture()
+    const trigram = join(f.root, 'trigram.db')
+    const words = join(f.root, 'words.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out: trigram, withText: true })
+        buildIndex({ sessionsDir: f.root, out: words, withText: true, tokenizer: 'unicode61' })
+        // "ummary of the a" crosses token boundaries -- it is a SUBSTRING, not a word or a phrase
+        const viaTrigram = await searchSessions('ummary of the a', { path: trigram })
+        assert.equal(viaTrigram.searchMode, 'fts5-trigram')
+        assert.equal(viaTrigram.rows.length, 1, 'a trigram mirror answers the LIKE question')
+        const viaWords = await searchSessions('ummary of the a', { path: words })
+        assert.equal(viaWords.searchMode, 'fts5')
+        assert.equal(viaWords.rows.length, 0, 'a word index cannot: this is the question F99 recorded as changed')
+        // and a whole phrase is found by both, so the difference is only about substrings
+        assert.equal((await searchSessions('summary of the above', { path: words })).rows.length, 1)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a query SHORTER than a trigram falls back to the scan and says so, rather than a confident zero', async () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        buildIndex({ sessionsDir: f.root, out, withText: true })
+        const found = await searchSessions('um', { path: out })
+        assert.equal(found.searchMode, 'like', 'three characters is the smallest run a trigram stores')
+        assert.equal(found.rows.length, 1, 'and the scan still answers it')
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('changing the TOKENIZER recreates the mirror, and the TABLE is the truth rather than the receipt', async () => {
+    // Measured on the real store: a build that predated the `tokenizer` receipt reported `trigram` in meta while the
+    // table underneath was still unicode61, so the drop was skipped and the search quietly kept word semantics.
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    const sqlOf = async (file) => {
+        const { DatabaseSync } = await import('node:sqlite')
+        const db = new DatabaseSync(file, { readOnly: true })
+        try { return String(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_fts'").get()?.sql ?? '') } finally { db.close() }
+    }
+    try {
+        buildIndex({ sessionsDir: f.root, out, withText: true, tokenizer: 'unicode61' })
+        assert.match(await sqlOf(out), /unicode61/)
+        assert.equal((await searchSessions('ummary of the a', { path: out })).rows.length, 0, 'a word index cannot answer a substring')
+        buildIndex({ sessionsDir: f.root, out, incremental: true, withText: true, tokenizer: 'trigram' })
+        assert.match(await sqlOf(out), /trigram/, 'the table itself must change, not only the receipt')
+        assert.equal((await searchSessions('ummary of the a', { path: out })).rows.length, 1, 'and now the substring answers')
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
@@ -198,10 +250,10 @@ test('a query with no searchable token does not throw and names the mechanism th
     try {
         buildIndex({ sessionsDir: f.root, out, withText: true })
         const found = await searchSessions('***', { path: out })
-        assert.ok(['fts5', 'like'].includes(found.searchMode), `unexpected search mode ${found.searchMode}`)
+        assert.ok(['fts5', 'fts5-trigram', 'like'].includes(found.searchMode), `unexpected search mode ${found.searchMode}`)
         assert.equal(found.rows.length, 0)
         const quoted = await searchSessions('say "hello" now', { path: out })
-        assert.ok(['fts5', 'like'].includes(quoted.searchMode), 'a quoted phrase must not become syntax either')
+        assert.ok(['fts5', 'fts5-trigram', 'like'].includes(quoted.searchMode), 'a quoted phrase must not become syntax either')
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
