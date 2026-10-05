@@ -168,6 +168,52 @@ than argued. A throwaway SQLite index over **183 pi sessions plus the two dsh se
 4. **Cost the size.** 103 MB for 30k rows is the FTS table mirroring the text; an index over asks and counts alone
    would be a fraction of that, and only the text worth searching needs to be in it.
 
+## The normalized schema, tested rather than proposed
+
+One SQLite schema, **seven sessions across three harnesses** — 2 dsh (this one and the freeciv play session), 3 pi, 2
+mcode — 5,127 message rows, 4,380 tool calls, 8 attempts. The tables are the five shared concepts plus the per-harness
+facts and a receipt:
+
+```
+sessions(harness, id, path, schema_version, cwd, started_at)
+turns(session_id, ordinal, label, parent_label, end_reason, extra)
+messages(session_id, turn_label, exchange, ordinal, role, kind, text, reasoning,
+         interrupted, shadowed, extra)
+tool_calls(session_id, call_id, name, args, result, turn_label, outcome)
+attempts(session_id, turn_label, kind, stream_chars)
+session_facts(session_id, fact, value)          -- thinking_level, compaction, ask locator…
+receipts(session_id, source, source_bytes, source_sha256, high_water, built_at)
+messages_fts(text, session_id, role)
+```
+
+**One query spans all three harnesses**, and it needed no per-harness branch:
+
+| harness | exchanges | asks | answers | reasoning chars | visible chars |
+|---|---|---|---|---|---|
+| dsh | 309 | 309 | 4,452 | 10,042,653 | 3,142,667 |
+| pi | 8 | 8 | 22 | 1,917 | 89,533 |
+| mcode | 2 | 2 | 2 | 114 | 1,256 |
+
+### Four rules the test produced
+
+1. **Normalize only the five shared concepts** — an ask, an answer, the reasoning, tool traffic, a boundary. Anything a
+   single harness says about itself goes in a typed column or `extra`.
+2. **DERIVE the boundary where a harness has none.** dsh has `turn`; **pi has no turn at all** — measured: *all 44* pi
+   messages loaded with a null turn, so a "per turn" query silently became a **dsh-only** query while looking
+   cross-harness. Grouping each session by its human asks (the ask-group derived three turns ago) gives every harness a
+   comparable unit, and the same per-exchange query then answers for dsh, pi and mcode alike. **This is the single most
+   important rule here, because the failure is silent.**
+3. **A per-harness fact is a column whose ABSENCE is a value.** `shadowed`, `interrupted`, `attempts`, `parent_id`,
+   the mcode ask locator. The number that justifies them: **3,417 messages in one dsh session are shadowed** — inside a
+   `replace` range, withdrawn from the surface by compaction. The log holds what the surface no longer does, so an
+   index without that column measures text **the model can no longer see** while looking complete.
+4. **`extra` carries the rest, but the prototype was wrong about the DAG**: pi's `id`/`parentId` chain survived only in
+   the JSON `extra` column. A typed `parent_id` is the correct design — the rule above is the recommendation, not my
+   prototype.
+
+Two defects in my own prototype, disclosed rather than left to be found: the per-session tool count in the first run
+was a **global** count printed per session, and pi's DAG was stored as JSON rather than as a column.
+
 ## Status
 
 **Nothing here is built.** This file records what was read, so a decision can be made against evidence rather than
