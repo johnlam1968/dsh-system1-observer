@@ -287,9 +287,9 @@ surface from the session object instead.
 
 | the service has | what this plugin does instead | verdict |
 |---|---|---|
-| `searchSessions`, `searchEvents` | nothing — `system1_sessions`'s `search` is a substring of the **title or id** | **a real gap in our tool**, and the one the index section below originally mis-blamed on the platform |
-| `filterEvents(id, filters)`, `listEvents(id)` | `lib/session-subject.js` slices raw events by kind by hand | a hand-rolled filter where a service call exists |
-| `readTitle`/`readTitleSnapshots` | our tool folds titles from the log itself | hand-rolled again |
+| `searchSessions`, `searchEvents` | was: nothing — `system1_sessions`'s `search` compares a **title or id** | **FIXED**: `system1_sessions` now has `action: 'search'`, which calls `searchSessions` and hands the query over as data. The substring remains for `list` only, and where the index is absent the tool **refuses by name** instead of silently scanning titles |
+| `filterEvents(id, filters)`, `listEvents(id)` | `lib/session-subject.js` slices raw events by kind by hand | the filter vocabulary is `{seq \| time \| **type** \| **surface** \| text}`, so `{kind:'type'}` IS our kind slice and `{kind:'surface', values:['current']}` is the surface fold done AUTHORITATIVELY. Still hand-rolled, and the next thing to replace |
+| `readTitle`/`readTitleSnapshots` | **WRONG — corrected**: the tool DOES call `readTitleSnapshots` (`lib/sessions-tool.js:108`) | this row was my error, not a gap |
 | `traceEvent`, `traceSession` | unused, though attribution was recorded as a missing capability | available and unclaimed |
 
 ### And what this plugin does that `sessionQuery` cannot, by construction

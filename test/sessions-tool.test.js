@@ -8,9 +8,17 @@ import { composeTurnState } from '../lib/turn-state.js'
 
 const record = (id, { cwd = '/home/john/freeciv', createdAt = 1000, live = false, persisted = true } = {}) => ({ header: { id, cwd, createdAt }, live, persisted })
 
-/** A query service with the two methods the tool uses, and a store of message events keyed by session. */
-function fakeQuery({ records = [], events = {}, titles = {}, failList = false } = {}) {
+/** A query service with the methods the tool uses, and a store of message events keyed by session. */
+function fakeQuery({ records = [], events = {}, titles = {}, failList = false, hits = null, seen = null } = {}) {
   return {
+    // FULL TEXT IS THE SERVICE'S, NOT OURS. The harness documents the query as "interpreted as data, never
+    // executable FTS syntax", so the fake records exactly what was sent -- that is what the test asserts.
+    ...(hits === null ? {} : {
+      async searchSessions(request) {
+        if (seen !== null) seen.push(request)
+        return { items: hits }
+      },
+    }),
     async listSessions() {
       if (failList) throw new Error('persistence unavailable')
       return records
@@ -38,6 +46,43 @@ test('textOf reads the content shapes the harness writes, and nothing else', () 
   const reasoning = { data: { message: { content: [{ type: 'reasoning', text: 'thinking' }, { type: 'text', text: 'shown' }] } } }
   assert.equal(textOf(reasoning), 'shown')
   assert.equal(textOf({ data: {} }), '')
+})
+
+test('search finds a session by the TEXT of its conversation, which list cannot', async () => {
+  // The capability this adds: `list`'s `search` compares a title or an id, so a phrase that exists only inside the
+  // conversation is invisible to it. The harness's own index is what makes the phrase findable.
+  const seen = []
+  const hits = [{
+    ...record('session-deep', { cwd: '/home/john/somewhere', createdAt: 2000 }),
+    bestMatch: { snippet: '…the operator asked about civil disorder and research…' },
+  }]
+  const tool = createSessionsTool({ query: fakeQuery({ records: [record('session-deep')], titles: { 'session-deep': 'unrelated title' }, hits, seen }) })
+  const value = await tool.execute({ action: 'search', query: 'civil disorder' })
+  assert.equal(value.action, 'search')
+  assert.equal(value.usedService, 'searchSessions')
+  assert.equal(value.count, 1)
+  assert.equal(value.sessions[0].id, 'session-deep')
+  assert.match(value.sessions[0].snippet, /civil disorder/)
+  // AND THE QUERY IS HANDED OVER AS DATA: verbatim, with no FTS syntax built around it.
+  assert.deepEqual(seen, [{ query: 'civil disorder', limit: 20 }])
+  assert.match(tool.output.render({}, value)[0].text, /session-deep/)
+})
+
+test('search REFUSES rather than falling back to a substring scan when the index is absent', async () => {
+  const tool = createSessionsTool({ query: fakeQuery({ records: [record('session-a')] }) })
+  const value = await tool.execute({ action: 'search', query: 'anything' })
+  assert.equal(value.sessions.length, 0)
+  assert.match(value.problem, /searchSessions/)
+  assert.match(tool.output.render({}, value)[0].text, /UNAVAILABLE/)
+  // a substring scan would have "found" this session by title; saying nothing would have looked like no matches
+  const listed = await tool.execute({ action: 'list', search: 'anything' })
+  assert.equal(listed.sessions.length, 0)
+})
+
+test('search without a query says which argument is missing', async () => {
+  const tool = createSessionsTool({ query: fakeQuery({ records: [] }) })
+  const value = await tool.execute({ action: 'search' })
+  assert.deepEqual(value.problems, ['`query` is required for `search`'])
 })
 
 test('list finds a session by title substring, by cwd, and by availability', () => {
