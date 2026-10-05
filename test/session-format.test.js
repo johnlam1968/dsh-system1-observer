@@ -24,7 +24,7 @@ import {
     textOfEvent,
     textOfMessage,
     turnOf,
-} from '../lib/host/session-format.js'
+} from 'dsh-session-adapter/session-format'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 

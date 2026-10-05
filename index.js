@@ -1,7 +1,7 @@
 import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './lib/host/fs-journal.js'
-import { surfaceEvents } from './lib/host/surface.js'
+import { surfaceEvents } from 'dsh-session-adapter/surface'
 import { currentSurfaceSeqs } from './lib/surface-authority.js'
-import { createEventFeed, DEFAULT_MAX_PER_SESSION } from './lib/host/feed.js'
+import { createEventFeed, DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //

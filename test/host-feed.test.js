@@ -2,7 +2,7 @@
 // runs inside a listener the harness awaits, where a throw is a broken turn rather than a failed test.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createEventFeed } from '../lib/host/feed.js'
+import { createEventFeed } from 'dsh-session-adapter/feed'
 
 const ev = (seq) => ({ seq, type: 'user/message', data: { message: { role: 'user', content: [] } } })
 

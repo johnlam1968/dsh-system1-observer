@@ -1,0 +1,17 @@
+{
+  "name": "dsh-session-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The DSH session surface this repository's plugins are thin adapters over: the harness's event vocabulary in one home, the model-surface fold, and the per-session event feed. Pure modules -- no host call of any kind.",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./session-format": "./lib/session-format.js",
+    "./surface": "./lib/surface.js",
+    "./feed": "./lib/feed.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "lib/**/*.js", "package.json"],
+  "engines": { "node": "^22.19.0 || >=24.0.0" },
+  "license": "MIT"
+}

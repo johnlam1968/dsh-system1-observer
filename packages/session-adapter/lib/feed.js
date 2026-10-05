@@ -9,7 +9,7 @@
 // available for a session that is NOT live (the reason a scope pointing at a closed session went inert), and it is
 // the same ordered stream the log records, surface ops included.
 //
-// WHAT THIS IS NOT. It is not a fold -- `lib/host/surface.js` applies the surface ops. This holds events; that
+// WHAT THIS IS NOT. It is not a fold -- `dsh-session-adapter/surface` applies the surface ops. This holds events; that
 // decides which of them the model actually saw.
 //
 // THIS FILE IS THE ADAPTER SEAM, with the fold beside it. `sessionQuery` answers both questions authoritatively

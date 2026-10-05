@@ -61,7 +61,7 @@ included), `completion_tokens` (*"including reasoning and tool calls"*), `cached
 Not "our own subject model" as previously recommended, and not "ATIF everywhere". Both, at different distances:
 
 ```
-   dsh event log  ──►  lib/host/session-format.js  ──►  THE MEASUREMENT CORE  ──►  packages, readings
+   dsh event log  ──►  dsh-session-adapter/session-format  ──►  THE MEASUREMENT CORE  ──►  packages, readings
    (lossless, in                                 (vocabulary + shape)     (questions, scoring,
     the harness)                                                            batteries, calibration)
                               │
@@ -128,7 +128,7 @@ The sixth harness, and the most instructive, because it solves the same problems
 
 | mcode file | what it is | our equivalent |
 |---|---|---|
-| `manifest.json` | `schemaVersion`, `sessionId`, timestamps, `source`, **`layout: "v2-final-dated-session"`**, and a `paths` map naming every other file | the package manifest + `lib/host/session-format.js`'s stated layout |
+| `manifest.json` | `schemaVersion`, `sessionId`, timestamps, `source`, **`layout: "v2-final-dated-session"`**, and a `paths` map naming every other file | the package manifest + `dsh-session-adapter/session-format`'s stated layout |
 | `messages.jsonl` | `{ message_id, turn_id, message: { role, content: [{ type: 'text', text }] } }` | the event log, minus the control plane |
 | **`user-message-locators.jsonl`** | **an ask index by BYTE OFFSET and LINE NUMBER**, each entry carrying `generation` and **`artifactRevision: "sha256:…"`** | the ask index we derived by hand two turns ago — mcode ships it, and pins the revision it was built against |
 | `ledger.jsonl`, `display.jsonl`, `snapshot` | separate projections of one session | our G0/G1/G2 selections, and the Composer |
@@ -551,7 +551,7 @@ observe        observeSession(id, options)
 ```
 
 **This plugin calls two of them: `listSessions()` and `readSession(id)`.** `readSurface` is additionally used as the
-ORACLE that `lib/host/surface.js` is checked against (`test/surface-compare.test.js`), while the live path takes the
+ORACLE that `dsh-session-adapter/surface` is checked against (`test/surface-compare.test.js`), while the live path takes the
 surface from the session object instead.
 
 ### The harness's own search index exists, and this profile turns it OFF
@@ -762,10 +762,10 @@ about 114 lines of paging arithmetic and then CONSUMES the rest as its ingester.
 | `sessions-tool.js` `rowsOf` (cwd/availability/title filtering) | 23 | **replace with a predicate** |
 | `session-subject.js` `readStoredSubject` | 36 | **become the INGESTER** — the same `readSession` call, once per session rather than once per question |
 | `session-subject.js` `eventTypesOf`, `subjectSettings` | 51 | **stay** — the kind→event-type mapping IS the format knowledge |
-| `lib/host/session-format.js` | 138 | **stay** — the vocabulary the ingester reads through |
+| `dsh-session-adapter/session-format` | 138 | **stay** — the vocabulary the ingester reads through |
 | `sessions-tool.js` `createSessionsTool` (contract, render, refusals) | 309 | **stay** — a tool must exist whatever answers it |
 | `lib/exchange.js` (G0/G1), `turn-state.js`, `segment.js`, `tool-blocks.js` | ~860 | **stay** — this is the business logic, and no schema holds a judgement |
-| `lib/host/surface.js` (the fold) | 20 | **replace with a SERVICE CALL**, not a database: `filterEvents(id, [{kind:'surface', values:['current']}])` |
+| `dsh-session-adapter/surface` (the fold) | 20 | **replace with a SERVICE CALL**, not a database: `filterEvents(id, [{kind:'surface', values:['current']}])` |
 
 So the deletion is about **114 of ~11,100 lines — roughly 1%** — and the schema would need `eventTypesOf`,
 `readStoredSubject`, `session-format.js` and every semantic module anyway. **"Go straight to the database" is a
@@ -855,7 +855,7 @@ They must share **the selection semantics and the vocabulary**, or the same ques
 ```
 
 The normalized shape is the five concepts already derived — **an ask, an answer, the reasoning, tool traffic, a
-boundary** — plus the per-harness facts (`shadowed`, `interrupted`, `attempts`, the boundary label). `lib/host/session-format.js`
+boundary** — plus the per-harness facts (`shadowed`, `interrupted`, `attempts`, the boundary label). `dsh-session-adapter/session-format`
 is channel 1's reader of dsh's log; an ingester is channel 2's. **When both produce that shape, the same question set
 can be asked of a live seam judgement and of a corpus reading — and of pi's sessions through its own reader.** That,
 not the database, is what makes measuring another harness reachable.

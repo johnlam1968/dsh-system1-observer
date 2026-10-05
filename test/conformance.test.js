@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 import { readConfigValue } from '../lib/config-value.js'
 import { HOST_EVENTS } from '../lib/host/index.js'
-import { DEFAULT_MAX_PER_SESSION } from '../lib/host/feed.js'
+import { DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
 import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../lib/host/fs-journal.js'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'

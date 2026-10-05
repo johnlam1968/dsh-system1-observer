@@ -13,7 +13,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
-import { createEventFeed } from '../lib/host/feed.js'
+import { createEventFeed } from 'dsh-session-adapter/feed'
 
 const accessor = (value) => ({ get: () => value })
 const env = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })

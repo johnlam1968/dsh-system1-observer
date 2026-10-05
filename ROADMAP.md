@@ -804,6 +804,11 @@ core never reads a log.
   `agent/turn-stopping` is SERIAL, `fs/write-intent` is WATERFALL SINGLE SLOT, and a throw in `fs/observed` fails the
   tool call — a store cannot be consulted in there.
 * **What moves out**: `lib/host/*`, `lib/session-subject.js`'s DSH half, `lib/sessions-tool.js`'s DSH half.
+  **Moved 2026-10-05**: the session-shaped three (`session-format`, `surface`, `feed`) are the package
+  `dsh-session-adapter`, imported by name; `fs-journal.js` and the inventory stayed, because a filesystem journal is not
+  session-shaped. The remaining half calls the host, so it needs the service. **And the two files this section said to
+  DELETE are not deletable, measured (`F104`)**: the authority is async and optional, so the fold is the fallback for a
+  deployment with no `sessionQuery` -- they move, and the retirement rows say so.
   **What stays**: the selection semantics (G0/G1), composition, segmentation — and `lib/sessions.js`'s allow-list rule,
   which is ours and is not about a format.
 * **The measured case**: a title search through `sessionQuery` costs **~54 s** (seven samples, median 53,951 ms) and the
@@ -891,7 +896,7 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 | **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned; candidates measured (`seams.js` 297, `questions.js` 278, `question-sets.js` 311, `probe-score.js` 390, `calibrate.js` 233, `compare.js` 160, `model/*` ~400, `observe.js` 247, `evidence.js` 229, `register.js` 161) |
 | **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
 | **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
-| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them (`lib/host/` 259 lines + the dsh half of `lib/session-subject.js` 223 and `lib/sessions-tool.js` 290, all by INJECTION) | dsh plugin | the unblocked next step; start by DELETING `feed.js`/`surface.js` |
+| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | dsh plugin | **the IN-BAND half is extracted** (2026-10-05): the session vocabulary, the surface fold and the event feed are now the package `dsh-session-adapter` (`packages/session-adapter/`, imported BY NAME because the composer cannot await a service -- `F104`), and the checks followed them there. What remains: the `sessionQuery`-backed reads (`lib/session-subject.js` 223 + the dsh half of `lib/sessions-tool.js` 290, both by INJECTION), which are the SERVICE half |
 | **(e)** | **the composition**: profiles, bundle list, pinned versions, plans and ledgers | repository, no code of its own | homeless today: it is spread over this repo and `~/.dsh/profiles/docdrift`, and with two plugins it stops being hypothetical |
 
 **The seams that must be drawn explicitly, or the shape drifts:**

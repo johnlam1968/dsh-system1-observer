@@ -257,7 +257,7 @@ characters — five times that session's visible text**, and unmistakably delibe
 Two consequences, and they point opposite ways:
 
 * **A reading of what the human READ must exclude reasoning**, or the operator is credited with the model's private
-  deliberation. That excludes it in one place (`lib/host/session-format.js`), which is why the reported "chars of
+  deliberation. That excludes it in one place (`dsh-session-adapter/session-format`), which is why the reported "chars of
   conversation" for that session fell from 12,774,434 to 2,839,380.
 * **A question about the model's own deliberation is answerable**, from the reasoning blocks in G1, rather than
   impossible as this file previously implied.

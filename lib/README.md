@@ -20,13 +20,19 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 
 | file | retired by | what says so |
 |---|---|---|
-| `host/feed.js` | **MOVING to the session adapter (§14.6 (d)), not deleting**: its condition cannot be met where it is needed. Measured 2026-10-05 (`F104`) -- the authority is ASYNC and OPTIONAL, and the in-band path cannot await, so a deployment without `sessionQuery` would lose the answer entirely | its header: *"`readSession` for the log, `readSurface` for the surface; when the plugin is wired to that, these two modules are the ones to delete"* |
-| `host/surface.js` | **WIRED, and NOT deleted, because deleting it is wrong** (`F104`): `sessionQuery.filterEvents(sessionId, [{kind:'surface', values:['current']}])` is now asked wherever a caller can await (`lib/surface-authority.js`), and this fold is the fallback for a deployment with no `sessionQuery` -- without which the shadowed-answer defect it was written for comes back. It MOVES to the session adapter with `feed.js` | its header: *"when the plugin is wired to it this fold is redundant and should be deleted"* |
+| `packages/session-adapter/lib/feed.js` | **MOVING to the session adapter (§14.6 (d)), not deleting**: its condition cannot be met where it is needed. Measured 2026-10-05 (`F104`) -- the authority is ASYNC and OPTIONAL, and the in-band path cannot await, so a deployment without `sessionQuery` would lose the answer entirely | its header: *"`readSession` for the log, `readSurface` for the surface; when the plugin is wired to that, these two modules are the ones to delete"* |
+| `packages/session-adapter/lib/surface.js` | **WIRED, and NOT deleted, because deleting it is wrong** (`F104`): `sessionQuery.filterEvents(sessionId, [{kind:'surface', values:['current']}])` is now asked wherever a caller can await (`lib/surface-authority.js`), and this fold is the fallback for a deployment with no `sessionQuery` -- without which the shadowed-answer defect it was written for comes back. It MOVES to the session adapter with `feed.js` | its header: *"when the plugin is wired to it this fold is redundant and should be deleted"* |
 
 ## The subject: what gets measured
 
 * `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
 * `surface-authority.js` — WHICH events are in the model's CURRENT surface, asked of the host (`filterEvents {kind:'surface', values:['current']}`); returns null rather than an empty answer when it cannot, so the fold in `host/surface.js` stays in charge
+
+**THE SESSION-SHAPED THREE ARE NO LONGER IN `lib/host/`.** The harness's event vocabulary (`session-format`), the surface
+fold (`surface`) and the event feed (`feed`) are the pure half of the session adapter and live in the package
+[`dsh-session-adapter`](packages/session-adapter/), imported by name. The reason is measured (`F104`): they must be
+**importable**, because the composer runs inside a synchronous path that cannot await a Cordis service. `fs-journal.js`
+and this map stay, because the filesystem journal is not session-shaped.
 * `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
 
 **THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
@@ -106,9 +112,6 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 ## The host adapter
 
 * `host/index.js` — the host surface this plugin depends on, in one place, and how it is checked
-* `host/session-format.js` — the harness's session vocabulary: the event types, the two message shapes, and which block kinds count as text
-* `host/feed.js` — the live event feed, taken from the harness rather than polled
-* `host/surface.js` — the model surface, derived from the log's own surface ops
 * `host/fs-journal.js` — what the filesystem actually did, recorded from the harness
 
 ## Our own footprint

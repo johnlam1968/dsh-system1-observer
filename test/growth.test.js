@@ -112,11 +112,14 @@ test('a file whose header nominates it for deletion is on the map\'s retirement 
     const doc = readFileSync(join(ROOT, 'lib/README.md'), 'utf8')
     const section = doc.split('## Nominated for retirement')[1]
     assert.ok(section !== undefined, 'lib/README.md has no `## Nominated for retirement` section')
-    // The map writes paths relative to `lib/`; the scan returns them relative to the repository root.
+    // The map writes paths relative to `lib/`; the scan returns them relative to the repository root. A row may now
+    // name a path OUTSIDE `lib/` -- the session-shaped adapter modules moved into their own package (`F104`), and this
+    // check follows them there, because a check that stopped at `lib/` would quietly stop covering them.
     const listed = [...section.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)]
-        .map((m) => [m[1].startsWith('lib/') ? m[1] : `lib/${m[1]}`, m[2].trim()])
+        .map((m) => [m[1].startsWith('lib/') || m[1].startsWith('packages/') ? m[1] : `lib/${m[1]}`, m[2].trim()])
 
-    const nominating = filesUnder('lib').filter((rel) => NOMINATES.test(readFileSync(join(ROOT, rel), 'utf8')))
+    const nominating = [...filesUnder('lib'), ...filesUnder('packages')]
+        .filter((rel) => NOMINATES.test(readFileSync(join(ROOT, rel), 'utf8')))
 
     const missing = nominating.filter((rel) => !listed.some(([f]) => f === rel))
     assert.deepEqual(missing, [], `these nominate themselves for deletion but are not on the retirement list: ${missing.join(', ')}`)
