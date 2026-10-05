@@ -263,6 +263,58 @@ Every one of those is **per-harness** (almost all Claude Code), and **none carri
 Third-party code: if any of it is adopted, review the source and pin a commit — the same rule this repository applies
 to plugins.
 
+## What `sessionQuery` already does, and what this plugin adds
+
+Asked directly, and the answer corrects a claim in the section below. **`sessionQuery` is a dsh SERVICE on `ctx`
+(not an agent tool): our agent-facing surface is the tool `system1_sessions`.** It exposes **fifteen methods**:
+
+```
+read           readSession(id) · listEvents(id) · readEvent({sessionId, seq, before, after})
+surface        readSurface(id)
+filter         filterSessions(filters) · filterEvents(id, filters)
+search         searchSessions(request)          -- full text across the corpus
+               searchEvents(request)            -- full text within one session
+titles         readTitle · readTitleSnapshot · readTitleSnapshots
+attribution    traceSession(id) · traceEvent(request)   -- which agent/plugin caused an event
+observe        observeSession(id, options)
+```
+
+**This plugin calls two of them: `listSessions()` and `readSession(id)`.** `readSurface` is additionally used as the
+ORACLE that `lib/host/surface.js` is checked against (`test/surface-compare.test.js`), while the live path takes the
+surface from the session object instead.
+
+### So we hand-roll three things the service already offers
+
+| the service has | what this plugin does instead | verdict |
+|---|---|---|
+| `searchSessions`, `searchEvents` | nothing — `system1_sessions`'s `search` is a substring of the **title or id** | **a real gap in our tool**, and the one the index section below originally mis-blamed on the platform |
+| `filterEvents(id, filters)`, `listEvents(id)` | `lib/session-subject.js` slices raw events by kind by hand | a hand-rolled filter where a service call exists |
+| `readTitle`/`readTitleSnapshots` | our tool folds titles from the log itself | hand-rolled again |
+| `traceEvent`, `traceSession` | unused, though attribution was recorded as a missing capability | available and unclaimed |
+
+### And what this plugin does that `sessionQuery` cannot, by construction
+
+1. **The selection semantics**: what an ASK is (the `source.kind` discrimination — the harness speaks on the same
+   channel), what an ANSWER is (the turn's last word), and what G0/G1 mean. The service reads events; it has no notion
+   of a group, of a subject, or of a refusal when a group cannot be composed.
+2. **The derived unit**: a turn is not an ask (**253 asks across 487 turns**), so the unit a measurement wants has to be
+   derived. The service offers the harness's own boundaries only.
+3. **Composition for a judge**: the labelled sections, the head/tail cut, and the surface-aware refusal (`a turn whose
+   response was shadowed has NO response` — refused, not re-read from the log).
+4. **Sizing**: `coverageOf` and `lib/segment.js`, which fit a subject to the decision model's character budget.
+5. **The register**: the trace, the readings, the packages, reproducibility. `sessionQuery` has no concept of a
+   measurement, a question, or a reading.
+6. **Cross-harness**: the service is dsh-only. pi, mcode and Hermes need their own readers.
+7. **The instrument**: asking system1 a question set and turning probabilities into readings.
+8. **The agent-facing tool**: `system1_sessions` exists because dsh's session plugins are UI-first and expose no host
+   tool — which is the reason this plugin built one.
+
+### The order this implies
+
+**Expose what the service already offers before building a database to replace it.** Search, filtered event reads and
+titles are service calls; the index's own case is aggregates, the derived unit, cross-harness normalization and
+materialization. Building the DB first would re-implement search that is already mounted.
+
 ## Why convert a session to a database at all
 
 The operator asked for the rationale rather than the build. Every claim below is tied to a measurement taken in this
@@ -274,7 +326,7 @@ repository; none of it is a general preference for databases.
 |---|---|
 | **Seek instead of scan.** A query reads rows; a session read decodes everything. | One session's asks paged from an index in **7.7 ms**, against decoding a **23 MB** zstd log of **10,939 concatenated frames** whose decoder stops at the first frame — and `readSession` hands back the whole event list regardless of how little is wanted |
 | **A boundary the harness may not have.** The index can hold a DERIVED unit for every source. | **All 44** pi messages loaded with a null turn, so a "per turn" query **looked cross-harness and answered for dsh alone**. The failure is silent, which is what makes this the strongest single argument |
-| **Arithmetic stays arithmetic.** Counting, filtering, grouping and joining belong in SQL, not in a model call. | There is **no per-session ask count at all**; `search` matches only a title or an id substring; a full-text query for `telegram` matched **2,316 times** inside one pi session that no title search would ever surface |
+| **Arithmetic stays arithmetic.** Counting, filtering, grouping and joining belong in SQL, not in a model call. | There is **no per-session ask count at all** — nothing in the harness or here answers "asks per session". **CORRECTED: full-text search is NOT missing from the platform**; `sessionQuery` exposes `searchSessions` and `searchEvents`, and `filterEvents` and `readTitle*` besides (see the next section). The gap is in OUR TOOL, which offers a title/id substring and nothing else. So the index's case rests on **aggregates, the derived unit, cross-harness normalization and materialization** — not on search |
 | **A distribution to read a number against.** A reading means more beside the population it came from. | `dsh 4.21` against `pi 0.19` reasoning-to-visible — a cross-harness comparison nothing here can currently make, and `1.85 of 2` means little without other sessions' readings |
 | **The fidelity facts become addressable.** `shadowed`, attempts and turn-end reasons stop being re-derived per request. | **3,417 messages are shadowed** in one session, **8 attempts**, **541 turn-end reasons** — today only `surfaceEvents()` and the composer ever see them, and "which readings judged withdrawn text?" is not a question anyone can ask |
 | **The cost is small and known.** | **4.1 s** to build over 185 sessions and **103 MB**, which is the FTS mirroring the text; an asks-and-counts index is a fraction of it. A disposable index costs nothing to throw away |
