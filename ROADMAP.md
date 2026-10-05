@@ -871,3 +871,38 @@ core never reads a log.
 * **If the two channels drift.** `test/surface-compare.test.js` compares this plugin's fold against
   `sessionQuery.readSurface`; the same pattern is owed to the index.
 * **If the core is extracted before a second consumer.** Then the "pure" package is DSH-shaped with a neutral name.
+
+### 14.6 The topology, as five things and what each owns
+
+Recorded 2026-10-05, after the store was extracted. The shape is the one `system1-runtime-repo` +
+`dsh-docdrift` + `system1-runtime` already realise for the decision-model side, applied to measurement.
+
+| | what it is | kind | status |
+|---|---|---|---|
+| **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned; candidates measured (`seams.js` 297, `questions.js` 278, `question-sets.js` 311, `probe-score.js` 390, `calibrate.js` 233, `compare.js` 160, `model/*` ~400, `observe.js` 247, `evidence.js` 229, `register.js` 161) |
+| **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
+| **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
+| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them (`lib/host/` 259 lines + the dsh half of `lib/session-subject.js` 223 and `lib/sessions-tool.js` 290, all by INJECTION) | dsh plugin | the unblocked next step; start by DELETING `feed.js`/`surface.js` |
+| **(e)** | **the composition**: profiles, bundle list, pinned versions, plans and ledgers | repository, no code of its own | homeless today: it is spread over this repo and `~/.dsh/profiles/docdrift`, and with two plugins it stops being hypothetical |
+
+**The seams that must be drawn explicitly, or the shape drifts:**
+
+1. **(b) vs (d): the store serves what was BUILT, the adapter serves what is LIVE.** Without that rule two
+   plugins both read sessions and disagree, which is `F98`'s lesson at a different layer -- a divergence nobody
+   can see.
+2. **(a) owns the instrument's artifacts and the instrument's tools.** The trace format, the reading/register
+   semantics and the measurement package are (a)'s, and so are the tools that measure the INSTRUMENT rather than
+   the session (`system1_questions`, `system1_battery`). Today those live in (c), which is why a second consumer
+   would have to reach into the application to get them.
+3. **(e) owns the VERSIONS.** The runtime precedent pins `#v0.1.1` in the consumer's package.json; the bundle list
+   and those pins must live in one place or they drift (`F98` again: a profile edited by hand while a process
+   held the old composition).
+4. **(c) must not be the only place (a)'s format is known.** An application is a leaf by design; if the trace and
+   the packages can only be read through it, the instrument is not reusable whatever the package boundary says.
+
+**What (c) offers outward today, measured**: it provides exactly ONE service (`OBSERVER_SERVICE`) and **nothing
+consumes it** -- not this repository, not the profile's other plugins -- while the durable artifacts (the trace at
+`~/.dsh/logs/system1-observer.jsonl`, the packages under `data/measurements`) are the surface anything can actually
+read, and the eight registered tools are inward (they serve the agent inside this deployment). So (c) is a leaf in
+dependency terms and an unused offer in service terms; the reuse question is answered by moving (a)'s artifacts and
+instrument tools into (a), not by making (c) consumable.
