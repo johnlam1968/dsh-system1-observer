@@ -48,6 +48,20 @@ test('textOf reads the content shapes the harness writes, and nothing else', () 
   assert.equal(textOf({ data: {} }), '')
 })
 
+test('list search finds a session by its PROJECT, because the title is a summary of the work', async () => {
+  // Measured on this host: the dsh session whose cwd is /home/john/CodingProjects/zeroclaw-voice-proxy is titled
+  // "Push repo to GitHub account". An agent asking for the session in a named project would search a string that no
+  // title contains, so `search` must compare the directory too.
+  const records = [{ header: { id: 'session-d8d5d126', cwd: '/home/john/CodingProjects/zeroclaw-voice-proxy', createdAt: 5 }, live: false, persisted: true }]
+  const tool = createSessionsTool({ query: fakeQuery({ records, titles: { 'session-d8d5d126': 'Push repo to GitHub account' } }) })
+  const value = await tool.execute({ action: 'list', search: 'zeroclaw-voice-proxy' })
+  assert.equal(value.count, 1)
+  assert.equal(value.sessions[0].id, 'session-d8d5d126')
+  assert.equal(value.sessions[0].title, 'Push repo to GitHub account')
+  // and the title still matches, so nothing that worked before stopped working
+  assert.equal((await tool.execute({ action: 'list', search: 'GitHub account' })).count, 1)
+})
+
 test('search finds a session by the TEXT of its conversation, which list cannot', async () => {
   // The capability this adds: `list`'s `search` compares a title or an id, so a phrase that exists only inside the
   // conversation is invisible to it. The harness's own index is what makes the phrase findable.
@@ -86,13 +100,21 @@ test('search without a query says which argument is missing', async () => {
 })
 
 test('list finds a session by title substring, by cwd, and by availability', () => {
-  const records = [record('session-a', { createdAt: 3 }), record('session-b', { createdAt: 2, cwd: '/home/john/other' }), record('session-c', { createdAt: 1, live: true, persisted: false })]
+  // DISTINCT PROJECTS ON PURPOSE. Every record used to share one cwd, so once `search` began comparing the directory a
+  // single term matched all three and the assertion below stopped meaning anything about the title.
+  const records = [
+    record('session-a', { createdAt: 3, cwd: '/home/john/freeciv' }),
+    record('session-b', { createdAt: 2, cwd: '/home/john/other' }),
+    record('session-c', { createdAt: 1, cwd: '/home/john/third', live: true, persisted: false }),
+  ]
   const titles = { 'session-a': 'Assisted freeciv play', 'session-b': 'Something else' }
   // the search that motivated this tool: a name, not an id, and not a walk through ~/.dsh/sessions
   const byTitle = rowsOf(records, new Map(Object.entries(titles)), { search: 'freeciv' })
   assert.deepEqual(byTitle.rows.map((r) => r.id), ['session-a'])
   assert.equal(byTitle.rows[0].title, 'Assisted freeciv play')
   assert.equal(byTitle.total, 1)
+  // and the same argument now matches a DIRECTORY, which is the handle that works when a title describes the work
+  assert.deepEqual(rowsOf(records, new Map(), { search: 'john/other' }).rows.map((r) => r.id), ['session-b'])
   // cwd, availability, and newest-first
   assert.deepEqual(rowsOf(records, new Map(), { cwd: '/home/john/other' }).rows.map((r) => r.id), ['session-b'])
   assert.deepEqual(rowsOf(records, new Map(), { availability: 'live' }).rows.map((r) => r.id), ['session-c'])
