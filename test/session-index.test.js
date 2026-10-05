@@ -6,8 +6,8 @@ import assert from 'node:assert/strict'
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildIndex, foldSession, readCounts, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
-import { findSessions, metaOf, searchSessions } from '../lib/session-index.js'
+import { buildIndex, foldSession, readCounts, sessionFiles, sessionLines } from 'dsh-session-index/build'
+import { findSessions, metaOf, searchSessions } from 'dsh-session-index/store'
 
 /** A fixture session: header at the RECORD level, a title event whose `source` is an object, and a replace op. */
 function fixture() {

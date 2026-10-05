@@ -195,6 +195,26 @@ search covers what the harness's own extractor covers — message text, reasonin
 arguments** — because a search that read only messages would answer "not in this library" for a phrase sitting in a
 tool result (measured: the fixture's phrase was in `tool_results`, not in any message).
 
+## Where the store LIVES, and why it left this plugin
+
+The store is now its own package in this repository: **`packages/session-index/`** (published name
+`dsh-session-index`), mounted as the `session-index` bundle row and providing a **`localSessionIndex`** service. The
+reason is the import audit that answered the operator's question: the store, its builder and its refresh import **no
+dsh code at all** — only `node:sqlite`, `node:child_process`, `node:fs`, `node:os`, `node:path`, `node:url` — while the
+plugin that measures sessions has no business owning a database.
+
+* `packages/session-index/lib/store.js` — the read side (path, tables, search, meta)
+* `packages/session-index/lib/build.js` — the builder (fold, the FTS mirror, transactions, phase timings)
+* `packages/session-index/lib/refresh.js` — the child-process incremental rebuild
+* `packages/session-index/bin/session-index.mjs` — the CLI; `scripts/session-index.mjs` remains as a **shim** because the
+  docs, the tool's own render text and several habits point at that path
+* `packages/session-index/index.js` — the row: `Config` (`path`, `sessionsDir`, `tokenizer`) and the service
+
+The plugin consumes it **by package import** (`dsh-session-index/store`, `.../refresh`) rather than by injection,
+because both live in the same repository and the import cannot silently differ from what the service would do; the
+service exists for consumers that are not this repository's. Verified by a probe boot on another port before the
+operator restarted: the new row activated, with the only failure being the pre-existing `capability-inspector`.
+
 ## The store's FTS5 mirror, and what it cost
 
 A `LIKE` scan over 155 MB answered in **242 ms**; the same question through an FTS5 mirror answers in **9 ms**. So the

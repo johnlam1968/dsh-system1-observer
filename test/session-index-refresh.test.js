@@ -11,8 +11,8 @@ import { Readable } from 'node:stream'
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildIndex } from '../scripts/session-index.mjs'
-import { refreshIndex, refreshScriptPath } from '../lib/session-index-refresh.js'
+import { buildIndex } from 'dsh-session-index/build'
+import { refreshIndex, refreshScriptPath } from 'dsh-session-index/refresh'
 
 const SUMMARY = [
     '499 session(s) in the store; refolded 2, skipped 497 unchanged, in 1500 ms -> /tmp/store.db',

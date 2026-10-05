@@ -18,9 +18,9 @@
 
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { defaultIndexPath, metaOf } from './session-index.js'
+import { defaultIndexPath, metaOf } from './store.js'
 
-const SCRIPT = fileURLToPath(new URL('../scripts/session-index.mjs', import.meta.url))
+const SCRIPT = fileURLToPath(new URL('../bin/session-index.mjs', import.meta.url))
 
 /** The rebuild this process would run, exposed so a caller can report or test it. */
 export function refreshScriptPath() {
