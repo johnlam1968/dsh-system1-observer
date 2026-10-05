@@ -298,10 +298,15 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     const dropCalls = db.prepare('DELETE FROM tool_calls WHERE session_id = ?')
     const dropResults = db.prepare('DELETE FROM tool_results WHERE session_id = ?')
     const files = sessionFiles(sessionsDir)
+    const refoldStarted = Date.now()
     const now = new Date().toISOString()
     let done = 0
     let skipped = 0
     let ftsRebuilt0 = false
+    // WHICH SESSIONS WERE REFOLDED, so the mirror can be maintained for THEM instead of rebuilt whole. Measured on this
+    // library before the fix: one changed session cost refold 43.3 s + mirror 66.6 s, because 91,380 mirror rows were
+    // deleted and re-inserted for 499 sessions of which exactly one had changed.
+    const refoldedIds = []
     for (const file of files) {
         const stat = statSync(file.path)
         const held = known.get(file.id)
@@ -324,6 +329,7 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
         for (const r of results) insertResult.run(...r)
         done += 1
         ftsRebuilt0 = true
+        refoldedIds.push(file.id)
         if (onProgress !== null && done % 25 === 0) onProgress(done, files.length)
     }
     db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(id UNINDEXED, title, cwd)')
@@ -332,6 +338,8 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // THE VERSION IS STAMPED LAST. Stamping it before the build marked a store that never finished as current: the next
     // run saw "same version", kept the old tables, and failed on a column that did not exist. A crash must leave the
     // version BEHIND the schema so the following run rebuilds.
+    const refoldMs = Date.now() - refoldStarted
+    const mirrorStarted = Date.now()
     // THE MIRROR IS REBUILT FROM THE TABLES, NOT FROM THE LOGS: every searchable row is already stored, so this costs
     // one INSERT..SELECT per source instead of decoding 499 session files again. The receipt is the row counts: if the
     // mirror and the sources disagree -- or anything was refolded, which changes the sources -- it is rebuilt.
@@ -342,24 +350,54 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
       + (SELECT COUNT(*) FROM tool_calls WHERE args IS NOT NULL AND args <> '') AS n`).get().n
     let ftsRows = db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n
     let ftsRebuilt = false
-    if (wantFts && (ftsRebuilt0 || ftsRows !== searchable)) {
-        // ONE TRANSACTION, so a reader sees the old mirror or the new one and never half of either.
+    let ftsMaintained = 0
+    const insertFor = (where, args) => {
+        db.prepare(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'text' FROM messages WHERE ${where} AND text IS NOT NULL AND text <> ''`).run(...args)
+        db.prepare(`INSERT INTO search_fts (body, session_id, source) SELECT reasoning, session_id, 'reasoning' FROM messages WHERE ${where} AND reasoning IS NOT NULL AND reasoning <> ''`).run(...args)
+        db.prepare(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'tool-result' FROM tool_results WHERE ${where} AND text IS NOT NULL AND text <> ''`).run(...args)
+        db.prepare(`INSERT INTO search_fts (body, session_id, source) SELECT args, session_id, 'tool-call' FROM tool_calls WHERE ${where} AND args IS NOT NULL AND args <> ''`).run(...args)
+    }
+    // THE MIRROR IS MAINTAINED PER SESSION, and rebuilt whole only when it CANNOT BE TRUSTED. The distinction matters and
+    // was got wrong once: a refold necessarily changes the source count (the session gained rows), so comparing the
+    // mirror's count with the sources AFTER the refold condemns exactly the case maintenance exists for. What the counts
+    // can say is whether the mirror is ABSENT or was never built for this store -- and, after maintenance, whether the
+    // result adds up.
+    const mirrorMissing = wantFts && ftsRows === 0 && searchable > 0
+    if (mirrorMissing) {
+        db.exec('BEGIN')
+        try { db.exec('DELETE FROM search_fts'); insertFor('1 = 1', []) ; db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+        ftsRebuilt = true
+    } else if (wantFts && refoldedIds.length > 0) {
         db.exec('BEGIN')
         try {
-            db.exec('DELETE FROM search_fts')
-            db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'text' FROM messages WHERE text IS NOT NULL AND text <> ''`)
-            db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT reasoning, session_id, 'reasoning' FROM messages WHERE reasoning IS NOT NULL AND reasoning <> ''`)
-            db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT text, session_id, 'tool-result' FROM tool_results WHERE text IS NOT NULL AND text <> ''`)
-            db.exec(`INSERT INTO search_fts (body, session_id, source) SELECT args, session_id, 'tool-call' FROM tool_calls WHERE args IS NOT NULL AND args <> ''`)
+            for (const id of refoldedIds) {
+                db.prepare('DELETE FROM search_fts WHERE session_id = ?').run(id)
+                insertFor('session_id = ?', [id])
+            }
             db.exec('COMMIT')
         } catch (error) { db.exec('ROLLBACK'); throw error }
-        ftsRows = db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n
+        ftsMaintained = refoldedIds.length
+        // A MAINTENANCE THAT DOES NOT ADD UP IS REBUILT WHOLE, rather than left subtly wrong: the counts are the receipt.
+        if (db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n !== searchable) {
+            db.exec('BEGIN')
+            try { db.exec('DELETE FROM search_fts'); insertFor('1 = 1', []); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
+            ftsRebuilt = true
+            ftsMaintained = 0
+        }
+    } else if (wantFts && ftsRows !== searchable) {
+        // NOTHING WAS REFOLDED, YET THE MIRROR DISAGREES WITH THE TABLES: a store left inconsistent by an interrupted
+        // build, which the counts can still see because no session changed under it.
+        db.exec('BEGIN')
+        try { db.exec('DELETE FROM search_fts'); insertFor('1 = 1', []); db.exec('COMMIT') } catch (error) { db.exec('ROLLBACK'); throw error }
         ftsRebuilt = true
-    } else if (!wantFts && ftsRows > 0) {
+    }
+    ftsRows = db.prepare('SELECT COUNT(*) AS n FROM search_fts').get().n
+    if (!wantFts && ftsRows > 0) {
         db.exec('DELETE FROM search_fts')
         ftsRows = 0
         ftsRebuilt = true
     }
+    const mirrorMs = Date.now() - mirrorStarted
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     const stamp = db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
     stamp.run('text_indexed', withText ? '1' : '0')
@@ -372,7 +410,7 @@ export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_I
     // THE SUMMARY IS READ BACK FROM THE STORE, not accumulated during the walk: in an incremental run most rows were
     // never walked, so a running counter would describe the refold rather than the index.
     const counts = readCounts(out)
-    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, ftsRebuilt, ftsRows, searchMode: wantFts ? 'fts5' : 'like', tokenizer: wantFts ? wantTokenizer : 'none', titled: counts.titled, untitled: counts.sessions - counts.titled, out }
+    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, modeChanged, ftsRebuilt, ftsMaintained, ftsRows, refoldMs, mirrorMs, searchMode: wantFts ? 'fts5' : 'like', tokenizer: wantFts ? wantTokenizer : 'none', titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
 // THE READ SIDE LIVES IN `lib/session-index.js`, so this script and the plugin cannot drift about a path, a column or
@@ -412,7 +450,8 @@ async function main(argv) {
             + `${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}`
             + `${result.modeChanged && !result.schemaMoved ? ' (the TEXT MODE changed, so every receipt was void)' : ''}`
             + `, in ${ms(started)} -> ${result.out}`)
-        console.log(`  search: ${result.searchMode}${result.searchMode === 'fts5' ? ` (${result.tokenizer}), ${result.ftsRows} mirrored row(s)${result.ftsRebuilt ? ' (rebuilt)' : ' (unchanged)'}` : ' -- no FTS5 mirror, text is matched by scan'}`)
+        console.log(`  cost: refold ${(result.refoldMs / 1000).toFixed(1)} s, mirror ${(result.mirrorMs / 1000).toFixed(1)} s`)
+        console.log(`  search: ${result.searchMode}${result.searchMode === 'fts5' ? ` (${result.tokenizer}), ${result.ftsRows} mirrored row(s)${result.ftsRebuilt ? ' (rebuilt whole)' : result.ftsMaintained > 0 ? ` (maintained for ${result.ftsMaintained} session(s))` : ' (unchanged)'}` : ' -- no FTS5 mirror, text is matched by scan'}`)
         console.log(`  with a session/title event: ${result.titled} | without: ${result.untitled}` +
             (result.untitled > 0 ? ' (those are the ones a title service must fold per request)' : ''))
         console.log(`  size: ${(statSync(out).size / 1048576).toFixed(1)} MB`)

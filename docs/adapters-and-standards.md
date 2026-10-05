@@ -229,8 +229,13 @@ The store is a **snapshot**, so `search` is only as fresh as the last build — 
 the one being measured) is not in it. `system1_sessions { action: 'refresh' }` closes that gap from inside the
 conversation, without a shell.
 
-**It runs in a CHILD PROCESS, and the measurement is why**: one living 33 MB session measured **110.6 s** to refold
-(`refolded 1, skipped 498`, store 617.8 → 635.9 MB). The builder decodes logs through `zstd` with `spawnSync`, so
+**It runs in a CHILD PROCESS, and the measurement is why**: one living 33 MB session measured **110.6 s** to refresh,
+then **56.6 s** after a defect was found and fixed in the same pipeline (`refolded 1, skipped 498`). Instrumenting the
+builder split that cost, which is how the defect was visible at all: **refold 43.3 s + mirror 66.6 s** — two thirds of
+a one-session refresh spent deleting and re-inserting the whole 91,380-row FTS mirror. The mirror is now maintained for
+the refolded sessions only (`F102`), and what remains is named: **43.3 s of refold** (the offset-level refresh of
+`ROADMAP.md` §12.4) and **13.2 s of mirror maintenance**, which is the `session_id` scan of an UNINDEXED FTS column and
+would need a rowid map. The builder decodes logs through `zstd` with `spawnSync`, so
 in-process that would block the harness — including the very session it is observing — for close to two minutes. A
 child process costs a pid and keeps the observer out of its subject's way; `timeoutMs` lets a caller wait less and come
 back, and the report distinguishes **finished** from **still running** rather than claiming a rebuild that has not

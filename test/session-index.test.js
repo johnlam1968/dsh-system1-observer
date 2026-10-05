@@ -3,7 +3,7 @@
 // shadowed messages. Each assertion below is one of those failures.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildIndex, foldSession, readCounts, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
@@ -146,6 +146,34 @@ test('search SAYS SO when the store holds no message text, rather than reporting
         assert.equal(found.rows.length, 0, 'and the phrase really is absent from titles, ids and directories')
         // the title path still works from the same store
         assert.equal((await searchSessions('GitHub account', { path: out })).rows[0].id, f.id)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a refold of ONE session maintains THAT session\'s mirror rows, and does not rebuild the mirror whole', async () => {
+    // Measured on the real library before this: a single changed session cost refold 43.3 s + mirror 66.6 s, because
+    // 91,380 mirror rows were deleted and re-inserted for 499 sessions of which exactly one had changed.
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        const other = join(f.root, '--home-john-CodingProjects-other--', 'session-other')
+        mkdirSync(other, { recursive: true })
+        writeFileSync(join(other, 'session.v4.jsonl'), [
+            JSON.stringify({ type: 'session', version: 4, id: 'session-other', createdAt: 6, cwd: '/home/john/CodingProjects/other' }),
+            JSON.stringify({ type: 'user/message', seq: 1, time: 1, data: { turn: 1, source: { kind: 'user' }, content: [{ type: 'text', text: 'untouched phrase lives here' }] } }),
+        ].join('\n') + '\n')
+        const first = buildIndex({ sessionsDir: f.root, out, withText: true })
+        assert.equal(first.refolded, 2)
+        assert.equal(first.ftsRebuilt, true, 'the first build has no mirror to maintain')
+        assert.equal((await searchSessions('untouched phrase', { path: out })).rows.length, 1)
+        appendFileSync(join(f.dir, 'session.v4.jsonl'), JSON.stringify({
+            type: 'user/message', seq: 11, time: 11, data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'a newly appended phrase' }] },
+        }) + '\n')
+        const second = buildIndex({ sessionsDir: f.root, out, incremental: true, withText: true })
+        assert.equal(second.refolded, 1)
+        assert.equal(second.ftsRebuilt, false, 'one changed session must NOT rebuild the mirror whole')
+        assert.equal(second.ftsMaintained, 1)
+        assert.equal((await searchSessions('a newly appended phrase', { path: out })).rows.length, 1, 'the changed session is current')
+        assert.equal((await searchSessions('untouched phrase', { path: out })).rows.length, 1, 'and the session nobody touched is still searchable')
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 

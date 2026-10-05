@@ -827,9 +827,12 @@ core never reads a log.
 1. **`filterEvents` with `{kind: 'surface', values: ['current']}`** — replaces `lib/host/surface.js` (20 lines) with the
    AUTHORITY instead of an approximation, and needs no store. The one deletion on the retirement list that is ready.
 2. **The offset-level refresh** — makes a LIVING session cost its last frame instead of its whole life. **Measured
-   again from the agent's own refresh path: 110.6 s to refold ONE living session** (`refolded 1, skipped 498`), which is
-   why that rebuild runs in a child process rather than in the harness. Design in `docs/adapters-and-standards.md`; a
-   stored frame offset would make it about a second.
+   through the agent's own refresh path: 43.3 s of REFOLD for one living session** (the rest was a mirror defect, fixed
+   — `F102`), which is why the rebuild runs in a child process rather than in the harness. Design in
+   `docs/adapters-and-standards.md`; a stored frame offset would make it about a second.
+   **And the mirror step it left behind**: maintaining one session costs 13.2 s because `DELETE ... WHERE session_id = ?`
+   scans an UNINDEXED FTS column. A `session_id → rowid` side table, or `contentless_delete`, would cut that to
+   milliseconds; measured and named rather than guessed.
    **And the store now carries SESSION SEARCH, hand-rolled, because the native route was tried and reverted**: enabling
    `@deepseek-ai/dsh-session-query-sqlite` in this profile made `api-session-controller` fail to start, the cause was
    never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`
