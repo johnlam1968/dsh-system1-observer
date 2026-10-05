@@ -12,6 +12,17 @@ Two things this map deliberately does **not** carry, because something else alre
 
 Paths are relative to `lib/`.
 
+## Nominated for retirement
+
+A file may be kept, but not silently: if its own header says it should go, the condition that retires it lives here.
+`test/growth.test.js` checks this both ways — a nominating file that is missing, or a row whose file no longer
+nominates itself, fails. (Size budgets, the other half of that test, are machine facts and live beside it.)
+
+| file | retired by | what says so |
+|---|---|---|
+| `host/feed.js` | wiring the plugin to `sessionQuery.readSession`, which answers the same question authoritatively | its header: *"`readSession` for the log, `readSurface` for the surface; when the plugin is wired to that, these two modules are the ones to delete"* |
+| `host/surface.js` | wiring the plugin to `sessionQuery.readSurface` | its header: *"when the plugin is wired to it this fold is redundant and should be deleted"* |
+
 ## The subject: what gets measured
 
 * `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
