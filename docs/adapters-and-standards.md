@@ -223,6 +223,31 @@ executable FTS syntax"; `MATCH` has no such manners, so a phrase is quoted and i
 over (`ftsPhrase`). The test asserts the difference: `summary AND above` finds nothing (a phrase that is not in the
 text) while `summary of the above` finds the message — if the words were syntax, the first would have matched.
 
+### Keeping the store current: the agent's own refresh, out of process
+
+The store is a **snapshot**, so `search` is only as fresh as the last build — a session still being written (including
+the one being measured) is not in it. `system1_sessions { action: 'refresh' }` closes that gap from inside the
+conversation, without a shell.
+
+**It runs in a CHILD PROCESS, and the measurement is why**: one living 33 MB session measured **110.6 s** to refold
+(`refolded 1, skipped 498`, store 617.8 → 635.9 MB). The builder decodes logs through `zstd` with `spawnSync`, so
+in-process that would block the harness — including the very session it is observing — for close to two minutes. A
+child process costs a pid and keeps the observer out of its subject's way; `timeoutMs` lets a caller wait less and come
+back, and the report distinguishes **finished** from **still running** rather than claiming a rebuild that has not
+happened.
+
+Three properties, each deliberate:
+
+* **The store's mode is preserved.** `--text` and the tokenizer come from the store's own `meta`, so a refresh
+  maintains the store that exists instead of silently switching a trigram mirror to word search or dropping it.
+* **One at a time.** A second call while a rebuild runs reports the running pid instead of starting a rival writer on
+  the same file — the index path has a single owner by design.
+* **The store stays readable throughout**, because the mirror swap is one transaction and the tables are only appended
+  to. A search during a rebuild answers from the previous state, which is why the caller is told to search again.
+
+**This is also the strongest argument for the offset-level refresh** (`ROADMAP.md` §12.4): 110 s is the price of
+re-decoding a whole living log to append a few frames, and a stored frame offset would make it about a second.
+
 ### The tokenizer decides what a query MEANS, so it is chosen and recorded
 
 An FTS5 table's tokenizer is not a detail — it is the definition of the question a `MATCH` answers:

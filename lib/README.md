@@ -28,6 +28,8 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 * `session-subject.js` — a stored session as the subject: sliced into a window, and what the slice covers
 * `session-index.js` — the hand-rolled session store, READ side: its path, its tables, and search over message text, reasoning, tool calls and tool results
 * `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
+* `session-index-refresh.js` — bringing the store CURRENT on the agent's request: an incremental rebuild in a CHILD process (a refold of tens of MB must not block the harness it observes), preserving the store's text mode and tokenizer
+* `sessions-tool-output.js` — the tool's output schema and its rendering, split out of `sessions-tool.js` when the fourth action arrived
 * `exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
 * `sessions.js` — which sessions the observer watches at all
 * `subject.js` — which model produced the text being judged

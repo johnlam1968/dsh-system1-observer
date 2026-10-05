@@ -246,11 +246,55 @@ test('the tool declares everything it emits, and names itself the way the regist
   const tool = createSessionsTool({ query: fakeQuery({ records: [record('session-a')] }) })
   assert.equal(tool.name, SESSIONS_TOOL_NAME)
   assert.equal(tool.name, 'system1_sessions')
-  for (const value of [await tool.execute({ action: 'list' }), await tool.execute({ action: 'read', sessionId: 'session-a' })]) {
+  const refreshing = createSessionsTool({ query: fakeQuery({ records: [] }), refresh: async () => ({ refreshing: true, pid: 9, elapsedMs: 1000 }) })
+  for (const value of [
+    await tool.execute({ action: 'list' }),
+    await tool.execute({ action: 'read', sessionId: 'session-a' }),
+    await refreshing.execute({ action: 'refresh' }),
+  ]) {
     for (const key of Object.keys(value)) {
       assert.ok(tool.output.schema.properties[key] !== undefined, key + ' is emitted and declared')
     }
   }
+})
+
+test('`refresh` is an action an agent can call, and it distinguishes FINISHED from STILL RUNNING', async () => {
+  // The store is a snapshot, so `search` is only as fresh as the last build. This is the action that closes the gap --
+  // and it must never report a rebuild as done while it is still running.
+  const finished = createSessionsTool({
+    query: fakeQuery({ records: [] }),
+    refresh: async (options) => {
+      assert.deepEqual(options, {}, 'no index path means the store\'s default location, and no timeout means the default wait')
+      return {
+        refreshing: false, pid: 4242, elapsedMs: 1500, refolded: 2, skipped: 497, count: 499,
+        storeSizeMb: 617.8, searchMode: 'fts5', tokenizer: 'trigram',
+        summary: ['499 session(s) in the store; refolded 2, skipped 497 unchanged, in 1500 ms -> /tmp/store.db', '  size: 617.8 MB'],
+      }
+    },
+  })
+  const value = await finished.execute({ action: 'refresh' })
+  assert.equal(value.action, 'refresh')
+  assert.equal(value.refolded, 2)
+  // and the caller may choose how long to WAIT, because the rebuild outlives a short call
+  const patient = createSessionsTool({ query: fakeQuery({ records: [] }), refresh: async (options) => { assert.equal(options.timeoutMs, 30000); return { refreshing: true, pid: 7, elapsedMs: 1 } } })
+  assert.equal((await patient.execute({ action: 'refresh', timeoutMs: 30000 })).refreshing, true)
+  const text = finished.output.render({}, value)[0].text
+  assert.match(text, /the store is current: refolded 2, skipped 497 unchanged, 617.8 MB/)
+  assert.match(text, /search: fts5 \(trigram\)/)
+  assert.match(text, /size: 617.8 MB/)
+
+  const working = createSessionsTool({
+    query: fakeQuery({ records: [] }),
+    refresh: async () => ({ refreshing: true, pid: 4242, elapsedMs: 30000, problems: ['the rebuild is still running after 120 s (pid 4242); it finishes on its own and the store stays readable, so search again shortly'] }),
+  })
+  const running = await working.execute({ action: 'refresh' })
+  const runningText = working.output.render({}, running)[0].text
+  assert.match(runningText, /being rebuilt in pid 4242, running 30 s so far/)
+  assert.match(runningText, /PROBLEM: the rebuild is still running/)
+  // and a refresh needs NO harness service: the store and the builder are both files
+  const serviceless = createSessionsTool({ query: undefined, refresh: async () => ({ refreshing: false, pid: 1, elapsedMs: 5, refolded: 0, skipped: 499 }) })
+  assert.equal((await serviceless.execute({ action: 'refresh' })).refolded, 0)
+  assert.equal((await serviceless.execute({ action: 'list' })).problem !== undefined, true, 'while `list` still refuses by name')
 })
 
 test('`format: subject` composes from the WHOLE log, and says so when no composer is wired', async () => {
