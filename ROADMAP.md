@@ -901,7 +901,7 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 | **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
 | **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
 | **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | package `dsh-session-adapter` (`packages/session-adapter/`), imported BY NAME | **BOTH halves are in the package** (2026-10-05): the in-band half (session vocabulary, surface fold, feed) and the host-backed half (`lib/reader.js` -- the subject read, the list, the window slicing, the coverage, the host's full-text search -- and `lib/surface-authority.js`). The host reaches them through a PARAMETER (`sessionQuery`), never through `ctx`, so the inventory still checks that they contain no host call. **AND THE SERVICE FORM EXISTS AND IS MOUNTED** (2026-10-05): the same functions are provided as `ctx.sessionAdapter` (row `session-adapter`, 193 composed rows, probe-verified on another port before any restart), with `getQuery` as a function so a host that mounts later is still found, and named absences (`null`, a problem sentence, `available()`) for a deployment with no host. The observer still IMPORTS rather than injects, which is what the in-band path requires -- the service exists for consumers that are not this repository's |
-| **(e)** | **the composition**: profiles, bundle list, pinned versions, plans and ledgers | repository, no code of its own | homeless today: it is spread over this repo and `~/.dsh/profiles/docdrift`, and with two plugins it stops being hypothetical |
+| **(e)** | **the composition**: the profile's load-bearing DECISIONS -- the patch (persona override and the rows we add), the mounted bundle list, the peer bridge, the pins | a `deploy/` directory in THIS repository; its own repo only when a SECOND HOST needs it | **NOT a repository today, and this plan overstated it.** Measured 2026-10-05: there is **exactly ONE deployment** carrying this stack (`docdrift`, 10 bundles; `docdrift-headless` carries only `dsh-system1`; `web` and `headless` carry none), so a composition repo would have one consumer -- the mistake §14.1's stop condition refuses for (a). What IS real: `~/.dsh/profiles/docdrift` is **not under version control** (`git rev-parse` fails) and holds **four `.bak` files from tooling rewrites**, one of which silently dropped a bundle entry (`F105`). The rationale splits three ways: the **bundle list** is genuinely at risk; the **pins** are half-done (the lock pins the git dep to a commit, the spec is `github:` = master at install time, and the profile `link:`s working trees -- right for development, wrong for a deployment someone must reproduce); and **plans and ledgers do NOT belong there**, because this register is about the design of the code it sits beside |
 
 **The seams that must be drawn explicitly, or the shape drifts:**
 
@@ -914,9 +914,12 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
    semantics and the measurement package are (a)'s, and so are the tools that measure the INSTRUMENT rather than
    the session (`system1_questions`, `system1_battery`). Today those live in (c), which is why a second consumer
    would have to reach into the application to get them.
-3. **(e) owns the VERSIONS.** The runtime precedent pins `#v0.1.1` in the consumer's package.json; the bundle list
-   and those pins must live in one place or they drift (`F98` again: a profile edited by hand while a process
-   held the old composition).
+3. **(e) owns the VERSIONS, and only the versions, the mounted list and the profile's decisions.** The runtime
+   precedent pins `#v0.1.1` in the consumer's package.json; the bundle list and those pins must live in one place or
+   they drift (`F98` again: a profile edited by hand while a process held the old composition). **Its repository
+   trigger is a second HOST, not a second plugin**: until someone else must reproduce this composition, a `deploy/`
+   directory here carries the same files with no new repo to keep in sync, and the machine-local parts (`node_modules/`,
+   `data/`, credentials, `link:` paths) stay out of it by construction.
 4. **(c) must not be the only place (a)'s format is known.** An application is a leaf by design; if the trace and
    the packages can only be read through it, the instrument is not reusable whatever the package boundary says.
 
