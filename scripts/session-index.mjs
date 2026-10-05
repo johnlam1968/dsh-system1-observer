@@ -30,6 +30,16 @@ export const DEFAULT_SESSIONS_DIR = join(process.env.DSH_HOME ?? join(homedir(),
 /** The derived store. Droppable: `build` recreates it. */
 export const DEFAULT_INDEX = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'session-index.db')
 
+/**
+ * THE STORE'S OWN VERSION, because a receipt is not enough.
+ *
+ * `mtime`+`bytes` says "this FILE did not change", which is true and useless when the SCHEMA changed: the first
+ * incremental run after a column was added skipped all 498 sessions and left the new column empty everywhere, which
+ * looks exactly like a store with nothing to say. So the version is stored in the file (`PRAGMA user_version`) and a
+ * mismatch throws the receipts away.
+ */
+export const SCHEMA_VERSION = 2
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions(
   id TEXT PRIMARY KEY, path TEXT NOT NULL, format TEXT, cwd TEXT, created_at INTEGER,
@@ -40,13 +50,15 @@ CREATE TABLE IF NOT EXISTS sessions(
   reasoning_chars INTEGER NOT NULL DEFAULT 0, visible_chars INTEGER NOT NULL DEFAULT 0,
   tool_calls INTEGER NOT NULL DEFAULT 0, shadowed INTEGER NOT NULL DEFAULT 0,
   high_water INTEGER NOT NULL DEFAULT 0, bytes INTEGER NOT NULL DEFAULT 0,
-  source_sha256 TEXT, indexed_at TEXT NOT NULL
+  source_sha256 TEXT, indexed_at TEXT NOT NULL, mtime REAL
 );
 CREATE TABLE IF NOT EXISTS messages(
   session_id TEXT NOT NULL, seq INTEGER, turn INTEGER, role TEXT, kind TEXT,
   text TEXT, reasoning TEXT, shadowed INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS tool_calls(session_id TEXT NOT NULL, call_id TEXT, name TEXT, args TEXT);
+CREATE TABLE IF NOT EXISTS tool_results(session_id TEXT NOT NULL, call_id TEXT, text TEXT, chars INTEGER NOT NULL DEFAULT 0, is_error INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS results_by_session ON tool_results(session_id);
 CREATE INDEX IF NOT EXISTS messages_by_session ON messages(session_id);
 `
 
@@ -104,6 +116,7 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
     }
     const messages = []
     const calls = []
+    const results = []
     const replaced = []
     for (const line of text.split('\n')) {
         if (line === '') continue
@@ -148,6 +161,20 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
             calls.push([id, String(data.callId ?? ''), String(data.name ?? ''), String(data.arguments ?? '').slice(0, 4000)])
             continue
         }
+        // A RESULT'S ID LIVES IN TWO PLACES and both are read here -- `message.toolCallId` and `message.source.callId`.
+        // `lib/tool-blocks.js` documents the same rule for the composer, and pairing on one place alone is what left
+        // results matched by position there.
+        if (event.type === 'tool/result') {
+            const message = data.message ?? {}
+            const callId = String(data.callId ?? data.toolCallId ?? message.toolCallId ?? (message.source ?? {}).callId ?? '')
+            const content = message.content
+            const text = typeof content === 'string' ? content
+                : Array.isArray(content) ? content.filter((b) => b !== null && typeof b === 'object' && b.type === 'text').map((b) => b.text ?? '').join('') : ''
+            // THE CAP IS THE COMPOSER'S OWN ORDER OF MAGNITUDE, and the FULL LENGTH is stored beside it: a truncated
+            // result with no length reads as a short result, which is the failure `lib/tool-blocks.js` exists to avoid.
+            results.push([id, callId, text.slice(0, 8000), text.length, data.error === undefined && message.isError !== true ? 0 : 1])
+            continue
+        }
         if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
         row.messages += 1
         const content = event.type === 'user/message' ? data.content : (data.message ?? {}).content
@@ -171,40 +198,84 @@ export function foldSession({ id, path, version, text, sha256, bytes }) {
             row.shadowed += 1
         }
     }
-    return { row, messages, calls }
+    return { row, messages, calls, results }
 }
 
 /** Build the index. Returns what it wrote, so a caller can print it rather than assume it. */
-export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_INDEX, withText = false, onProgress = null } = {}) {
+export function buildIndex({ sessionsDir = DEFAULT_SESSIONS_DIR, out = DEFAULT_INDEX, withText = false, incremental = false, onProgress = null } = {}) {
     const db = new DatabaseSync(out)
     db.exec('PRAGMA journal_mode = WAL;')
+    // A DERIVED STORE MIGRATES BY BEING THROWN AWAY. `CREATE TABLE IF NOT EXISTS` cannot add a column -- measured here,
+    // the first attempt failed with "table tool_results has no column named chars" -- and an ALTER per column would be
+    // maintenance for data nobody owns. The version is read BEFORE the schema runs, and a mismatch drops the tables.
+    const heldVersion = db.prepare('PRAGMA user_version').get().user_version
+    const schemaMoved = heldVersion !== SCHEMA_VERSION
+    if (schemaMoved) {
+        db.exec('DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS tool_calls; '
+            + 'DROP TABLE IF EXISTS tool_results; DROP TABLE IF EXISTS titles_fts;')
+    }
     db.exec(SCHEMA)
-    db.exec('DELETE FROM sessions; DELETE FROM messages; DELETE FROM tool_calls;')
-    const insertSession = db.prepare(`INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    if (!incremental || schemaMoved) {
+        db.exec('DELETE FROM sessions; DELETE FROM messages; DELETE FROM tool_calls; DELETE FROM tool_results;')
+    }
+    const known = new Map()
+    if (incremental && !schemaMoved) {
+        for (const held of db.prepare('SELECT id, mtime, bytes FROM sessions').all()) known.set(held.id, held)
+    }
+    // COLUMNS ARE NAMED, not positional: `mtime` was added to an existing store by ALTER, and a positional INSERT
+    // then failed with "table sessions has 23 columns but 22 values were supplied". Naming them makes the next column
+    // an addition rather than a breakage.
+    const insertSession = db.prepare(`INSERT INTO sessions
+      (id, path, format, cwd, created_at, title, title_source, title_seqs, has_title, explicit_rename, events,
+       messages, asks, assistant, reasoning_chars, visible_chars, tool_calls, shadowed, high_water, bytes,
+       source_sha256, indexed_at, mtime)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     const insertMessage = db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)')
     const insertCall = db.prepare('INSERT INTO tool_calls VALUES (?,?,?,?)')
+    const insertResult = db.prepare('INSERT INTO tool_results (session_id, call_id, text, chars, is_error) VALUES (?,?,?,?,?)')
+    // A SESSION IS REFOLDED WHEN ITS FILE CHANGED. Appending is the only thing the harness does to a log, and it moves
+    // both mtime and size, so the pair is the receipt that makes the second build cheap.
+    const dropSession = db.prepare('DELETE FROM messages WHERE session_id = ?')
+    const dropCalls = db.prepare('DELETE FROM tool_calls WHERE session_id = ?')
+    const dropResults = db.prepare('DELETE FROM tool_results WHERE session_id = ?')
     const files = sessionFiles(sessionsDir)
     const now = new Date().toISOString()
     let done = 0
-    let titled = 0
+    let skipped = 0
     for (const file of files) {
+        const stat = statSync(file.path)
+        const held = known.get(file.id)
+        if (held !== undefined && held.mtime === stat.mtimeMs && held.bytes === stat.size) { skipped += 1; continue }
         let lines
         try { lines = sessionLines(file.path) } catch { continue }
-        const { row, messages, calls } = foldSession({ ...file, text: lines.text, sha256: lines.sha256, bytes: statSync(file.path).size })
+        const { row, messages, calls, results } = foldSession({ ...file, text: lines.text, sha256: lines.sha256, bytes: stat.size })
+        // REFOLDING REPLACES A SESSION, so every table it appears in is cleared first -- sessions, messages, calls and
+        // results. Deleting the session row and then asking for it (which an earlier draft of this did) reads nothing.
+        if (held !== undefined) {
+            dropSession.run(file.id); dropCalls.run(file.id); dropResults.run(file.id)
+            db.prepare('DELETE FROM sessions WHERE id = ?').run(file.id)
+        }
         insertSession.run(row.id, row.path, row.format, row.cwd, row.created_at, row.title, row.title_source, row.title_seqs,
             row.has_title, row.explicit_rename, row.events, row.messages, row.asks, row.assistant, row.reasoning_chars,
-            row.visible_chars, row.tool_calls, row.shadowed, row.high_water, row.bytes, row.source_sha256, now)
-        if (row.has_title === 1) titled += 1
+            row.visible_chars, row.tool_calls, row.shadowed, row.high_water, row.bytes, row.source_sha256, now, stat.mtimeMs)
         if (withText) for (const m of messages) insertMessage.run(...m)
         for (const c of calls) insertCall.run(...c)
+        for (const r of results) insertResult.run(...r)
         done += 1
         if (onProgress !== null && done % 25 === 0) onProgress(done, files.length)
     }
     db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(id UNINDEXED, title, cwd)')
     db.exec('DELETE FROM titles_fts')
     db.exec("INSERT INTO titles_fts(id, title, cwd) SELECT id, COALESCE(title,''), COALESCE(cwd,'') FROM sessions")
+    // THE VERSION IS STAMPED LAST. Stamping it before the build marked a store that never finished as current: the next
+    // run saw "same version", kept the old tables, and failed on a column that did not exist. A crash must leave the
+    // version BEHIND the schema so the following run rebuilds.
+    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.close()
-    return { sessions: done, titled, untitled: done - titled, out }
+    // THE SUMMARY IS READ BACK FROM THE STORE, not accumulated during the walk: in an incremental run most rows were
+    // never walked, so a running counter would describe the refold rather than the index.
+    const counts = readCounts(out)
+    return { sessions: counts.sessions, refolded: done, skipped, schemaMoved, titled: counts.titled, untitled: counts.sessions - counts.titled, out }
 }
 
 /**
@@ -229,6 +300,14 @@ export function findSessions(term, { out = DEFAULT_INDEX, limit = 20 } = {}) {
 
 const ms = (t) => `${(Number(process.hrtime.bigint() - t) / 1e6).toFixed(0)} ms`
 
+/** What the store holds, read back rather than assumed from the number of files walked. */
+export function readCounts(out = DEFAULT_INDEX) {
+    const db = new DatabaseSync(out, { readOnly: true })
+    const row = db.prepare('SELECT COUNT(*) sessions, SUM(has_title) titled, SUM(shadowed) shadowed, SUM(asks) asks FROM sessions').get()
+    db.close()
+    return { sessions: row.sessions, titled: row.titled ?? 0, shadowed: row.shadowed ?? 0, asks: row.asks ?? 0 }
+}
+
 function main(argv) {
     const [command, ...rest] = argv
     const flag = (name, fallback) => {
@@ -242,9 +321,10 @@ function main(argv) {
             sessionsDir: flag('sessions', DEFAULT_SESSIONS_DIR),
             out,
             withText: rest.includes('--text'),
+            incremental: rest.includes('--incremental'),
             onProgress: (done, total) => process.stderr.write(`  ${done}/${total}\r`),
         })
-        console.log(`indexed ${result.sessions} session(s) in ${ms(started)} -> ${result.out}`)
+        console.log(`${result.sessions} session(s) in the store; refolded ${result.refolded}, skipped ${result.skipped} unchanged${result.schemaMoved ? ' (the SCHEMA moved, so every receipt was void)' : ''}, in ${ms(started)} -> ${result.out}`)
         console.log(`  with a session/title event: ${result.titled} | without: ${result.untitled}` +
             (result.untitled > 0 ? ' (those are the ones a title service must fold per request)' : ''))
         console.log(`  size: ${(statSync(out).size / 1048576).toFixed(1)} MB`)
@@ -265,11 +345,9 @@ function main(argv) {
         return 0
     }
     if (command === 'stats') {
-        const db = new DatabaseSync(out, { readOnly: true })
-        const one = db.prepare('SELECT COUNT(*) n, SUM(has_title) titled, SUM(shadowed) shadowed, SUM(asks) asks FROM sessions').get()
+        const one = readCounts(out)
         const size = (statSync(out).size / 1048576).toFixed(1)
-        console.log(`${one.n} session(s), ${one.titled} titled, ${one.asks} asks, ${one.shadowed} shadowed message(s), ${size} MB`)
-        db.close()
+        console.log(`${one.sessions} session(s), ${one.titled} titled, ${one.asks} asks, ${one.shadowed} shadowed message(s), ${size} MB`)
         return 0
     }
     console.error('usage: session-index.mjs build|find|stats [--out FILE] [--sessions DIR] [--text] [--limit N]')

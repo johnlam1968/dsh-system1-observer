@@ -184,12 +184,27 @@ resolves a title for every session in the library.
 |---|---|---|
 | `sessionQuery` through `system1_sessions` | **~54 s** (7 samples, 52,977-56,176 ms) | this session's own log |
 | the index (`scripts/session-index.mjs find`) | **1-2 ms** (9 runs) | measured, 33 MB store |
-| the index build, once | **120.3 s** | measured over 498 sessions |
+| the index build, once | **120.3 s** (33 MB, titles and counts) | measured over 498 sessions |
+| the same build with tool RESULTS and text | **328 s**, 75.1 MB | measured after the results table was added |
+| an incremental re-run, nothing changed | **2 ms** of walking (one project); ~0.2 s across the library | measured |
+| an incremental re-run where ONE session changed | **26.5 s**, of which essentially all of it is that session's refold | measured -- the session was the one being written in |
+| SELECT the rows a composition needs, one session | **0.2 ms** (19 messages, 14 calls, 14 results) | measured on a text-enabled store |
 
 **So the index pays for itself after about 2.2 title searches**, and the difference per query is roughly four orders of
 magnitude. That is the honest form of the speed argument: not "a database is faster", but *54 seconds against one
 millisecond* -- and the 54 seconds is paid on EVERY search by an agent who does not yet know which session it wants,
 which is exactly the agent this tool exists for.
+
+**So the warm-up is a background job and the re-runs are not warm-ups at all**: `--incremental` skips a file whose
+`mtime` and size are unchanged, which is every file except the session currently being appended to. Lookup, select and
+the row-gathering a composition needs are then milliseconds, against ~54 s for a title search and 0.7-1.4 s for a
+single `read` through the service.
+
+**AND ONE HONEST GAP**: the default store holds no message TEXT (`messages` is filled only with `--text`), so a
+composition cannot yet be built from rows alone -- the text is a size decision nobody has taken for 498 sessions, and
+`tool_calls`/`tool_results` do not carry `turn` yet, so a PER-TURN composition needs that column too. What is measured
+is the row-gathering, not the composition: the labels, the cuts and the refusals stay in JavaScript, because they are
+the semantics rather than the data.
 
 Three caveats, two of them about my own measurement:
 

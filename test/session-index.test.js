@@ -3,10 +3,10 @@
 // shadowed messages. Each assertion below is one of those failures.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildIndex, findSessions, foldSession, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
+import { buildIndex, findSessions, foldSession, readCounts, sessionFiles, sessionLines } from '../scripts/session-index.mjs'
 
 /** A fixture session: header at the RECORD level, a title event whose `source` is an object, and a replace op. */
 function fixture() {
@@ -20,6 +20,8 @@ function fixture() {
         { type: 'user/message', seq: 2, time: 2, data: { turn: 1, source: { kind: 'user' }, content: [{ type: 'text', text: 'push this repo' }] } },
         { type: 'assistant/message', seq: 3, time: 3, data: { turn: 1, message: { content: [{ type: 'reasoning', text: 'think' }, { type: 'text', text: 'done' }] } } },
         { type: 'tool/call', seq: 4, time: 4, data: { callId: 'c1', name: 'bash', arguments: '{"command":"git push"}' } },
+        // a real result carries the call id in TWO places, and this one only in `message.toolCallId`
+        { type: 'tool/result', seq: 5, time: 5, data: { message: { toolCallId: 'c1', content: [{ type: 'text', text: 'pushed' }] } } },
         // a compaction replaces the opening span, so seq 2 is withdrawn from the surface
         { type: 'user/message', seq: 9, time: 9, surfaceOp: { op: 'replace', startSeq: 2, endSeq: 4 }, data: { source: { kind: 'compact-checkpoint' }, content: 'summary of the above' } },
         { type: 'session/title', seq: 10, time: 10, data: { title: 'Push repo to GitHub account', messageSeqs: [2], source: { kind: 'provider', provider: 'session-title-first-prompt-llm' } } },
@@ -70,6 +72,37 @@ test('reasoning is counted separately from visible text -- the 4.5x distinction,
         const { row } = foldSession({ id: f.id, path: 'x', version: 4, text, sha256, bytes: 1 })
         assert.equal(row.reasoning_chars, 5)
         assert.equal(row.visible_chars, 'push this reposummary of the abovedone'.length)
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a tool RESULT is kept and paired through the id it actually carries', () => {
+    const f = fixture()
+    try {
+        const { text, sha256 } = sessionLines(join(f.dir, 'session.v4.jsonl'))
+        const { results } = foldSession({ id: f.id, path: 'x', version: 4, text, sha256, bytes: 1 })
+        assert.deepEqual(results, [[f.id, 'c1', 'pushed', 6, 0]], 'paired by message.toolCallId, not by position, with the full length recorded')
+    } finally { rmSync(f.root, { recursive: true, force: true }) }
+})
+
+test('a second build refolds only what CHANGED, so the warm-up is paid once', () => {
+    const f = fixture()
+    const out = join(f.root, 'index.db')
+    try {
+        const first = buildIndex({ sessionsDir: f.root, out })
+        assert.equal(first.refolded, 1)
+        assert.equal(first.skipped, 0)
+        const warm = buildIndex({ sessionsDir: f.root, out, incremental: true })
+        assert.equal(warm.schemaMoved, false)
+        assert.equal(warm.skipped, 1, 'an unchanged file is skipped')
+        assert.equal(warm.refolded, 0)
+        assert.equal(readCounts(out).sessions, 1, 'and the store still holds it')
+        // now the session grows, which is the only thing the harness does to a log
+        const more = '\n' + JSON.stringify({ type: 'user/message', seq: 11, time: 11, data: { turn: 2, source: { kind: 'user' }, content: 'and again' } })
+        writeFileSync(join(f.dir, 'session.v4.jsonl'), readFileSync(join(f.dir, 'session.v4.jsonl'), 'utf8') + more + '\n')
+        const third = buildIndex({ sessionsDir: f.root, out, incremental: true })
+        assert.equal(third.refolded, 1, 'the appended file is refolded')
+        assert.equal(third.skipped, 0)
+        assert.equal(readCounts(out).sessions, 1, 'and it REPLACES its row rather than duplicating it')
     } finally { rmSync(f.root, { recursive: true, force: true }) }
 })
 
