@@ -48,6 +48,32 @@ test('textOf reads the content shapes the harness writes, and nothing else', () 
   assert.equal(textOf({ data: {} }), '')
 })
 
+test('list marks the sessions the observer will actually MEASURE, and never confuses "these" with "all"', async () => {
+  // The allow-list is the row's own, written by the session's "..." menu in the UI. Its matching rule lives in
+  // lib/sessions.js; this asserts the tool REPORTS it rather than re-deriving it.
+  const records = [record('session-30500a5a-c2da-4420-8087-e46356490ac9', { createdAt: 3 }), record('session-other', { createdAt: 2 })]
+  const pinned = createSessionsTool({
+    query: fakeQuery({ records }),
+    observed: () => ({ every: false, match: (id) => id.startsWith('session-30500a5a') }),
+  })
+  const value = await pinned.execute({ action: 'list' })
+  assert.equal(value.observesEverySession, false)
+  assert.equal(value.observedCount, 1)
+  assert.equal(value.sessions.find((r) => r.id.startsWith('session-30500a5a')).observed, true)
+  assert.equal(value.sessions.find((r) => r.id === 'session-other').observed, false)
+  assert.match(pinned.output.render({}, value)[0].text, /NOT measured/)
+  // AND "EVERY SESSION" IS SAID, not implied by 498 trues
+  const all = createSessionsTool({ query: fakeQuery({ records }), observed: () => ({ every: true, match: () => true }) })
+  const every = await all.execute({ action: 'list' })
+  assert.equal(every.observesEverySession, true)
+  assert.match(all.output.render({}, every)[0].text, /EVERY session is measured/)
+  // NO SCOPE WIRED: the field is absent rather than guessed, and nothing claims a session is measured
+  const bare = createSessionsTool({ query: fakeQuery({ records }) })
+  const none = await bare.execute({ action: 'list' })
+  assert.equal(none.observesEverySession, false)
+  assert.equal(none.sessions.every((r) => r.observed === undefined), true)
+})
+
 test('list search finds a session by its PROJECT, because the title is a summary of the work', async () => {
   // Measured on this host: the dsh session whose cwd is /home/john/CodingProjects/zeroclaw-voice-proxy is titled
   // "Push repo to GitHub account". An agent asking for the session in a named project would search a string that no

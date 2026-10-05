@@ -50,6 +50,14 @@ const SIZE_EXEMPTIONS = {
             + 'manifest and the reproducible-file list. Splitting it invites the parts to disagree about the same '
             + 'measurement, which is the defect the package exists to prevent.',
     },
+    'lib/sessions-tool.js': {
+        max: 422,
+        reason: 'the agent-facing sessions tool: three actions (`list`, `read`, `search`), one declared schema, one '
+            + 'render and the refusals they share. The ACTIONS are the seam, so a split BY ACTION is the one to make '
+            + 'when a fourth action arrives, not by size now. It crossed the ceiling when `list` began reporting the '
+            + 'OBSERVE ALLOW-LIST -- the fact that decides WHICH session is measured at all, and the one an agent '
+            + 'cannot otherwise see.',
+    },
     'test/client-card.test.js': {
         max: 1752,
         reason: 'the settings card enumerated: every seam, every host-schema shape, save, refusal and error path. It '

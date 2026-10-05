@@ -20,7 +20,7 @@ import { probeFingerprint } from './lib/probe-score.js'
 import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject, subjectSettings } from './lib/session-subject.js'
 import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
-import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
+import { observesEverySession, readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
 import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
@@ -588,6 +588,9 @@ async function apply(ctx, config) {
       tools.register(createSessionsTool({
         query: () => sessionQuery,
         settings: () => subjectSettings(liveConfig()),
+        // THE ALLOW-LIST, READ ONCE PER CALL AND MATCHED BY ITS OWN MODULE. An agent cannot see which sessions this
+        // row will measure without it, and `list` is where that question lands.
+        observed: () => ({ every: observesEverySession(liveConfig()), match: (id) => sessionObserved(liveConfig(), id) }),
         compose: composeSubject,
       }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
