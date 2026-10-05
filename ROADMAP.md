@@ -858,10 +858,12 @@ core never reads a log.
    mirror **18.7 s**. A stored frame offset would save the decode — 1.8 s of a 43 s refold — and was recommended,
    designed and selected before anything was measured. One instrumented run retired it. **The refresh went 110 s →
    56 s → 21 s** for a living session this way.
-   **What is left, measured, in this order:** the **mirror step (18.7 s)**, which is `DELETE ... WHERE session_id = ?`
-   scanning an UNINDEXED FTS column — an external-content FTS5 table over an indexed `search_rows` table, or a
-   `session_id → rowid` map, would cut it to milliseconds; then the **refold (2.1 s)**, which is now small enough that
-   nothing is worth building for it.
+   **The mirror step is DONE, and its proposed remedy was retired by measurement** (`F106`): `DELETE ... WHERE
+   session_id = ?` costs 4,087 ms and deleting BY ROWID costs 4,129 ms -- the seconds are FTS5's trigram index work,
+   not the lookup a `session_id → rowid` map would replace (which is 92 ms). So the WORK was removed instead: the
+   mirror carries `seq`, `mirror_state(session_id, high_water)` says how far each session was built, and maintenance
+   **APPENDS only what the log added** -- safe because a DSH log only grows. A missing receipt, a shrinking log or a
+   row with no `seq` is replaced rather than guessed. `SCHEMA_VERSION` 4 costs one full rebuild once (measured: 51 s). **Measured after: the refresh is 2,680 ms** (`refold 2.2 s, mirror 0.4 s`), against 15-21 s -- the mirror step 18.7 s -> 0.4 s.
    **And the store now carries SESSION SEARCH, hand-rolled, because the native route was tried and reverted**: enabling
    `@deepseek-ai/dsh-session-query-sqlite` in this profile made `api-session-controller` fail to start, the cause was
    never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`
