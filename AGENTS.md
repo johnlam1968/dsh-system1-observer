@@ -17,13 +17,16 @@ Optionally, read the source code (if source code is not available, git clone it)
   (`F79`, `F89`, `F95`) are the same mistake in the same direction: a claim about a system generalised from one
   sample of it, where reading the producer's own source would have answered it outright.
 
-## Why this file, and not the preset
+## Where these lines live, and why BOTH
 
-These lines are workspace INSTRUCTIONS, so `AGENTS.md` is their home: `dsh-agent-instructions` loads the
-applicable chain at the session's first request and reconciles the baseline on resume. The stricter alternative
-is `dsh-persona`'s `prefix` inside the `cordis` preset, which renders on EVERY request — the route to take if a
-reminder must survive compaction or a long session's distance from its first message.
-
-**Do not put them in this plugin.** The observer must not alter the session it measures; a reminder injected by
-the measuring row would change the thing being measured. A separate row (`persona`, or a small plugin on the
-`system-prompt/assemble` waterfall) keeps the two jobs apart.
+* **Every request** — the two lines are in the `cordis` preset's persona `prefix`, so they are re-sent with every
+  request. That row is overridden in `~/.dsh/profiles/docdrift/cordis.patch.yml`, which restates the shipped
+  `plugins` list with the two lines added: a Cordis patch replaces `config` **wholesale and never deep-merges**, so
+  the list is a snapshot. **After any `dsh` upgrade, diff it against**
+  `@deepseek-ai/dsh-web-app/presets/cordis.patch.yml`.
+* **Once per session** — this file carries what the two lines *mean* here (which doc, which source), which is the
+  right shape for a baseline: identical for every session of this repository, at the cost of one injection rather
+  than one per request.
+* **Never in this plugin** — the observer must not alter the session it measures; a reminder injected by the
+  measuring row would change the thing being measured, and `lib/config-event.js` exists to record exactly that kind
+  of boundary (readings either side of a prompt change are not comparable).
