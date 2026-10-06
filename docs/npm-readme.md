@@ -7,7 +7,7 @@ you choose — and writes every call, every skip and every answer to a JSONL tra
 `enforcement: "declarative", verified: false`.
 
 The full manual is the [repository README](https://github.com/johnlam1968/dsh-system1-observer#readme). This page is
-the short version: install, one example, the four things to know before trusting a reading.
+the short version: install, one example, and the four things to know before trusting a reading.
 
 ## Install
 
@@ -31,28 +31,33 @@ system1_measurements { action: 'interpret', package: '…', text: '…', by: 'yo
 ```
 
 `system1_evaluate_session` does the mechanical work in one call: it reads the session, segments it if it is large,
-asks the question set of every segment, aggregates in code and writes a report package. The interpretation is a
-separate call, and deliberately yours — prose cannot be derived from numbers.
+asks every question of every segment, aggregates in code and writes a report package. The last step is a separate
+call, and deliberately yours — prose cannot be derived from numbers.
 
 Nine tools in all: `system1_explain`, `system1_settings`, `system1_decide`, `system1_evaluate_session`,
 `system1_measurements`, `system1_sessions`, `system1_question_sets`, `system1_battery`, `system1_trace`.
 
 ## What you get
 
-- **The trace**: `~/.dsh/logs/system1-observer.jsonl` — one line per call, per skip (with the gate that stopped it)
-  and per mount. Read it with the `system1_trace` tool, the trace card in a conversation, or `scripts/trace.mjs`.
+- **The trace**: `~/.dsh/logs/system1-observer.jsonl` — one line per call, per skip (with the reason it did not ask)
+  and per start-up. Read it with the `system1_trace` tool, the trace card in a conversation, or `scripts/trace.mjs`.
 - **The settings card** on the Plugins page: every live-writable setting, and "…" → **Observe this session**.
-- **A register**: `docs/findings.md` in the repository records every defect this instrument has had, with the
-  measurement that found it.
+- **A written record**: [docs/findings.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/findings.md)
+  notes every problem this instrument has had and the measurement that found it.
 
 ## Before you trust a reading
 
-1. **A whole-session judgement is capped** unless you segment it — pass `segmentChars` for a long conversation.
-2. **Selecting a question set disables the probe at every seam it does not name.**
-3. **The probe's accuracy depends on the seam mix**: the four tool seams are shown two texts and asked four labels.
-4. **Readings either side of a config change are not comparable** — every change is recorded on the trace first.
+1. **Long conversations are summarised** unless you ask for segments — pass `segmentChars` when the session is large.
+2. **Where there is no question of its own, it records that it did not ask** rather than guessing — so a quiet trace
+   says which check stopped it, not that nothing happened.
+3. **Its built-in question is measurably weaker at the tool-call points than elsewhere**, so a run full of tool calls
+   reads differently from a conversation.
+4. **Readings either side of a configuration change are not comparable** — every change is written to the trace first.
 
-`system1_explain` prints these in full, derived from the running row.
+## Questions, and contributing
+
+Ask in [GitHub issues](https://github.com/johnlam1968/dsh-system1-observer/issues); pull requests are welcome, and
+`RELEASING.md` and the repository's conventions describe how the project is run.
 
 ## Documentation
 
