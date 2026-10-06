@@ -143,6 +143,14 @@ figures had hidden:
    routing in 0 of 4,369 calls. Both states are English, which is the language the question set was written in, but
    the field that would prove the checkpoint is missing on this server.
 
+4. **The two before/afters were the AUTHOR's own edits, and unblinded.** The same agent chose what to put into the page
+   and then asked the rubric about it, and nothing in the text tells the judge who wrote it. The ablation (paragraph
+   removed, paragraph restored) is the closest thing here to a blind test, and it is one case. The two pairs therefore
+   show that the instrument is **sensitive to a line**; they do not show that the line makes the page better in any
+   sense independent of its author. The reviewer's proposal for the missing calibration — three READMEs none of us
+   wrote, judged without identity hints, checked against how the community rates them — is the right next
+   measurement and is not yet done.
+
 **The readings are attributable**, which is the one thing that needs no caveat: every call appears on the trace as a
 `hook: "tool"` line carrying the question ids, the provider and the model (`typesafe/jev-1.13-20260917`), so the
 figures above can be traced to the exact questions that produced them.
