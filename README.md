@@ -7,8 +7,8 @@ you choose — and writes every call, every skip and every answer to a JSONL tra
 `enforcement: "declarative", verified: false`. Its product is evidence about the decision model's replies at each point
 of the loop, not judgements about the session it is observing.
 
-**This page is short on purpose**: it is capped at 100 lines by `test/readme.test.js`, and the reference material —
-every setting, the seams, the trace, the measured claims **and the ones that are not verified** — is in the
+**This page is short on purpose**: it is capped at 100 lines by `test/readme.test.js`. The reference material — every
+setting, the seams, the trace, the measured claims **and the ones that are not verified** — is in the
 [manual](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/manual.md).
 
 ## Install
@@ -55,8 +55,7 @@ Nine tools in all: `system1_explain`, `system1_settings`, `system1_decide`, `sys
 ## Before you trust a reading
 
 1. **Long conversations are summarised** unless you ask for segments — pass `segmentChars` when the session is large.
-2. **Where there is no question of its own, it records that it did not ask** rather than guessing — so a quiet trace
-   says which check stopped it, not that nothing happened.
+2. **Where it has no question of its own, it records that it did not ask** rather than guessing.
 3. **Its built-in question is measurably weaker at the tool-call points than elsewhere**, so a run full of tool calls
    reads differently from a conversation.
 4. **Readings either side of a configuration change are not comparable** — every change is written to the trace first.
@@ -93,6 +92,7 @@ happens and what it does not ship.
 | [docs/measurement-depth.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/measurement-depth.md) | what evidence a judgement gets (G0–G4) |
 | [docs/question-suitability.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/question-suitability.md) | which question type fits which evidence |
 | [ROADMAP.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/ROADMAP.md) | the direction, and what already exists in the ecosystem |
+| [case study](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/case-study-readme-review.md) | two agents, one rubric and this page's own redesign, measured — the method, the numbers and the mistakes |
 
 ## Licence
 

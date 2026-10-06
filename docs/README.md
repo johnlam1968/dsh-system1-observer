@@ -18,6 +18,8 @@ the project's record, kept because a measurement without its reasoning is a numb
 | file | what it answers |
 |---|---|
 | `manual.md` | the reference manual: hooks, every setting, the trace, mounting, the measured claims and the unverified ones |
+| `case-study-readme-review.md` | **a worked example of using this plugin**: two agents collected what the sources require of a README, measured this repository's own front page with it, checked each other and recorded their mistakes |
+| `readme-standards.md` | the standards, the twelve text-checkable questions derived from them, and every reading taken with them — including the questions that did not survive checking |
 | `settings.md` | every setting: what it does, what it costs, and why it exists (the table the settings card is built from) |
 | `measurement-depth.md` | what evidence a judgement is given — the groups G0–G4 — and what each one can and cannot support |
 | `question-suitability.md` | which question type fits which evidence, and the selection methods |
@@ -30,8 +32,6 @@ the project's record, kept because a measurement without its reasoning is a numb
 | `findings.md` | **the register**: every defect, its cause, its consequence, and its status, numbered in the order they were found. The reason the code is shaped the way it is |
 | `conventions.md` | the rules this repository holds itself to, each with the measurement that produced it |
 | `handoff.md` | what the last working session left for the next one |
-| `readme-standards.md` | what authoritative sources require of a repository README, the twelve questions derived from them, and the measurement they produced |
-
 ### Kept locally, deliberately not in this repository
 
 | file | what it is |
