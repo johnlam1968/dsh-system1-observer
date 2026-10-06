@@ -46,6 +46,11 @@ test('the publish workflow keeps the promises a release depends on', () => {
   assert.match(manifest.scripts.prepublishOnly, /check-publish-tag\.mjs/, 'prepublishOnly must run the tag guard')
   assert.doesNotMatch(yamlText, /npm publish[^\n]*--ignore-scripts/, 'the workflow must not skip prepublishOnly')
   assert.match(yamlText, /dist-tags\.latest/, 'nothing checks that the prerelease did not land on `latest`')
+  // TRUSTED PUBLISHING, NOT A TOKEN: npm authenticates from the run's OIDC identity, which needs no secret and
+  // cannot expire. A `NODE_AUTH_TOKEN` here would make npm prefer the token instead -- which is what failed with
+  // EOTP ("this operation requires a one-time password") on the first attempt.
+  assert.doesNotMatch(yamlText, /NODE_AUTH_TOKEN|secrets\.NPM_TOKEN/, 'the publish steps must not use a token')
+  assert.match(yamlText, /npm --version/, 'nothing asserts an npm new enough for the OIDC exchange')
   // IDEMPOTENCY: a re-run after a partial failure must skip what is already published.
   assert.match(yamlText, /npm view "[^"]+@\$\{ver\}" version/, 'no idempotency guard on the publish steps')
   // THE TAG TRIGGER, and a manual path for repairs.
