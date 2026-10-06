@@ -1,6 +1,6 @@
 {
   "name": "dsh-system1-observer",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "type": "module",
   "description": "Calls a System One model at configured points of the agent loop and writes each call, request and response, to a JSONL trace. Decides nothing.",
   "main": "./index.js",
@@ -13,6 +13,9 @@
     "./icon.svg": "./icon.svg"
   },
   "icon": "./icon.svg",
+  "workspaces": [
+    "packages/*"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -33,6 +36,7 @@
     }
   },
   "scripts": {
+    "prepublishOnly": "npm run ci && node scripts/check-publish-tag.mjs",
     "test": "node --test test/*.test.js",
     "check:citations": "node scripts/check-citations.mjs",
     "coverage": "node --experimental-test-coverage --test --test-coverage-include='lib/*.js' --test-coverage-include='lib/model/*.js' --test-coverage-include='lib/host/*.js' --test-coverage-include='packages/*/lib/*.js' --test-coverage-include='packages/*/index.js' --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=75 test/*.test.js",
@@ -42,21 +46,28 @@
     "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:composition && npm run check:deploy"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@deepseek-ai/schemastery": "3.18.4",
-    "dsh-session-adapter": "file:packages/session-adapter",
+    "dsh-session-adapter": "^0.1.0-beta.1",
     "dsh-session-index": "github:johnlam1968/dsh-session-index",
     "yaml": "^2.9.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
   },
   "files": [
     "LICENSE",
     "install.sh",
-    "packages/**",
     "index.js",
     "client.js",
     "skills/**",
     "lib/**/*.js",
-    "scripts/**/*.mjs",
+    "scripts/trace.mjs",
+    "scripts/session-index.mjs",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -67,6 +78,10 @@
     "type": "git",
     "url": "git+https://github.com/johnlam1968/dsh-system1-observer.git"
   },
+  "bugs": {
+    "url": "https://github.com/johnlam1968/dsh-system1-observer/issues"
+  },
+  "homepage": "https://github.com/johnlam1968/dsh-system1-observer#readme",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -81,6 +96,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@deepseek-ai/cordis-plugin-loader": "1.0.5",
     "@typesafe-ai/sdk": "^0.6.0"
   }

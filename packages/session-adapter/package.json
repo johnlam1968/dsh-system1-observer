@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-adapter",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "type": "module",
   "description": "The DSH session surface this repository's plugins are thin adapters over: the harness's event vocabulary in one home, the model-surface fold, the per-session event feed, and the sessionQuery-backed reads -- as importable functions AND as a `sessionAdapter` service.",
   "main": "./index.js",
@@ -14,7 +14,11 @@
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/check-publish-tag.mjs"
+  },
   "files": [
+    "LICENSE",
     "index.js",
     "lib/**/*.js",
     "package.json",
@@ -24,6 +28,25 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnlam1968/dsh-system1-observer.git",
+    "directory": "packages/session-adapter"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "session",
+    "adapter"
+  ],
+  "bugs": {
+    "url": "https://github.com/johnlam1968/dsh-system1-observer/issues"
+  },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4"
   },

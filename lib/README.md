@@ -127,6 +127,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `explain-tool.js` — `system1_explain`: the brief an agent reads instead of the README — what is writable LIVE (derived
   from the schema's own `volatile` metadata, so it cannot drift), the two mount-bound fields and why, what the row is
   set to right now, how to choose/write/validate a question set, and the cautions that make a reading trustworthy
+* `publish-tag.js` — the rule that refuses to publish a PRERELEASE to `latest`, because npm ignores
+  `publishConfig.tag` (measured on npm 11.8.0) and a bare `npm publish` would make the beta what `npm i` installs;
+  `scripts/check-publish-tag.mjs` is the `prepublishOnly` wrapper, tested through its exit codes
 * `config-value.js` — reading a config field, when the field may be an accessor
 * `instrument-input.js` — THE BRIDGE: the row's settings -> the instrument's one input object (`point`, `callsEnabled`,
   `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport`). The only place a plain read of a setting is
