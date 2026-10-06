@@ -159,7 +159,7 @@
     provider: typesafe
     model: jev-latest
     timeoutMs: 8000
-    turnEveryNTurns: 5
+    turnEveryNTurns: 0
     questionSetsDir: /home/john/CodingProjects/dsh-system1-observer/criteria
     questionSet: session@1
     callsEnabled: true
@@ -178,6 +178,7 @@
         title: Optimizing greeting responses with AI coding help
     subjectSource: stored
     composeMaxChars: 8000
+    observeSubagents: false
 
 # peer-bridge -- reach a SIBLING ROOT session. Promoted 2026-09-30 from the sandbox body kept at
 # ~/.dsh/plugins/peer-bridge.dynamic-host.js (that file is the origin record of what the sandbox ran; this row is
@@ -243,9 +244,9 @@
         config:
           suffix: Your working directory is {{cwd}}.
           prefix: >-
-            You are a coding agent powered by the {{model}} model.
-            Read the doc.
-            Optionally, read the source code (if source code is not available, git clone it).
+            You are a coding agent powered by the {{model}} model. Read the doc.
+            Optionally, read the source code (if source code is not available,
+            git clone it).
       - id: agent-instructions
         name: '@deepseek-ai/dsh-agent-instructions'
         config:
@@ -374,7 +375,8 @@
         name: '@deepseek-ai/dsh-skill-filesystem'
         config:
           customSkillDirs:
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')),
+              'skills')
       - id: tool-skill
         name: '@deepseek-ai/dsh-tool-skill'
       - id: present
@@ -394,4 +396,3 @@
 #  config:
 #    path: !!js dshHomePath('session-query.db')
 #    openAt: first-search
-

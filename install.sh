@@ -90,6 +90,15 @@ Notes:
     line above shows what survived — if something is missing, re-add it.
 
 A newly added bundle needs no restart. A bundle whose package was REPLACED does: the metadata is
-cached per loader specifier until the process restarts. That also means a settings change made in
-the card is written to the profile's patch and takes effect on the next restart, not immediately.
+cached per loader specifier until the process restarts.
+
+A SETTINGS CHANGE IS NOT LIKE THAT, and this note said the opposite until it was measured: every
+field the card offers is VOLATILE -- read at the point of use -- so a save reaches the RUNNING row
+immediately (measured live on this deployment: seamEnabled, sessions, observeSubagents, questionSet
+and turnEveryNTurns all took effect in-process), AND it is written through the harness's
+configEditor into the profile's patch, which is the initial value on the next boot. The write
+re-serializes that file, so anything else hand-edited in it is re-flowed: that is why the recorded
+copy in deploy/profile/ goes byte-stale after a testing session and `npm run check:deploy` asks to
+be re-recorded. The two MOUNT-BOUND fields -- probeQuestion and tracePath -- are the exception: not
+in the card, YAML only, and a change to either needs a restart.
 NOTE

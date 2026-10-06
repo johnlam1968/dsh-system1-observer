@@ -32,5 +32,53 @@ none), so a repository would have one consumer — the mistake §14.1's stop con
 trigger for extracting this directory into its own repository is a **second host** that must reproduce the
 composition, not a second plugin.
 
+## Deploying a SECOND profile, step by step
+
+**What is reusable and what is host-local.** Ten bundles in a fixed order (`profile/package.json`), four of them
+`link:`ed to absolute paths on this host and one pinned to a `file:` tarball in `~/Downloads` (the check prints that
+pin every run). So this directory reproduces the composition on **this** host; a second HOST needs the four local
+packages published or cloned, and its own copy of the factory tarball.
+
+**A faithful clone** (reproduces what `docdrift` actually runs, including the `system1` service and the persona):
+
+```bash
+NEW=observer-test
+cp -r deploy/profile "$HOME/.dsh/profiles/$NEW"
+cd "$HOME/.dsh/profiles/$NEW" && npm install          # or pnpm install --frozen-lockfile
+# rename the profile package (cosmetic, but two profiles with one name confuse --dump-config readers)
+sed -i 's/dsh-profile-docdrift/dsh-profile-'"$NEW"'/' package.json
+```
+
+Then EDIT THE NEW PATCH before booting, for the two things a second profile must not share:
+
+```yaml
+# $DSH_HOME/profiles/$NEW/cordis.patch.yml, under the system1-observer row
+tracePath: /home/john/.dsh/logs/system1-observer-$NEW.jsonl   # MOUNT-BOUND: two profiles on one trace pool
+                                                              # two deployments' readings in one file
+```
+
+and, to start testing rather than sit quiet, the live-writable testing set (`system1_settings`, or the card):
+`sessions: ['*']`, `observeSubagents: true`, the seam switches on, and `questionSet: ''` for the probe — a selected
+set disables the probe at every seam it does not name (`F123`).
+
+**Minimal alternative** (observer only, no `system1` service): `./install.sh $NEW`, which adds the bundle and prints
+the composed row; the observer then needs the HTTP wire at `wireUrl` (default `http://127.0.0.1:8766`) or every call
+is an error line.
+
+**Verify, in this order** — each step is cheap and the first failure localizes:
+
+```bash
+dsh --profile "$NEW" --dump-config | grep -c 'id: system1-observer'   # 1: the row composed
+dsh web --profile "$NEW"                                              # boots; note its port, not 3090
+```
+
+then from an agent in that profile: `system1_explain` (the live brief: knobs, state, sets, cautions),
+`system1_settings { action: 'list' }`, and `system1_trace` — which prints every skip with its reason, so a quiet trace
+is read through the gates rather than assumed broken.
+
+**After any testing session, re-record**: a settings write re-serializes the profile patch, so
+`npm run check:deploy` fails on a byte difference that is mostly formatting and must not be hand-merged. Copy the live
+files back (`cp` each named file into `deploy/profile/`) and commit them with the change that moved them.
+
 **Plans and ledgers do not belong here** either: they are in this repository, beside the code they describe, which is
 where a reader looks for them.
