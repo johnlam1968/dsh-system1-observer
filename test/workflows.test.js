@@ -45,6 +45,10 @@ test('the publish workflow keeps the promises a release depends on', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   assert.match(manifest.scripts.prepublishOnly, /check-publish-tag\.mjs/, 'prepublishOnly must run the tag guard')
   assert.doesNotMatch(yamlText, /npm publish[^\n]*--ignore-scripts/, 'the workflow must not skip prepublishOnly')
+  // STAGING IS NOT A RELEASE: the OIDC flow can stage a publish, exit 0 and leave nothing installable (measured).
+  // The workflow must check the REGISTRY, not its own exit code.
+  assert.match(yamlText, /must be INSTALLABLE/, 'nothing verifies the version actually landed')
+  assert.match(yamlText, /npm view "\$pkg@\$ver" version/, 'the installability check must query the registry')
   // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
   // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
   // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on
