@@ -12,7 +12,7 @@ fixes.
   `DELTA` with citations. This file cites them; it does not restate them.
 - **Forward direction** stays in [`ROADMAP.md`](../ROADMAP.md); **plans** stay in `plans/`.
 - **Some cited notes are kept OFF-repository** and were removed from this repository and its history on 2026-10-06:
-  `plans/`, `port/`, `ECOSYSTEM_STUDY.md`, `reports/`. Rows below still cite them, and are **left as written** rather
+  `plans/`, `port/`, `ECOSYSTEM_STUDY.md`, `reports/`, `handoff.md` and `RELEASING.md`. Rows below still cite them, and are **left as written** rather
   than rewritten: a register that edits its own citations to match a later decision stops being a record. Read such a
   citation as "this is where the evidence was", not as a path a clone will resolve.
 

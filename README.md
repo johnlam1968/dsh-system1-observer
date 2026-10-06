@@ -79,9 +79,9 @@ The rules this repository holds itself to, each with the measurement that produc
 
 ## Questions, and contributing
 
-Ask in [GitHub issues](https://github.com/johnlam1968/dsh-system1-observer/issues); pull requests are welcome.
-[RELEASING.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/RELEASING.md) describes how a release
-happens and what it does not ship.
+Ask in [GitHub issues](https://github.com/johnlam1968/dsh-system1-observer/issues); pull requests are welcome. How a
+release happens — and what it deliberately does not ship — is the maintainer's runbook, kept off-repository with the
+other working notes.
 
 ## Documentation
 

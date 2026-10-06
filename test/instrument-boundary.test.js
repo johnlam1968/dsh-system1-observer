@@ -1,9 +1,9 @@
 // THE INSTRUMENT'S BOUNDARY, CHECKED AGAINST THE CODE.
 //
 // (a) of the topology (`ROADMAP.md` §14.6) is "the instrument: seams, question composition and validation, the model
-// call path, probe calibration, batteries, readings -- a pure package, no dsh import". It is still inline, and step 3
-// of `docs/handoff.md` is what makes the eventual extraction a MOVE rather than a reshaping: the instrument must read
-// no config of this plugin's.
+// call path, probe calibration, batteries, readings -- a pure package, no dsh import". It is still inline, and the
+// extraction plan's third step -- kept in the off-repository working notes -- is what makes the eventual extraction a
+// MOVE rather than a reshaping: the instrument must read no config of this plugin's.
 //
 // THE SET IS DECLARED HERE, because a boundary that lives in a comment drifts the first time a file moves -- and the
 // count that was carried before this test was a TEXT MATCH rather than a call graph: it named `probe-score.js` and

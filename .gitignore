@@ -10,6 +10,8 @@ docs/plans/
 docs/ECOSYSTEM_STUDY.md
 docs/assistant-contract-small-model.md
 reports/
+docs/handoff.md
+RELEASING.md
 
 # npm pack output: a build artifact, never a source file
 dsh-system1-observer-*.tgz

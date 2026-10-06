@@ -543,7 +543,7 @@ dsh plugin --profile <profile> add dsh-system1-observer@beta
 
 `dsh-session-adapter` and `dsh-session-index` come with it as ordinary dependencies; `@deepseek-ai/cordis` and
 `@deepseek-ai/dsh-tools` are **peerDependencies**, supplied by the profile, which is why the CLI is the right installer
-and a bare `npm i` in an empty directory is not. Releasing is a three-package, tag-driven process: `RELEASING.md`.
+and a bare `npm i` in an empty directory is not. Releasing is a three-package, tag-driven process: the release runbook (kept off-repository).
 
 ```bash
 git clone https://github.com/johnlam1968/dsh-system1-observer.git
