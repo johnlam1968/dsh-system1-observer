@@ -45,15 +45,24 @@ The conclusion is a **contract**, not a convenience:
 | keep the losses deliberate | `THINK` is stored as a `reasoning` block and the text reader ignores it **by design** (`F79`); an attachment whose bytes are absent becomes an **empty** message rather than a fabricated block; and provider citations, which are **not** session events, are **not** turned into `tool/call`/`tool/result` — that would fabricate tool history a measurement would then read as real. They go to a sidecar (`IMPORT-MAP.json`) |
 | point a persistence backend at the imported root, or copy the sessions in | nothing sees them: the global session index correctly returns zero for a root no deployment is mounted on, which looks like missing data and is not |
 
-**Two paths, and they are not competitors.** To *continue chatting*, `dsh-chat-import` (audited, L5 run-tested, MIT,
+**Two paths, and this repository built one and adopted nothing for the other.** To *continue chatting*, `dsh-chat-import` (audited, L5 run-tested, MIT,
 210 stars — and its 25+ parsers do **not** include the DeepSeek Chat web export). To *measure the conversations with
 this plugin*, convert to DSH sessions as above: the observer reads through `sessionQuery` + this adapter, which is what
 the verification demonstrates.
 
 **Attribution.** The importer (`tools/extract-web-export.mjs`, `import-web-export.mjs`, `verify-import.mjs`,
 `export-interchange.mjs`, `search-import.mjs`, `decode-session.mjs`), its outputs and its reasoning are the *Paper
-screening* session's work: `/home/john/test-system1-observer/FINDINGS.md` and `deepseek_data-2026-10-07/`. That is a
-scratch workspace **with no git history**, which is why the durable part is recorded here.
+screening* session's work, in the operator's `test-system1-observer` workspace (`FINDINGS.md`,
+`deepseek_data-2026-10-07/`, 2026-10-06). That workspace is now a **local-only git repository** — 36 files, committed
+there as `4d1c4b1` — whose `.gitignore` deliberately keeps the export out of history: the conversations can be
+re-downloaded from the account and the tools cannot, so the tools were the half worth protecting. **No URL is given
+because there is no remote**, and a dead link would be worse than none; the facts above are stated so they stand
+without one. Two privacy defects were fixed before that first commit (a real personal email hardcoded as an arXiv
+contact string; a colleague's filename in two notes), which is the register's own provenance rule applied to somebody
+else's repository.
+
+**Measured, and the thing most likely to be misread as failure**: an imported corpus is **invisible** until a backend
+points at it — a session listing in a running deployment returned **511 sessions and not one of the 75**.
 
 ## What ATIF already models that we recorded as MISSING
 
