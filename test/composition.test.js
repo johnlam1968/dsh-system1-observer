@@ -293,3 +293,68 @@ test('the serial turn trigger returns undefined, so the listeners BEHIND it stil
 
   await fiber.dispose()
 })
+
+test('the REAL registry executes system1_decide and VALIDATES its output -- the check F118 was missing', async () => {
+  // The live failure this pins was not a wrong value: it was a value the pipeline REFUSED, because the tool's output
+  // declaration closed a map whose keys come from the caller (`answers`) and an envelope another service owns
+  // (`executed`, `usage`). Every unit test passed, because they assert the object a body returns and never dispatch it
+  // through the registry -- which is the only place a value meets its declaration. This test dispatches it there.
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', (chunk) => { body += chunk })
+    req.on('end', () => {
+      void body
+      res.setHeader('content-type', 'application/json')
+      // THE ENVELOPE SITS AT THE TOP LEVEL for the wire: `projectEnvelope` copies `executed`/`usage` off the REPLY, so a
+      // stub that nested them under `meta` would leave the two nodes this test exists for unpopulated (`envelope.js`).
+      res.end(JSON.stringify({
+        answers: { a_noul: { noul: 0.9 } },
+        executed: { provider: 'typesafe', model: 'typesafe/jev-1.13-20260917' },
+        usage: { inputTokens: 12, outputTokens: 3 },
+      }))
+    })
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+  const dir = mkdtempSync(join(tmpdir(), 'composition-output-'))
+  const ctx = new Context()
+  ctx.provide('agents', { get: () => AGENT, list: () => [AGENT], currentInitiator: () => AGENT })
+  ctx.provide('systemPrompt', systemPromptStub())
+  const registryFiber = ctx.plugin(ToolRuntime)
+  await registryFiber.await()
+  const registry = ctx.get('tools')
+
+  const fiber = ctx.plugin(plugin, {
+    hooks: [], sessions: ['*'], turnEveryNTurns: 0, questions: { turn: [] },
+    tracePath: join(dir, 'trace.jsonl'), wireUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: 5000,
+  })
+  await fiber.await()
+
+  // THE EXECUTION SHAPE THE RUNTIME EXPECTS, taken from its own `createExecution`: a call id, the agent it is dispatched
+  // for (which is also how it resolves visibility), the arguments, and a signal.
+  try {
+    const result = await registry.execute({
+      // `signal` IS REQUIRED, not optional: the runtime reads `.aborted` off it while preparing the dispatch, and
+      // passing `undefined` throws inside the registry rather than reaching the tool (measured).
+      name: DECIDE_TOOL_NAME, callId: 'call-1', rootCallId: 'call-1', agent: AGENT,
+      signal: new AbortController().signal,
+      arguments: { state: 'the operator asked for a typo fix', questions: [{ id: 'a_noul', type: 'noul', instructions: 'Was it done?' }] },
+    })
+
+    // A REFUSAL WOULD ARRIVE AS A THROWN `ToolOutputError`, so reaching here is half the assertion; the value is the
+    // other half, and `answers`/`executed`/`usage` are the three nodes that made the live call fail.
+    assert.equal(result.isError, false, 'the dispatch succeeded: ' + JSON.stringify(result).slice(0, 300))
+    assert.deepEqual(Object.keys(result.value.answers), ['a_noul'])
+    // THE THREE NODES THAT FAILED LIVE, each asserted POPULATED -- an absent field would satisfy a closed-empty
+    // declaration vacuously, which is exactly how this shipped.
+    assert.equal(result.value.executed.provider, 'typesafe')
+    assert.equal(result.value.usage.inputTokens, 12)
+    assert.match(result.content[0].text, /a_noul/)
+  } finally {
+    // IN A `finally`, BECAUSE A FAILING ASSERTION LEFT THE SERVER AND TWO FIBERS OPEN AND THE WHOLE FILE TOOK 119 s:
+    // a test that hangs the suite when it fails is worse than one that fails.
+    await fiber.dispose()
+    await registryFiber.dispose()
+    server.close()
+  }
+})
