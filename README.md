@@ -24,7 +24,7 @@ every setting, the seams, the trace, and the measured claims **with the ones tha
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-system1-observer@beta
+dsh plugin --profile web add dsh-system1-observer
 ```
 
 `web` is the profile to install into — substitute the name of yours. Or from a clone, which needs no npm account:

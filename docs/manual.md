@@ -538,7 +538,7 @@ it falls back to the wire at `wireUrl`. Installing the bundle into a profile is 
 **From npm (beta).** The published prereleases are opt-in by tag — `npm i dsh-system1-observer` will NOT find them:
 
 ```bash
-dsh plugin --profile <profile> add dsh-system1-observer@beta
+dsh plugin --profile <profile> add dsh-system1-observer
 ```
 
 `dsh-session-adapter` and `dsh-session-index` come with it as ordinary dependencies; `@deepseek-ai/cordis` and
