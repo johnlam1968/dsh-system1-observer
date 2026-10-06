@@ -1,0 +1,32 @@
+{
+  "name": "dsh-profile-docdrift",
+  "private": true,
+  "description": "DocDrift as an end-user app: the Web UI, with DocDrift's capability in it. Copy this directory to $DSH_HOME/profiles/docdrift and boot it.",
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-system1",
+        "dsh-find-plugin",
+        "dsh-plugin-dev-kb",
+        "dsh-capability-inspector",
+        "dsh-plugin-factory",
+        "dsh-system1-observer",
+        "dsh-session-index",
+        "dsh-session-adapter"
+      ]
+    }
+  },
+  "dependencies": {
+    "dsh-capability-inspector": "github:tree201/dsh-capability-inspector",
+    "dsh-find-plugin": "^0.4.0",
+    "dsh-plugin-dev-kb": "github:Pasumao/dsh-plugin-dev-kb",
+    "dsh-plugin-factory": "file:/home/john/Downloads/dsh-plugin-factory-0.3.2.tgz",
+    "dsh-session-adapter": "link:/home/john/CodingProjects/dsh-system1-observer/packages/session-adapter",
+    "dsh-session-index": "link:/home/john/CodingProjects/dsh-session-index",
+    "dsh-system1": "github:exoticknight/dsh-system1",
+    "dsh-system1-observer": "link:/home/john/CodingProjects/dsh-system1-observer",
+    "system1-bridge": "link:/home/john/CodingProjects/system1-bridge"
+  }
+}

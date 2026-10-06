@@ -1,0 +1,397 @@
+# DocDrift's app profile: the profile's own layer, applied after every bundle layer.
+#
+# Why a PROFILE is the thing an end user installs, and not the bundle: the Web UI is
+# @deepseek-ai/dsh-web-app, a 562-line bundle with five preset patch files of its own. A bundle
+# brings ROWS; only a profile chooses which bundles compose it. So the capability travels as
+# `@local/dsh-docdrift` and the APP is this directory.
+
+# ── WHERE THE SETTINGS LIVE ─────────────────────────────────────────────────────────────────────
+#
+# DocDrift's gates are the `config` of its `docdrift` row, and a patch row REPLACES the whole config
+# for its id -- it never merges. So to change one value, restate the ones you care about and let the
+# rest fall back to the measured defaults in the bundle.
+#
+# Nothing is required here: the bundle ships the defaults (`config: {}`), and the Web UI's
+# Plugins page writes whatever you change on the card straight into THIS file. To set something
+# before the UI is used, add the row yourself:
+#
+# - id: docdrift
+#   name: '@local/dsh-docdrift'
+#   config:
+#     mode: enforce              # enforce holds a draft back; observe judges it and delivers anyway
+#     allowTools: true           # keep a session to its four DocDrift tools
+#     prompt: true               # tell the session it is a plant maintenance assistant (YAML-only)
+#     restatesEnabled: true      # and *At is how sure the judge must be before it blocks the draft
+#     restatesAt: 0.55
+#     inventedContextEnabled: true
+#     inventedContextAt: 0.55
+#     relationEnabled: true
+#     relationAt: 0.6
+#     rightMachineEnabled: true
+#     rightMachineAt: 0.85
+#     groundedEnabled: true
+#     groundedAt: 0.8
+#     severityEnabled: true
+#
+# Every field sits at the ROOT on purpose: the settings card renders the fields the form puts at its
+# root, so a nested field is returned by the service and drawn by nothing.
+#
+# A value NOT named here is not "off" -- it is the schema default, which is what the card shows.
+
+# The port this profile's web app listens on. A deployment decision: a terminal needs none.
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: 127.0.0.1
+    port: 3090
+
+# The skills catalogue. `skill-filesystem` is the PROVIDER that fills it; the catalogue arrives as
+# a USER MESSAGE, measured at ~350 tokens of instruction irrelevant to a maintenance answer, on a
+# 7B model whose documented weakness is that accuracy falls as state grows. The `skill` REGISTRY
+# stays enabled: removing it removes the `skills` SERVICE, every row injecting it sits PENDING for
+# ever, and a new session fails with "waiting for skill". That has happened once.
+- id: skill-filesystem
+  disabled: true
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-08-13.1
+# ── THE MODEL, AND WHY THIS FILE NO LONGER NAMES IT ──────────────────────────────────────────────
+#
+# This profile used to replace `llm-pi-ai` wholesale with a four-model Ollama map. That override is
+# GONE (2026-09-29) so the bundle's own default applies: OpenRouter, `mistralai/ministral-3b-2512`,
+# keyed by OPENROUTER_API_KEY. `providers` is replaced wholesale and not merged, so leaving the old
+# block here would have kept the profile on Ollama no matter what the bundle declared -- which is
+# exactly what it did. The bundle keeps an `ollama` route declared as well; a deployment that wants
+# the no-egress route sets `provider: ollama, model: qwen2.5:7b` on `agent-default-model` instead.
+
+
+# ── THE JUDGE: JEV OVER OPENROUTER ──────────────────────────────────────────────────────────────
+#
+# `dsh-system1` is in this profile's bundles (see package.json), so its bundle has inserted the
+# `system1` and `system1-typesafe` rows and these two rows OVERRIDE them. They must be here rather
+# than in the DocDrift bundle: a bundle patch that named these ids before dsh-system1 was in the
+# bundle list would target rows that do not exist yet, and the Loader warns and SKIPS it.
+#
+# `baseURL` is `https://openrouter.ai/api` and not the package default, because the adapter appends
+# a FIXED `/v1/systemone`: OpenRouter serves that contract (200, typesafe/jev-1.13-20260917, 0.55 s),
+# where `https://api.typesafe.ai` answers 401 to an OpenRouter key. Measured 2026-09-28.
+#
+# `apiKeyEnv` NAMES A VARIABLE, so no key is written here. Both TYPESAFE_API_KEY and
+# OPENROUTER_API_KEY hold the same OpenRouter key in this environment; this profile names the one
+# that says what it is. The judge is a HOSTED THIRD PARTY: every draft judged leaves this machine.
+- id: system1
+  name: dsh-system1
+  config:
+    defaultModel:
+      provider: typesafe
+      model: jev-latest
+    timeoutMs: 20000
+
+- id: system1-typesafe
+  name: dsh-system1/providers/typesafe
+  config:
+    id: typesafe
+    apiKeyEnv: OPENROUTER_API_KEY
+    baseURL: https://openrouter.ai/api
+- id: agent-preset-registry
+  name: "@deepseek-ai/dsh-agent-preset-registry"
+  config:
+    default: standard
+    selectedDefault: cordis
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      openrouter:
+        models:
+          - id: meta-llama/llama-3.1-8b-instruct
+            name: "Meta: Llama 3.1 8B Instruct"
+            contextWindow: 131072
+            maxTokens: 117964
+            input:
+              - text
+          - id: mistralai/ministral-3b-2512
+            name: "Mistral: Ministral 3 3B 2512"
+            contextWindow: 131072
+            maxTokens: 104857
+            input:
+              - text
+              - image
+          - id: mistralai/ministral-8b-2512
+            name: "Mistral: Ministral 3 8B 2512"
+            contextWindow: 262144
+            maxTokens: 209715
+            input:
+              - text
+              - image
+          - id: qwen/qwen-2.5-7b-instruct
+            name: "Qwen: Qwen2.5 7B Instruct"
+            contextWindow: 32768
+            maxTokens: 29491
+            input:
+              - text
+          - id: qwen/qwen3-8b
+            name: "Qwen: Qwen3 8B"
+            contextWindow: 131072
+            maxTokens: 8192
+            input:
+              - text
+      minimax-cn: {}
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: minimax-cn
+    model: MiniMax-M3
+- id: system1-laya
+  disabled: true
+- id: system1-observer
+  name: dsh-system1-observer
+  config:
+    hooks:
+      - assemble
+      - admit
+      - draft
+      - pre_execute
+      - execute
+      - post_execute
+      - result
+    provider: typesafe
+    model: jev-latest
+    timeoutMs: 8000
+    turnEveryNTurns: 5
+    questionSetsDir: /home/john/CodingProjects/dsh-system1-observer/criteria
+    questionSet: session@1
+    callsEnabled: true
+    seamEnabled:
+      assemble: false
+      admit: false
+      request: false
+      draft: false
+      pre_execute: false
+      execute: false
+      post_execute: false
+      result: false
+      close: false
+    sessions:
+      - id: session-30500a5a-c2da-4420-8087-e46356490ac9
+        title: Optimizing greeting responses with AI coding help
+    subjectSource: stored
+    composeMaxChars: 8000
+
+# peer-bridge -- reach a SIBLING ROOT session. Promoted 2026-09-30 from the sandbox body kept at
+# ~/.dsh/plugins/peer-bridge.dynamic-host.js (that file is the origin record of what the sandbox ran; this row is
+# what runs now). The module lives beside this file because `@deepseek-ai/dsh-tools` resolves from the profile's
+# parent node_modules and NOT from ~/.dsh/plugins.
+#
+# INSERTED, not named: an entry with an `id` and no `insert` overrides an EXISTING row, and a target that matches
+# nothing is a warning on stderr -- the profile still boots and looks healthy. Measured, in the README.
+#
+# Send guard widened from one cwd substring to an allowlist, and made tunable by environment:
+#   PEER_BRIDGE_SEND_MARKS=dsh-telegram,dsh-system1-observer
+#   PEER_BRIDGE_READ_MARKS=docdrift,dsh-system1-observer
+# See the module header for what this does and does not authorize.
+- insert:
+    - id: peer-bridge
+      name: ./peer-bridge/index.js
+
+# NOTE: this bundle is DISABLED below. The observer now ships its own `system1_decide`, over the same
+# `decide` path it records, and takes the input shape its own set files are written in.
+#
+# system1-bridge -- the agent-facing `system1_decide` tool, with this profile's default backend.
+#
+# The bundle's own tool row defaults to `provider: laya-decide`, whose baseURL is http://127.0.0.1:8766 -- NOT
+# running on this box (measured: HTTP 000), and `system1-laya` is disabled here for the same reason. The working
+# backend is the `typesafe` provider above. A patch row REPLACES the whole config for its id rather than
+# deep-merging, so both fields are restated.
+#
+# `typesafe` reaches Jev through OpenRouter (see the note on the `system1-typesafe` row): every judged draft
+# leaves this machine. The tool itself decides nothing -- it returns probabilities.
+#
+# TWO HANDINESS FIXES IN THE BUNDLE, both found by using the tool rather than reading it:
+#   * `questions` was declared as untyped JSON while the tool requires an OBJECT, so the first call sent a JSON
+#     string and was refused. It is now `type: object`.
+#   * the parameter descriptions hardcoded the bundle's own defaults (`laya-decide` / `auto`), so this profile's
+#     override left the tool describing a backend it would not reach. They now name the configured default.
+# Editing this file is also what makes the loader re-import the bundle's source.
+#
+# peer-bridge now puts the SENDER'S SESSION ID and a reply instruction into every delivered message. Before that,
+# a receiver could only answer if the sender happened to write its own id into the free-text label -- measured when
+# a delegated task reported into its own session instead of back to the caller.
+- id: system1-bridge-tool
+  config:
+    provider: typesafe
+    model: jev-latest
+  disabled: true
+
+# THE PROMPT REMINDERS, EVERY REQUEST. The Web editor writes its preset edits here by row id, and this is the same
+# shape: the override REPLACES `preset-cordis`'s whole `config` -- Cordis patches replace config wholesale and never
+# deep-merge -- so the shipped `plugins` list is restated verbatim from
+#   @deepseek-ai/dsh/dsh-web-app/presets/cordis.patch.yml
+# with two lines added to the persona prefix. AN UPGRADE THAT CHANGES THE SHIPPED PRESET WILL NOT REACH SESSIONS
+# USING THIS OVERRIDE: diff the two files after any dsh upgrade.
+- id: preset-cordis
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: cordis
+    order: 4
+    plugins:
+      # Same persona as `standard`: tool descriptions and the skill catalog carry
+      # the operating detail, and the skills own the preset-authoring rules.
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          suffix: Your working directory is {{cwd}}.
+          prefix: >-
+            You are a coding agent powered by the {{model}} model.
+            Read the doc.
+            Optionally, read the source code (if source code is not available, git clone it).
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: !!js process.platform === 'win32'
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: !!js process.platform !== 'win32'
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+      - id: delegation
+        name: cordis:group
+        group: true
+        isolate:
+          workflowEngine: true
+        config:
+          - id: tool-subagent-control
+            name: '@deepseek-ai/dsh-tool-subagent-control'
+          - id: tool-subagent-list-agents
+            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              modelSelectionSettings: true
+              backgroundMode: continuable
+          - id: tool-subagent-fork
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+              backgroundMode: continuable
+          - id: tool-subagent-codex
+            name: '@deepseek-ai/dsh-tool-subagent'
+            disabled: true
+            config:
+              provider: codex
+              toolName: subagent_codex
+              backgroundMode: one-shot
+              maxDepth: provider-managed
+          - id: tool-subagent-claude-code
+            name: '@deepseek-ai/dsh-tool-subagent'
+            disabled: true
+            config:
+              provider: claude-code
+              toolName: subagent_claude_code
+              backgroundMode: one-shot
+              maxDepth: provider-managed
+          - id: workflow-ptc
+            name: '@deepseek-ai/dsh-workflow-ptc'
+            config:
+              provider: spawn
+          - id: tool-workflow
+            name: '@deepseek-ai/dsh-tool-workflow'
+          - id: tool-ralph
+            name: '@deepseek-ai/dsh-tool-ralph'
+            disabled: true
+            config:
+              subagentProvider: spawn
+              maxRounds: 64
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+      - id: tool-web
+        name: '@deepseek-ai/dsh-tool-web'
+        config:
+          fetch: true
+          searchTimeoutMs: 60000
+      - id: tool-cordis
+        name: '@deepseek-ai/dsh-tool-cordis'
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+        config:
+          customSkillDirs:
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+      - id: tool-plugin-manager
+        name: '@deepseek-ai/dsh-plugin-manager/tools'
+        disabled: !!js "!ctx.get('profileContext')"
+
+# FULL-TEXT SESSION SEARCH, ENABLED. `dsh-base` ships this row as `path: ':memory:'`, `openAt: never`, which is why
+# `system1_sessions { action: 'search' }` refuses with "session search is disabled". A patch replaces `config`
+# WHOLESALE, so both fields are restated here:
+#   * a FILE path, not `:memory:`, so the derived index survives a restart instead of being rebuilt from the logs;
+#   * `first-search`, so no startup is delayed -- the build is paid by the first search that needs it.
+# ONE PROCESS OWNS AN INDEX PATH, so this file is this profile's alone; the other profiles keep `never`/`:memory:`.
+#- id: session-query-sqlite
+#  name: '@deepseek-ai/dsh-session-query-sqlite'
+#  config:
+#    path: !!js dshHomePath('session-query.db')
+#    openAt: first-search
+

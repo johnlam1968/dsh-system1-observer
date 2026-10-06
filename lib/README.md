@@ -138,5 +138,7 @@ and this map stay, because the filesystem journal is not session-shaped.
 ## Gates and shared
 
 * `citations.js` — does every `docs/...` path a comment names actually exist
+* `deploy-drift.js` — the deployment's recorded decisions, and the comparison that says whether `deploy/profile/` still
+  describes the machine (a check's logic, like `citations.js`, not runtime code)
 * `compat.js` — what this package was tested against, and what it merely supports
 * `is-record.js` — narrowing helpers for data that crosses a runtime boundary

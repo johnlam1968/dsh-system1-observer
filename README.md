@@ -53,7 +53,8 @@ npm run coverage       # the floor: 90% lines, 75% branches, 75% functions over 
 npm run check:citations
 npm run check:compat
 npm run check:composition
-npm run ci             # all five, in that order
+npm run check:deploy   # deploy/profile vs the live profile: bytes, and the bundle list by name AND order
+npm run ci             # all six, in that order
 ```
 
 **A machine runs them now.** `.github/workflows/ci.yml` exercises the two supported Node lines from `engines`
