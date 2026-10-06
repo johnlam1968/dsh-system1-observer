@@ -78,6 +78,10 @@ bash -lc "dsh web --profile $NEW"        # FROM A LOGIN SHELL: the provider auth
                                           # Boots; note its port, not 3090.
 ```
 
+To make a turn happen with no UI, drive a headless profile — one whose bundles include
+`@deepseek-ai/dsh-headless` — with `bash -lc 'dsh --profile <headless-profile> "say hello"'`; the turn is real, so the
+seams fire into that profile's trace.
+
 then from an agent in that profile: `system1_explain` (the live brief: knobs, state, sets, cautions),
 `system1_settings { action: 'list' }`, and `system1_trace` — which prints every skip with its reason, so a quiet trace
 is read through the gates rather than assumed broken.
