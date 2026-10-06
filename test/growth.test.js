@@ -33,7 +33,13 @@ const TEST_CEILING = 700
  */
 const SIZE_EXEMPTIONS = {
     'lib/evaluate-tool.js': {
-        max: 615,
+        // RAISED FROM 615 TO 620, which the gate asks to be a DECISION rather than a drift: four of the added lines
+        // are the declarations and their reasons for shapes the live calls produced and the schema had not described --
+        // a nullable `exchange.turns` item (`F122`), the selector echo, and the segmented subject's keys (`F119`,
+        // `F120`). Each is a fact about what this tool EMITS, so the alternatives were to understate the declaration
+        // (which is how all four defects shipped) or to split a lifecycle that this reason still says should not be
+        // split yet. The next raise should be the split, not a number.
+        max: 620,
         reason: 'one tool end to end: parameters, session resolution, evidence-group selection, segmentation, the '
             + 'judge call, aggregation and render. Splitting it by size would separate the tool contract from the '
             + 'behaviour that honours it; the split worth making is by LIFECYCLE (resolve, select, judge, aggregate), '

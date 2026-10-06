@@ -118,6 +118,18 @@ test('groups: [G0] gives the judge the exchange and NOT the working record', asy
   // THE G0 BRANCH CARRIES THE SELECTOR ECHO IN `subject`, which is the shape `F119` fixed; validated here so the
   // grouped path is covered by the same check as the ungrouped one.
   assertValidOutput(h.tool, out, 'groups G0')
+  // AND AN EXCHANGE THE HARNESS DID NOT NUMBER IS A SHAPE THE LIVE CALL PRODUCED AND THE FIXTURE DID NOT (`F122`):
+  // `exchange.turns` is `[null]` there, and a declaration of `items: number` refuses the whole value. Every fixture in
+  // this file had a turn number, which is exactly why the check above missed it.
+  const unnumbered = harness({
+    stored: async () => ({
+      events: [human(2, 'REVIEW MY CITIES'), { seq: 3, type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'FOUND IT' }] } } }],
+      messages: null, slice: { matched: 2, total: 2 }, coverage: { events: 2, messages: 2, chars: 40, toolEvents: 0 }, session: { id: 'S1' }, problem: null,
+    }),
+  })
+  const unnumberedOut = await unnumbered.tool.execute({ groups: ['G0'] }, {})
+  assert.deepEqual(unnumberedOut.exchange.turns, [null], 'the exchange exists and its turn number does not')
+  assertValidOutput(unnumbered.tool, unnumberedOut, 'G0 with an unnumbered exchange')
   assert.deepEqual(composed[0].map((e) => e.seq), [2, 6], 'the ask and the turn\'s last word, nothing between')
   assert.deepEqual(out.groups, ['G0'])
   assert.deepEqual(out.exchange.turns, [36])
@@ -403,6 +415,9 @@ test('`package: true` writes a package in the SAME call, and says where', async 
   let asked = 0
   const h = harness({ packageRun: async () => { asked += 1; return { dir: 'data/measurements/ID', files: ['manifest.json', 'report.md', 'readings.json', 'trace.jsonl', 'manifest.sha256'], bytes: 1234 } } })
   const out = await h.tool.execute({ package: true }, {})
+  // THE PACKAGE BLOCK IS A FOURTH SHAPE INSIDE THIS VALUE (`dir`, `files[]`, `bytes`, `problem`), and it is only
+  // present when one was asked for -- so it is validated on the path that produces it.
+  assertValidOutput(h.tool, out, 'package written')
   assert.equal(asked, 1, 'the writer ran once')
   assert.equal(out.package.dir, 'data/measurements/ID')
   const text = h.tool.output.render({}, out)[0].text
@@ -416,6 +431,7 @@ test('`package: true` writes a package in the SAME call, and says where', async 
   // A WRITER THAT THROWS IS A NAMED PROBLEM, not a lost reading: the evaluation already happened and is still returned.
   const broken = harness({ packageRun: async () => { throw new Error('disk full') } })
   const failed = await broken.tool.execute({ package: true }, {})
+  assertValidOutput(broken.tool, failed, 'package failed')
   assert.match(failed.package.problem, /packaging failed: disk full/)
   assert.equal(failed.subject.messages, 4, 'and the reading survives the packaging failure')
   assert.match(broken.tool.output.render({}, failed)[0].text, /PACKAGE NOT written: packaging failed/)
