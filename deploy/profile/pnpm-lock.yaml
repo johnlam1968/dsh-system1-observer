@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@local/dshso-mcp':
+        specifier: link:/home/john/CodingProjects/dshso-mcp-bundle
+        version: link:../../../CodingProjects/dshso-mcp-bundle
       dsh-capability-inspector:
         specifier: github:tree201/dsh-capability-inspector
         version: https://codeload.github.com/tree201/dsh-capability-inspector/tar.gz/7dded4f1137bf424d86a8c1e71807bc3370faaf3(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-tools@0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd))

@@ -14,11 +14,13 @@
         "dsh-plugin-factory",
         "dsh-system1-observer",
         "dsh-session-index",
-        "dsh-session-adapter"
+        "dsh-session-adapter",
+        "@local/dshso-mcp"
       ]
     }
   },
   "dependencies": {
+    "@local/dshso-mcp": "link:/home/john/CodingProjects/dshso-mcp-bundle",
     "dsh-capability-inspector": "github:tree201/dsh-capability-inspector",
     "dsh-find-plugin": "^0.4.0",
     "dsh-plugin-dev-kb": "github:Pasumao/dsh-plugin-dev-kb",
