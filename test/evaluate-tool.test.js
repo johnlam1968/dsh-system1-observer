@@ -63,6 +63,7 @@ test('a confidence is not printed as a float artefact', async () => {
 test('a subject over the estimate SEGMENTS ITSELF, and says so', async () => {
   const short = harness()
   const small = await short.tool.execute({}, {})
+  assertValidOutput(short.tool, small, 'one call')
   assert.equal(Object.hasOwn(small, 'autoSegmented') ? small.autoSegmented : false, false, 'a small subject is one call')
   assert.equal(Object.hasOwn(small, 'subject') && Object.hasOwn(small.subject, 'segmented'), false)
 
@@ -78,6 +79,10 @@ test('a subject over the estimate SEGMENTS ITSELF, and says so', async () => {
     }),
   })
   const out = await long.tool.execute({}, {})
+  // THE SEGMENTED BRANCH IS A DIFFERENT `subject` FROM THE SINGLE-CALL ONE, and until a LIVE call was made with
+  // `segmentChars` it emitted two keys its closed declaration did not have (`F120`). Every branch that builds a
+  // `subject` is validated here for that reason, not only the first one.
+  assertValidOutput(long.tool, out, 'auto-segmented')
   assert.equal(out.autoSegmented, true, 'it segments itself rather than judging 8,000 of 200,000 characters')
   assert.equal(out.windowChars, 200000, 'and reports the window it measured')
   assert.equal(out.subject.segmented.segments >= 2, true)
@@ -86,6 +91,7 @@ test('a subject over the estimate SEGMENTS ITSELF, and says so', async () => {
   assert.match(text, /Pass `segmentChars` to choose the size yourself/)
   // AND AN EXPLICIT `segmentChars` IS NOT "AUTO", so a caller who chose reads no advice about choosing.
   const chosen = await long.tool.execute({ segmentChars: 40000 }, {})
+  assertValidOutput(long.tool, chosen, 'segmentChars named')
   assert.equal(chosen.autoSegmented, false)
   assert.doesNotMatch(long.tool.output.render({}, chosen)[0].text, /AUTO-SEGMENTED/)
 })
@@ -109,6 +115,9 @@ test('groups: [G0] gives the judge the exchange and NOT the working record', asy
     stored: async () => ({ events, messages: events, slice: { matched: events.length, total: events.length }, coverage: { events: events.length, messages: events.length, chars: 100, toolEvents: 2 }, session: { id: 'S1' }, problem: null }),
   })
   const out = await h.tool.execute({ groups: ['G0'] }, {})
+  // THE G0 BRANCH CARRIES THE SELECTOR ECHO IN `subject`, which is the shape `F119` fixed; validated here so the
+  // grouped path is covered by the same check as the ungrouped one.
+  assertValidOutput(h.tool, out, 'groups G0')
   assert.deepEqual(composed[0].map((e) => e.seq), [2, 6], 'the ask and the turn\'s last word, nothing between')
   assert.deepEqual(out.groups, ['G0'])
   assert.deepEqual(out.exchange.turns, [36])
@@ -120,6 +129,7 @@ test('groups: [G0] gives the judge the exchange and NOT the working record', asy
   assert.match(text, /EXCLUDED 1 harness `user\/message`\(s\)/)
   // G0 + G1 IS THE WORKING RECORD, so the same call naming both composes every event -- the old behaviour, unchanged.
   const both = await h.tool.execute({ groups: ['G0', 'G1'] }, {})
+  assertValidOutput(h.tool, both, 'groups G0+G1')
   assert.equal(both.subject.messages, 6)
   // AND WHAT THIS BUILD CANNOT COMPOSE IS REFUSED.
   await assert.rejects(() => h.tool.execute({ groups: ['G2'] }, {}), /G2 cannot be composed by this build/)
