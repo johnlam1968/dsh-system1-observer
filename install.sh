@@ -88,6 +88,11 @@ Notes:
     dependencies are `link:` URLs, which npm rejects), and its steps are in DEPLOY-A-PROFILE.md and
     deploy/README.md.
 
+  * The observer needs a DECISION MODEL, and that model may need a CREDENTIAL FROM THE ENVIRONMENT: the
+    documented deployment's provider reads `OPENROUTER_API_KEY`, which `~/.bash_profile` defines. An agent's
+    `bash -c` environment does not carry it, so boot a profile through `bash -lc` or every call returns
+    `unreadable: the provider reported status "error"` in about 5 ms while the trace looks healthy. See
+    DEPLOY-A-PROFILE.md.
   * The observer needs a decision model to call. It prefers the profile's `system1` service and
     falls back to the HTTP endpoint at `wireUrl` (default http://127.0.0.1:8766) when no service
     is mounted. With neither, every call is an error line in the trace.

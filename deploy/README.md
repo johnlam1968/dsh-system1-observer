@@ -72,7 +72,10 @@ is an error line.
 
 ```bash
 dsh --profile "$NEW" --dump-config | grep -c 'id: system1-observer'   # 1: the row composed
-dsh web --profile "$NEW"                                              # boots; note its port, not 3090
+bash -lc "dsh web --profile $NEW"        # FROM A LOGIN SHELL: the provider authenticates from
+                                          # OPENROUTER_API_KEY, which ~/.bash_profile defines and an
+                                          # agent's `bash -c` environment does NOT carry (F129).
+                                          # Boots; note its port, not 3090.
 ```
 
 then from an agent in that profile: `system1_explain` (the live brief: knobs, state, sets, cautions),
