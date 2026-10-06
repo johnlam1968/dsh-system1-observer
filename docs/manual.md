@@ -543,7 +543,14 @@ dsh plugin --profile <profile> add dsh-system1-observer
 
 `dsh-session-adapter` and `dsh-session-index` come with it as ordinary dependencies; `@deepseek-ai/cordis` and
 `@deepseek-ai/dsh-tools` are **peerDependencies**, supplied by the profile, which is why the CLI is the right installer
-and a bare `npm i` in an empty directory is not. Releasing is a three-package, tag-driven process: the release runbook (kept off-repository).
+and a bare `npm i` in an empty directory is not.
+
+**The peer range on `@deepseek-ai/dsh-tools` was widened in 0.1.1** to `^0.1.7-rc.2 || ^0.2.0-rc.1`. A caret alone was
+not enough (`F137`: a prerelease range never floats to a new tuple), and DSH `0.2.0-rc.2` **rejects** the earlier range
+outright rather than warning. Measured on that line: the plugin **installs, composes its row and loads** -- it opens its
+trace file. A full model call there is **not yet verified** (`F141`).
+
+Releasing is a three-package, tag-driven process: the release runbook (kept off-repository).
 
 ```bash
 git clone https://github.com/johnlam1968/dsh-system1-observer.git

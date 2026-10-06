@@ -1,6 +1,6 @@
 {
   "name": "dsh-system1-observer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Calls a System One model at configured points of the agent loop and writes each call, request and response, to a JSONL trace. Decides nothing.",
   "main": "./index.js",
@@ -53,7 +53,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "^0.1.7-rc.2"
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.2 || ^0.2.0-rc.1"
   },
   "publishConfig": {
     "access": "public"
