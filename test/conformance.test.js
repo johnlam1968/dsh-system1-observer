@@ -12,7 +12,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -166,6 +166,18 @@ async function harnessPackage(name) {
   }
   throw new Error(`no reachable ${name}: declare it as a devDependency, or install a harness that provides it`)
 }
+
+test('every tool takes the caller\'s `exec`, so a cancellation can be honoured', () => {
+  // `reference/cookbook/adding-a-tool.md:49`: "honour `exec.signal`; cancel in-flight work when it fires". Measured
+  // 2026-10-05 (F112): FOUR of the eight tools ignored it ENTIRELY -- the four written after the first batch --
+  // because the obligation lives in each tool\'s own `execute` and nothing required one. This names the signature;
+  // the behavioural assertions live in each tool\'s test file, because a tool that takes `exec` and ignores it would
+  // pass this scan.
+  const tools = readdirSync('lib').filter((name) => name === 'tool.js' || name.endsWith('-tool.js'))
+  assert.ok(tools.length >= 8, 'the scan found fewer tool files than the row registers')
+  const offenders = tools.filter((name) => !/async execute\(args, exec\)/.test(read('lib/' + name)))
+  assert.deepEqual(offenders, [], 'these tools cannot see exec.signal: ' + offenders.join(', '))
+})
 
 test('every tool declaration passes the registry\'s own object-schema gate', async () => {
   const { assertObjectJsonSchema } = await harnessPackage('@deepseek-ai/dsh-tools')

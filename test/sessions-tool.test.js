@@ -387,3 +387,12 @@ test('a `subject` PREVIEW says when the composed state was CUT', async () => {
   const paged = await tool.execute({ action: 'read', sessionId: 's1', format: 'subject', lastMessages: 1 })
   assert.equal(paged.stateTruncated, true, 'the whole four-message subject is still cut, even though one was listed')
 })
+
+test('a call cancelled before it starts is REFUSED by name, and no work is done', async () => {
+  // `reference/cookbook/adding-a-tool.md:49`: "honour `exec.signal`; cancel in-flight work when it fires". The entry
+  // check is what this tool can do -- it reads sessions through the host, and a read cannot be interrupted mid-flight
+  // -- and it was MISSING until an audit drove every tool with an aborted signal (F112). Asserted here rather than
+  // only in the shared source scan, because a tool that takes `exec` and ignores it would pass that scan.
+  const tool = createSessionsTool({ query: fakeQuery({ records: [] }) })
+  await assert.rejects(() => tool.execute({ action: 'list' }, { signal: { aborted: true } }), /cancelled before it started/)
+})

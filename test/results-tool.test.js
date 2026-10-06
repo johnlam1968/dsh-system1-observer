@@ -276,3 +276,12 @@ test('a package window can be narrowed to ONE session, and the summary carries t
   // A LINE WITH NO SUBJECT IS NOT A MATCH, rather than a line that slips through every filter.
   assert.equal(summarise([call({ at: 'T4', hook: 'session-review' })], { run: 'r1', subject: 'session-one' }).counts.call, 0)
 })
+
+test('a call cancelled before it starts is REFUSED by name, and no work is done', async () => {
+  // `reference/cookbook/adding-a-tool.md:49`: "honour `exec.signal`; cancel in-flight work when it fires". The entry
+  // check is what this tool can do -- it reads the trace and may write a package, and neither can be interrupted mid-flight -- and it was MISSING until an audit drove every tool
+  // with an aborted signal (F112). Asserted here rather than only in the shared source scan, because a tool that
+  // takes `exec` and ignores it would pass that scan.
+  const { tool, args } = {tool: createResultsTool({ path: '/dev/null', readFile: () => lines.map((l) => JSON.stringify(l)).join('\n') }), args: {}}
+  await assert.rejects(() => tool.execute(args, { signal: { aborted: true } }), /cancelled before it started/)
+})

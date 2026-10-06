@@ -151,3 +151,12 @@ test('the tool names itself and declares everything it emits', async () => {
   assert.match(listed.problem, /no battery directory is configured/)
   assert.match(bare.output.render({}, listed)[0].text, /^UNAVAILABLE: /)
 })
+
+test('a call cancelled before it starts is REFUSED by name, and no work is done', async () => {
+  // `reference/cookbook/adding-a-tool.md:49`: "honour `exec.signal`; cancel in-flight work when it fires". The entry
+  // check is what this tool can do -- its longest run is one model call per case, and the loop stops between cases -- and it was MISSING until an audit drove every tool
+  // with an aborted signal (F112). Asserted here rather than only in the shared source scan, because a tool that
+  // takes `exec` and ignores it would pass that scan.
+  const { tool, args } = { tool: createBatteryTool({ dir: () => batteries, setsDir: () => sets, decide: async () => ({ kind: 'answers', answers: {} }), record: () => {} }), args: { action: 'list' } }
+  await assert.rejects(() => tool.execute(args, { signal: { aborted: true } }), /cancelled before it started/)
+})
