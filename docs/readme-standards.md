@@ -166,6 +166,47 @@ figures above can be traced to the exact questions that produced them.
    surface the complaint is about, and `first_screen_sufficient` is only meaningful when the text given IS the first
    screen. Judging the whole 775-line manual is a different measurement, and a longer one.
 
+## A blinded cross-document check, and a battery that did NOT reproduce
+
+The second reviewer ran a blinded trio — zoxide (39,896 stars), a 163-star focused project, and an 8-line student
+README — asking four `noul` questions one call each, and reported that two of them **invert**:
+`help_or_contributing_path` scored the 8-line README (0.40) above zoxide (0.20), and `internal_plumbing_present`
+scored it 0.60 against zoxide's 0.30. It also reported that its session's tool parser rejected multi-question arrays,
+`choice` questions and `score` questions with `levels`, reading them as empty.
+
+**That parser claim does not reproduce here**, and this matters for the battery: this session has run 12-question
+arrays, four-option `choice` questions and five-level `score` questions repeatedly, and every one returned a
+distribution. Because a result that inverts my own numbers has to be checked rather than filed, I ran the same two
+questions on the same two states — zoxide's first 62 lines as the reviewer used, and the student README whole:
+
+| question | student README (8 lines) | zoxide front page (62 lines) | reviewer's numbers |
+|---|---|---|---|
+| `internal_plumbing_present` | **0.07** (confidence 0.93) | **0.19** (0.81) | 0.60 / 0.30 — inverted |
+| `help_or_contributing_path` | **0.12** (0.88) | **0.51** (0.51) | 0.40 / 0.20 — inverted |
+
+**The inversion does not reproduce.** Both questions order the two documents the way the criterion intends: a
+three-sentence README has neither a help path nor plumbing, and zoxide's front page carries an issues link. The
+divergence is 0.5 and 0.3 on cells where my own reading is confident.
+
+**The likely mechanism is the reviewer's own constraint, and it is a validity problem rather than a curiosity**: it
+reported that its calls did not transmit the question specs as the tool documents them. **If the questions arrived
+empty, the answers are not answers to the questions asked**, whatever they say — which is exactly the failure this
+register's `F43` class records: a reply that carries no trace of what was asked. Its trace is where that is checked,
+and it has been asked to.
+
+**What the replication does establish**: on two documents neither of us wrote, the two questions under dispute
+separate in the intended direction, measured with the same instrument that produced the front-page figures. The
+earlier readings are therefore not contradicted by the one blinded test that has run to completion.
+
+**What is still missing** is unchanged and is the same gap: **labelled truth**. Stars are reputation, not
+measurement (the reviewer said so first); one call per cell leaves sampling variance unpriced; and eight of the twelve
+questions have never been asked of a document neither of us wrote. The next cheap step is repeat calls on the same
+cells, so the noise is known before any threshold is set on this rubric.
+
+**One factual correction to its report, because state size is part of the claim**: zoxide's README runs to hundreds
+of lines, so a 62-line state IS a slice, not a whole document — the reviewer reported all three candidates as
+front-page-sized "not a 68-line slice". The distinction matters for exactly the questions that ask about scope.
+
 ## Cross-check: a second reviewer collected the same standards in parallel
 
 A second agent (a different model, the `standard` preset) gathered the standards independently the same day. Both
