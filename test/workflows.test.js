@@ -45,7 +45,13 @@ test('the publish workflow keeps the promises a release depends on', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   assert.match(manifest.scripts.prepublishOnly, /check-publish-tag\.mjs/, 'prepublishOnly must run the tag guard')
   assert.doesNotMatch(yamlText, /npm publish[^\n]*--ignore-scripts/, 'the workflow must not skip prepublishOnly')
+  // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
+  // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
+  // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on
+  // every first release and be deleted.
   assert.match(yamlText, /dist-tags\.latest/, 'nothing checks that the prerelease did not land on `latest`')
+  assert.match(yamlText, /versions --json/, 'the tag check must distinguish a first release from a misfiled one')
+  assert.match(yamlText, /::warning::[^\n]*only version published/, 'the first-release case must warn, not fail')
   // TRUSTED PUBLISHING, NOT A TOKEN: npm authenticates from the run's OIDC identity, which needs no secret and
   // cannot expire. A `NODE_AUTH_TOKEN` here would make npm prefer the token instead -- which is what failed with
   // EOTP ("this operation requires a one-time password") on the first attempt.
