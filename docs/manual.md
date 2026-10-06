@@ -216,7 +216,7 @@ each says why in its own description: `provider` and `model`, because unset mean
 | `provider` | the service default | at mount |
 | `model` | the service default | at mount |
 | `timeoutMs` | `8000` | at mount |
-| `wireUrl` | `http://127.0.0.1:8766` | at mount |
+| `wireUrl` | `http://127.0.0.1:8766` (loopback; a bare IP on purpose, so the fallback does not depend on how `localhost` resolves) | at mount |
 | `question` | the runtime probe question | at mount |
 | `tracePath` | `SYSTEM1_OBSERVER_TRACE`, else `<DSH_HOME>/logs/system1-observer.jsonl` | at mount |
 | `questions` | unset — every seam asks the probe question | live |
