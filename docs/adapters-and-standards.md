@@ -45,6 +45,10 @@ The conclusion is a **contract**, not a convenience:
 | keep the losses deliberate | `THINK` is stored as a `reasoning` block and the text reader ignores it **by design** (`F79`); an attachment whose bytes are absent becomes an **empty** message rather than a fabricated block; and provider citations, which are **not** session events, are **not** turned into `tool/call`/`tool/result` — that would fabricate tool history a measurement would then read as real. They go to a sidecar (`IMPORT-MAP.json`) |
 | point a persistence backend at the imported root, or copy the sessions in | nothing sees them: the global session index correctly returns zero for a root no deployment is mounted on, which looks like missing data and is not |
 
+**The converter this repository ships** is `scripts/import-deepseek-web.mjs`, with the parsing and event mapping in
+`lib/deepseek-web-export.js` (both tested, `test/deepseek-web-export.test.js`), for the `chat.deepseek.com` archive.
+`--compression` must match the deployment that will read the root, or the root is refused wholesale (`F147`).
+
 **Two paths, and this repository built one and adopted nothing for the other.** To *continue chatting*, `dsh-chat-import` (audited, L5 run-tested, MIT,
 210 stars — and its 25+ parsers do **not** include the DeepSeek Chat web export). To *measure the conversations with
 this plugin*, convert to DSH sessions as above: the observer reads through `sessionQuery` + this adapter, which is what

@@ -36,6 +36,12 @@ and this map stay, because the filesystem journal is not session-shaped.
   and is now `dsh-session-adapter/reader`, with `surface-authority` beside it. Both take the `sessionQuery`
   service as a PARAMETER, so they still contain no host call for the inventory to find.
 * `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
+* `deepseek-web-export.js` — **intake for a foreign transcript**: a DeepSeek Chat web export (`conversations.json`)
+  as DSH session events, because the adapter reads HARNESS sessions and has no reader for any other format. Every
+  rule in it was measured by the *Paper screening* session and is carried with its reasoning — the deepest-subtree
+  branch rule, the pinned `source.kind: 'user'` title, the `step/start` pairing the harness enforces at read time,
+  and the losses it refuses to fabricate (`F147`, `docs/adapters-and-standards.md`). The half that needs a harness
+  is the writer, `scripts/import-deepseek-web.mjs`.
 
 **THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
 * `sessions-tool-output.js` — the tool's output schema and its rendering, split out of `sessions-tool.js` when the fourth action arrived

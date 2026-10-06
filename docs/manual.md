@@ -550,6 +550,22 @@ not enough (`F137`: a prerelease range never floats to a new tuple), and DSH `0.
 outright rather than warning. Measured on that line: the plugin **installs, composes its row and loads** -- it opens its
 trace file. A full model call there is **not yet verified** (`F141`).
 
+### Measuring conversations from another product
+
+`packages/session-adapter` reads HARNESS sessions and nothing else, so a foreign transcript has to be converted first
+(`docs/adapters-and-standards.md`). One converter ships here, for the archive `chat.deepseek.com` hands a user:
+
+```bash
+node scripts/import-deepseek-web.mjs --export <extracted-export-dir> --out <session-root> --compression zstd
+```
+
+**`--compression` must match the deployment that will READ the root.** Uncompressed logs in a `zstd` root are refused
+wholesale -- one mismatched artifact aborts the listing for every session under it (`F147`) -- and `none` stays the
+default so the output remains readable as plain JSONL with no harness at all. The conversion keeps reasoning separate
+from answer text, pins the original title, and invents no tool history for web citations; what the log deliberately
+does not carry -- citations, and attachment references whose bytes the archive never included -- goes to
+`IMPORT-MAP.json` beside the sessions.
+
 Releasing is a three-package, tag-driven process: the release runbook (kept off-repository).
 
 ```bash
