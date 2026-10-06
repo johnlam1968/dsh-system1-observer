@@ -20,6 +20,11 @@ MIT — see [LICENSE](LICENSE).
 
 ## Status
 
+**There is no CHANGELOG, deliberately.** The change history is this repository's **round log**
+([`docs/conventions.md`](docs/conventions.md) §"Round log") plus `git log`, which carry the same facts with the
+measurement attached to each; a CHANGELOG would be a second, hand-maintained copy that drifts from both. Register row
+**P4** asked for either that line or a CHANGELOG, and this is the line.
+
 **Every trace line says `enforcement: "declarative"` and `verified: false`, and that is the literal truth.**
 There is no sandbox and no runtime gate. "It decides nothing" is enforced by the *shape* of the code — the
 return values are read by the record and by nothing else — and nobody has observed that holding. Flipping
@@ -118,7 +123,10 @@ under `lib/`:
 
 | path | what it owns |
 |---|---|
-| `lib/seams.js` | the nine seam names, the seam-to-event map, the per-seam text extractor and the probe question |
+| `lib/seams.js` | the instrument's own vocabulary: the nine point ids, what is true of each, the switch rule, the exit-code reader and the probe question. It names **no** harness event and reads **no** config |
+| `lib/host-events.js` | which dsh event each point attaches to, and the point as the input object carries it |
+| `lib/host-payload.js` | which ARGUMENT of a harness seam carries the text, per seam — the two files above are the application's half of the point descriptor (`F110`, `F111`) |
+| `lib/instrument-input.js` | the ONE bridge from the row's settings to the instrument's input object, and the only place a `Volatile` is unwrapped for it |
 | `lib/evidence.js` | the evidence record — one JSON object per line, best-effort |
 | `lib/model/` | the two decision-model transports and the answer readers behind them |
 | `lib/is-record.js` | the property-check narrowing those modules share |

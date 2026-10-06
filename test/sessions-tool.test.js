@@ -396,3 +396,27 @@ test('a call cancelled before it starts is REFUSED by name, and no work is done'
   const tool = createSessionsTool({ query: fakeQuery({ records: [] }) })
   await assert.rejects(() => tool.execute({ action: 'list' }, { signal: { aborted: true } }), /cancelled before it started/)
 })
+
+test('the session list can tell a SUBAGENT run from a conversation, and says what it left out', async () => {
+  // ROADMAP 14.4 item 3 on the observer's own surface, which is the tool a person actually reaches for. The
+  // discriminator is the harness's `SessionHeader.origin` (`types.ts:112-117`), NOT `parentSession` -- that field is
+  // fork/seed lineage, and a forked conversation is not a worker run.
+  const records = [
+    { header: { id: 'session-man', cwd: '/home/john/proj', createdAt: 5 }, live: false, persisted: true },
+    { header: { id: 'session-worker', cwd: '/home/john/proj', createdAt: 4, origin: 'subagent', parentSession: 'session-forked-from' }, live: false, persisted: true },
+  ]
+  const tool = createSessionsTool({ query: fakeQuery({ records }) })
+  const all = await tool.execute({ action: 'list' })
+  assert.deepEqual(all.subagents, { subagentRuns: 1, ofTotal: 2, shown: 'include' })
+  assert.equal(all.sessions.length, 2, 'the default is EVERYTHING')
+
+  const conversations = await tool.execute({ action: 'list', subagents: 'exclude' })
+  assert.deepEqual(conversations.sessions.map((row) => row.id), ['session-man'], 'a conversation with no origin survives the exclude')
+  assert.equal(conversations.sessions[0].origin, undefined, 'absent rather than empty: no origin is not origin=""')
+  assert.deepEqual(conversations.subagents, { subagentRuns: 1, ofTotal: 2, shown: 'exclude' })
+
+  const workers = await tool.execute({ action: 'list', subagents: 'only' })
+  assert.deepEqual(workers.sessions.map((row) => row.id), ['session-worker'])
+  assert.equal(workers.sessions[0].origin, 'subagent')
+  assert.equal(workers.sessions[0].parentSession, 'session-forked-from', 'and fork lineage rides beside it')
+})

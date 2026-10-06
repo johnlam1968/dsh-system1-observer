@@ -869,9 +869,13 @@ core never reads a log.
    never reproduced, and the harness's index is left at its deployment default (`never`) — `F98`. `scripts/session-index.mjs`
    therefore gained `search`, a `meta` table recording `text_indexed` as a MODE receipt, and coverage of message text,
    reasoning, tool results and tool-call arguments.
-3. **The subagent distinction** — **318 of 499 sessions are subagent runs** (319 carry a parent session; re-measured
-   from the store), and the index cannot yet filter them out
-   while `observeSubagents` (default OFF) already encodes that policy for the live path.
+3. ~~**The subagent distinction**~~ — **DONE** (`F114`, 2026-10-05). Measured first: `origin = 'subagent'` for **318**
+   of 499 and NULL for 181, while `parent_session` (non-null for 319) is FORK LINEAGE, not a worker's parent -- so the
+   field a reader reaches for is the wrong one, and SQL's `origin != 'subagent'` would have returned zero conversations
+   because an ordinary session's origin is NULL. Both surfaces filter and report now: the store's
+   `listSessions({subagents})` + `counts()`, `session_index_list`'s `subagents: include|exclude|only` with
+   `{subagentRuns, ofTotal, shown}` on every answer, and the observer's `system1_sessions` with the same parameter and
+   `origin`/`parentSession` on the row.
 4. **The pi reader** — the second adapter, and the test of the interface: pi shares DSH's store layout and 183 of its
    sessions are on this disk.
 5. ~~**The `defineTool` migration**~~ -- **DONE** (`F108`): 12 tools authored through one adapter per plugin, the
