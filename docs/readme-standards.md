@@ -38,6 +38,29 @@ question decides which audience the document is written for — the diagnosis th
 | `audience_fit` | score | how well the text serves a first-time visitor deciding whether to use the project (`mismatched` · `weak` · `adequate` · `good` · `exact`) | GitHub, opensource.guide | yes |
 | `front_page_quality` | score | overall quality of this text AS a repository front page (`unusable` · `poor` · `adequate` · `good` · `exemplary`) | all three | yes |
 
+## The limit, and why it is a test rather than a promise
+
+`test/readme.test.js` holds `README.md` to **100 lines and 800 words**, requires every repository link in it to be
+absolute (npm renders this same file, where a relative link breaks), and requires `docs/manual.md` to exist and be
+linked — because a cap is only honest if what leaves the front page lands somewhere a reader can follow.
+
+**100 is not taste**: it is the length at which the [Standard Readme
+specification](https://github.com/RichardLitt/standard-readme/blob/master/spec.md) starts *requiring* a table of
+contents. At or below it a README is still a single-screen document, which is what GitHub's guidance means by "only
+information necessary for developers to get started". The word ceiling exists because lines alone are not a limit —
+100 long lines can hold a manual.
+
+**And it is measured, not assumed**: this repository's own README grew to 775 lines / 8,490 words, and on the twelve
+questions above that page read as a contributor document (0.57) with plumbing at 0.97, no install command in its first
+screen (0.13) and no help path (0.08) — 1.91 of 4 for the audience the sources describe. The 79-line page that
+replaced it graded 3.26 of 4. **The two questions that carry that comparison and are calibrated are `install_present`
+and `getting_started_scope`**; the rest of the rubric is directional at best, which is why the cap cites the sources
+and the two calibrated figures rather than a composite score.
+
+**A failing test is therefore not a nuisance**: it means reference material, a register row or a repository rule is
+sitting where a first-time visitor has to walk past it. The fix is to move it, and the failure message names where.
+It caught this change's own first draft at 102 lines.
+
 ## How they are used, and why not as a stored set
 
 `system1_decide { state, questions }` takes the specs inline — "the same shape the observer is configured with, so a

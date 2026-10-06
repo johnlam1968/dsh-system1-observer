@@ -1,7 +1,9 @@
 # `docs/` — what each file is for, and which are working notes
 
-**The user manual is the repository `README.md`.** It covers installing, configuring, reading a trace, mounting the
-row and the skills. Start there; come back here only if you want the reasoning behind a decision.
+**The user manual is [`manual.md`](manual.md)** — the reference: every setting, the seams, the trace, mounting, and the
+measured claims with the ones that are not verified. The repository `README.md` is the landing page, capped at 100
+lines by `test/readme.test.js`, and it links here. Start at the README; come back here only if you want the reasoning
+behind a decision.
 
 **Some of these notes are not in this repository at all.** The ones marked *kept locally* live on the author's host
 and are deliberately unpublished — they are the development record, and they were removed from the repository and
@@ -15,6 +17,7 @@ the project's record, kept because a measurement without its reasoning is a numb
 
 | file | what it answers |
 |---|---|
+| `manual.md` | the reference manual: hooks, every setting, the trace, mounting, the measured claims and the unverified ones |
 | `settings.md` | every setting: what it does, what it costs, and why it exists (the table the settings card is built from) |
 | `measurement-depth.md` | what evidence a judgement is given — the groups G0–G4 — and what each one can and cannot support |
 | `question-suitability.md` | which question type fits which evidence, and the selection methods |
