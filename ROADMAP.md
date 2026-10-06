@@ -892,9 +892,10 @@ core never reads a log.
    (`{ point, callsEnabled, subjects, axes, questions, limits, redaction, transport }`) built by the application, the
    dsh event map moved to `lib/host-events.js`, and `test/instrument-boundary.test.js` asserts that no instrument file
    imports anything but `node:` builtins and itself, that none calls a config reader, and that the one `ctx` edge is
-   `lib/model/service.js`. **What still blocks a MOVE rather than a reshaping**: `lib/seams.js` extracts text from
-   dsh's per-seam payload shapes (`probeText`, `asText`, `assemblyText`, `messagesText`, `toolText`) and
-   `lib/question-sets.js` reads the filesystem -- both named in the test's set rather than hidden.
+   `lib/model/service.js`. **What still blocks a MOVE rather than a reshaping**: `lib/question-sets.js` READS THE FILESYSTEM (a
+   directory it is given) -- named in the test's set rather than hidden. The per-seam payload shapes and the event map
+   left the instrument in the same pass (`lib/host-payload.js`, `lib/host-events.js`), and the gate asserts that no
+   instrument file names a harness event in code.
 
 ### 14.5 What would make us stop, or reverse
 
@@ -912,7 +913,7 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 
 | | what it is | kind | status |
 |---|---|---|---|
-| **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned, but **the CONFIG coupling is gone and gate-held** (2026-10-05, `F110`): the set is **23 files / 4,274 lines** (re-measured -- the earlier candidate list was a text match), it takes ONE input object built by `lib/instrument-input.js`, it imports nothing but `node:` builtins and itself, and `test/instrument-boundary.test.js` holds all three. **What is left before extraction is not config**: dsh's per-seam PAYLOAD shapes still live in `seams.js` (`probeText` and its four helpers), `question-sets.js` still reads the filesystem, and the trigger in §14.1 is unchanged |
+| **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned, but **the CONFIG coupling is gone and gate-held** (2026-10-05, `F110`): the set is **23 files / 4,274 lines** (re-measured -- the earlier candidate list was a text match), it takes ONE input object built by `lib/instrument-input.js`, it imports nothing but `node:` builtins and itself, and `test/instrument-boundary.test.js` holds all three. **What is left before extraction is not config and not the harness**: the per-seam PAYLOAD shapes moved to `lib/host-payload.js` and the event map to `lib/host-events.js`, so the instrument names no harness event at all (asserted); what remains is that `question-sets.js` reads the filesystem, and the trigger in §14.1, unchanged |
 | **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
 | **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
 | **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | package `dsh-session-adapter` (`packages/session-adapter/`), imported BY NAME | **BOTH halves are in the package** (2026-10-05): the in-band half (session vocabulary, surface fold, feed) and the host-backed half (`lib/reader.js` -- the subject read, the list, the window slicing, the coverage, the host's full-text search -- and `lib/surface-authority.js`). The host reaches them through a PARAMETER (`sessionQuery`), never through `ctx`, so the inventory still checks that they contain no host call. **AND THE SERVICE FORM EXISTS AND IS MOUNTED** (2026-10-05): the same functions are provided as `ctx.sessionAdapter` (row `session-adapter`, 193 composed rows, probe-verified on another port before any restart), with `getQuery` as a function so a host that mounts later is still found, and named absences (`null`, a problem sentence, `available()`) for a deployment with no host. The observer still IMPORTS rather than injects, which is what the in-band path requires -- the service exists for consumers that are not this repository's |

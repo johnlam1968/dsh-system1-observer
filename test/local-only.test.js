@@ -49,11 +49,12 @@ test('package.json asks for no decision-runtime package', () => {
 // the first `import` below, not on the first turn of a live session.
 test('every local runtime module loads from lib/', async () => {
   const seams = await import('../lib/seams.js')
+  const payload = await import('../lib/host-payload.js')
   const evidence = await import('../lib/evidence.js')
   const client = await import('../lib/model/client.js')
   const service = await import('../lib/model/service.js')
 
-  assert.equal(typeof seams.probeText, 'function')
+  assert.equal(typeof payload.probeText, 'function')
   assert.equal(seams.PROBE_SEAMS.length, 9)
   assert.equal(seams.PROBE_QUESTION.type, 'choice')
   assert.equal(typeof evidence.createEvidence, 'function')

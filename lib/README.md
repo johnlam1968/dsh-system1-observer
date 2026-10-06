@@ -55,7 +55,8 @@ and this map stay, because the filesystem journal is not session-shaped.
 
 * `questions.js` — what the observer asks, in one place
 * `question-sets.js` — question sets as files: read them, hash them, list them
-* `seams.js` — a real decision-model call available at every seam
+* `seams.js` — the loop's vocabulary (nine points, what is true of each, the switch rule, the exit-code reader) and
+  the probe's one question; it names no harness event, no payload shape and no config field
 * `observe.js` — the call and the line: everything that can go wrong, covered
 * `model/limits.js` — what the backend will actually take, from the vendor's published numbers
 * `model/wire.js` — one POST, and every way it can go wrong turned into a result
@@ -129,6 +130,8 @@ and this map stay, because the filesystem journal is not session-shaped.
   allowed besides `readConfigValue`, because it is where every `Volatile` is unwrapped before the instrument sees it
 * `host-events.js` — which dsh event each point attaches to: the APPLICATION's half of the point descriptor, split out
   of `seams.js` so the instrument names no harness event
+* `host-payload.js` — which ARGUMENT of a harness seam carries the text, per seam: the other half of that descriptor,
+  moved out of `seams.js` with its own measured notes on why `args[0]` was wrong at three of nine seams
 * `config-writer.js` — the write, as a module, so the dangerous part is tested
 * `service.js` — the observer as a service, so another row can read what this one measured
 

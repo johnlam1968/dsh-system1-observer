@@ -109,6 +109,22 @@ test('no instrument file imports anything but node builtins and itself', () => {
   assert.deepEqual(offenders, [], 'the instrument depends on something outside node:\n  ' + offenders.join('\n  '))
 })
 
+test('no instrument file names a harness event, or reads the adapter\'s event catalogue', () => {
+  const offenders = []
+  for (const file of INSTRUMENT) {
+    const source = code(read(file))
+    // A STRING LITERAL THAT NAMES A HARNESS EVENT IS HOW THE BINDING RE-ENTERS. The id-to-event map moved to
+    // `lib/host-events.js` and the per-seam argument shapes to `lib/host-payload.js`, so a name here again means the
+    // harness is being re-imported by hand -- and `EVENT.AGENT_TURN_STOPPING` was the one import that made
+    // `lib/seams.js` depend on the adapter package at all.
+    for (const match of source.matchAll(/'(?:agent|tools|llm|system-prompt)\/[a-z-]+(?:\/[a-z-]+)*'/g)) {
+      offenders.push(file + ' names ' + match[0])
+    }
+    if (/\bEVENT\.[A-Z_]/.test(source)) offenders.push(file + ' reads the adapter EVENT catalogue')
+  }
+  assert.deepEqual(offenders, [], 'an instrument file names a harness event:\n  ' + offenders.join('\n  '))
+})
+
 test('the ONE host edge in the instrument is the service route, and it is named here', () => {
   // `ctx` IS THE HOST. `ROADMAP.md` §14.1 records that `lib/model/service.js` is the instrument's host edge -- the
   // decision model reached as a Cordis service, with the wire as fallback -- and this asserts it is still the ONLY
