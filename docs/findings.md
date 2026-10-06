@@ -10,7 +10,11 @@ fixes.
 
 - **Harness-convention deltas** stay in [`conventions.md`](conventions.md), where seven rows are already marked
   `DELTA` with citations. This file cites them; it does not restate them.
-- **Forward direction** stays in [`ROADMAP.md`](../ROADMAP.md); **plans** stay in [`plans/`](plans/).
+- **Forward direction** stays in [`ROADMAP.md`](../ROADMAP.md); **plans** stay in `plans/`.
+- **Some cited notes are kept OFF-repository** and were removed from this repository and its history on 2026-10-06:
+  `plans/`, `port/`, `ECOSYSTEM_STUDY.md`, `reports/`. Rows below still cite them, and are **left as written** rather
+  than rewritten: a register that edits its own citations to match a later decision stops being a record. Read such a
+  citation as "this is where the evidence was", not as a path a clone will resolve.
 
 **Status values, used strictly:** `FIXED` (with the commit) · `OPEN` (with what would close it) ·
 `ACCEPTED` (deliberate, with the reason) · `REFUTED` (checked and wrong, with the reason) ·
