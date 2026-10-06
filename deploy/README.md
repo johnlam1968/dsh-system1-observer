@@ -22,6 +22,11 @@ is a comparison and not a mount — says `NOT CHECKED` on a machine with no such
 Two things it reports instead of failing on: any dependency pinned by a `file:` or absolute path, which a second host
 cannot install.
 
+**It compares against `docdrift` ONLY** (`scripts/check-deploy.mjs:16`). `DSH_PROFILE=<name> npm run check:deploy`
+points it at another profile, where it is EXPECTED to fail: this copy describes ONE deployment, and a test rig's patch
+differs by design — a second port, its own trace path, a wide-open observer row. A failure there is not drift, and
+`cp`-ing a rig's files in here would make the record describe the rig instead.
+
 **When to re-record.** In the same change that moves the profile — the check failing is the signal, not a nuisance.
 `test/deploy-drift.test.js` pins the comparison itself (a dropped bundle, an edited patch, a machine-local pin),
 because a check whose own logic is untested is a check that agrees with whatever it is given.
