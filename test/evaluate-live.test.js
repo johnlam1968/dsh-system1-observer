@@ -24,19 +24,33 @@ import plugin from '../index.js'
 import { EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../lib/evaluate-tool.js'
 import { probeAnswerOf, probeScore } from '../lib/probe-score.js'
 
-/** The real Cordis and the real tool registry, from the harness install -- as `test/composition.test.js` resolves them. */
+/**
+ * The real Cordis and the real tool registry, resolved the way `test/composition.test.js` resolves them.
+ *
+ * LOCAL FIRST, because this repository DECLARES both as devDependencies and the suite has to be runnable on a machine
+ * with no global harness install -- which is what a GitHub runner is. Until this order existed, this file resolved
+ * `npm root -g` only, so EVERY CI run failed here while passing on a developer machine with a harness installed
+ * (measured: three consecutive red `ci.yml` runs, and the publish workflow refused to release because of it).
+ * A failure rather than a skip, deliberately, and for the reason composition.test.js gives: a skip reads as
+ * "checked" in a summary line, and this is the one check that can disagree with everything else.
+ */
 async function real(pkg) {
   const candidates = []
+  try {
+    candidates.push(createRequire(import.meta.url).resolve(pkg + '/package.json'))
+  } catch { /* not declared as a dependency: fall through to the install */ }
   try {
     const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
     candidates.push(join(root, '@deepseek-ai/dsh/node_modules/@deepseek-ai', pkg.split('/')[1], 'package.json'))
     candidates.push(join(root, '@deepseek-ai', pkg.split('/')[1], 'package.json'))
-  } catch { /* no npm on PATH: nothing else to try */ }
+  } catch { /* no npm on PATH: the declared copy, or nothing */ }
   for (const manifest of candidates) {
     if (!existsSync(manifest)) continue
     return import(pathToFileURL(createRequire(manifest).resolve(pkg)).href)
   }
-  throw new Error('no reachable ' + pkg + ': the harness install must provide it')
+  throw new Error(
+    'no reachable ' + pkg + ': declare it as a devDependency, or install a harness that provides it.\n'
+    + `looked in: ${candidates.join(', ') || '(nothing: no declared copy and no npm root -g)'}`)
 }
 
 const { Context } = await real('@deepseek-ai/cordis')
