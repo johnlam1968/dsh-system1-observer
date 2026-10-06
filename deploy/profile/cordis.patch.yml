@@ -141,8 +141,9 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: minimax-cn
-    model: MiniMax-M3
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: high
 - id: system1-laya
   disabled: true
 - id: system1-observer
