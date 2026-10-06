@@ -51,8 +51,15 @@ export const inject = ['tools']
  * Workspace markers whose sessions may SEND through this bridge.
  *
  * `dsh-telegram` keeps the original bridge working; `dsh-system1-observer` is the workspace that was refused.
+ *
+ * `test-system1-observer` was added because it is a THIRD workspace that a substring test cannot reach: the
+ * Paper screening session works in the operator's DeepSeek-import workspace, four characters away from
+ * `dsh-system1-observer`, and was refused on every reply. The `dsh-system1-observer` session could send to it
+ * and it could not answer -- the bridge ran one way, which was discovered only after two questions had been
+ * asked and gone unanswered. Recorded here as another instance of the defect this file's header already names:
+ * a substring is not an identity, and every workspace added is a patch on that, not a fix for it.
  */
-const SEND_MARKS = marksFrom(process.env.PEER_BRIDGE_SEND_MARKS) ?? ['dsh-telegram', 'dsh-system1-observer']
+const SEND_MARKS = marksFrom(process.env.PEER_BRIDGE_SEND_MARKS) ?? ['dsh-telegram', 'dsh-system1-observer', 'test-system1-observer']
 
 /**
  * Workspace markers whose sessions may be READ through this bridge.
