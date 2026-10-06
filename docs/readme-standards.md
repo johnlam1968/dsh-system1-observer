@@ -102,6 +102,23 @@ vocabulary ("seams", "the probe", "a question set"), which is why internals stil
 visitor. Rewriting them in the reader's terms (and adding an issues link) moved that to 0.35 and the help path to
 0.99 — a defect the review's prose had not identified and the judge did.
 
+### What the measurement responds to: content, not section names
+
+The reviewer asked which part of the fix moved `help_or_contributing_path` from 0.11 to 0.99 — the sentence, or a
+section named as Standard Readme requires. **Measured by ablation**: the same page with ONLY the
+"Questions, and contributing" paragraph and its issues link removed scores **0.10**, and restored **0.99**. The
+heading in both cases is *"Questions, and contributing"* — never Standard Readme's required `Contributing`.
+
+Two more data points point the same way: `usage_example_present` scores **0.94–0.99** under a heading called
+*"Sixty seconds"*, not `Usage`; and `install_present` scores **0.76** under a heading that DOES say `Install`,
+so the heading did not carry it. The judge is reading what the text tells a reader, not which spec section it filed
+it under.
+
+**And that has a consequence for the divergence above**: a strict specification and this judge are measuring
+different things — form against intelligibility — so Standard Readme conformance cannot be inferred from these
+figures in either direction. What the ablation does show is that a single sentence and a link are enough for the
+question to separate, which is the sensitivity a usable instrument needs.
+
 **Three honest limits of this reading.**
 1. **No battery.** Nothing here shows these questions separate a good README from a bad one on labelled cases, which
    is the standard every other question set in this repository is held to. These are readings from an uncalibrated
