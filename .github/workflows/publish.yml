@@ -113,14 +113,22 @@ jobs:
           for pkg_dir in packages/session-adapter .; do
             name=$(node -p "require('./${pkg_dir}/package.json').name")
             ver=$(node -p "require('./${pkg_dir}/package.json').version")
-            if npm view "${name}@${ver}" version >/dev/null 2>&1; then
+            # RETRY, because the registry is eventually consistent: a direct publish is not always visible to the
+            # next `npm view` a second later, and declaring a release staged when it merely lagged is its own
+            # failure. Three attempts over ~20s, then the verdict.
+            found=false
+            for attempt in 1 2 3 4 5; do
+              if npm view "${name}@${ver}" version >/dev/null 2>&1; then found=true; break; fi
+              sleep 5
+            done
+            if [ "$found" = true ]; then
               echo "installable: ${name}@${ver}"
             else
               failed=1
-              # MEASURED: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run signs
-              # a provenance statement, exits 0, and nothing is installable. A green job is then evidence of staging,
-              # not of publication. Two ways out, both named here.
-              echo "::error::${name}@${ver} is NOT on the registry: npm staged it, or refused it. A green run is not a release."
+              # MEASURED TWICE: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run
+              # signs a provenance statement, the publish step exits 0, and nothing is installable. A green job is
+              # then evidence of staging, not of publication.
+              echo "::error::${name}@${ver} is NOT on the registry after 5 checks over ~20s: npm staged it, or refused it."
             fi
           done
           if [ "$failed" -ne 0 ]; then

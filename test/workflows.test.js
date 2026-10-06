@@ -52,6 +52,9 @@ test('the publish workflow keeps the promises a release depends on', () => {
   // AND IT MUST COVER EVERY PACKAGE THE TAG PUBLISHES, not only the root one: a staged adapter beside a published
   // plugin is half a release, which is exactly the shape that reads as success.
   assert.match(yamlText, /for pkg_dir in packages\/session-adapter \./, 'the installability check must cover both packages')
+  // AND IT MUST RETRY: the registry is eventually consistent, so a single check a second after publishing can
+  // report a staged release that merely lagged.
+  assert.match(yamlText, /for attempt in 1 2 3 4 5/, 'the installability check must retry before declaring staging')
   // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
   // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
   // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on
