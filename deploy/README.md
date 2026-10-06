@@ -44,7 +44,10 @@ packages published or cloned, and its own copy of the factory tarball.
 ```bash
 NEW=observer-test
 cp -r deploy/profile "$HOME/.dsh/profiles/$NEW"
-cd "$HOME/.dsh/profiles/$NEW" && npm install          # or pnpm install --frozen-lockfile
+cd "$HOME/.dsh/profiles/$NEW"
+pnpm install --frozen-lockfile    # PNPM, NOT NPM. Four dependencies are `link:` URLs -- a pnpm/yarn protocol
+                                  # npm REJECTS -- which is why this directory carries a pnpm lockfile.
+                                  # Measured by the first agent that followed this procedure (`F128`).
 # rename the profile package (cosmetic, but two profiles with one name confuse --dump-config readers)
 sed -i 's/dsh-profile-docdrift/dsh-profile-'"$NEW"'/' package.json
 ```

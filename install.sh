@@ -83,6 +83,11 @@ cat <<'NOTE'
 
 Notes:
 
+  * THIS SCRIPT INSTALLS THE PLUGIN, with npm, into a profile that already exists. Standing up a WHOLE
+    PROFILE from the recorded composition is a different task: it needs pnpm (four of the profile's
+    dependencies are `link:` URLs, which npm rejects), and its steps are in DEPLOY-A-PROFILE.md and
+    deploy/README.md.
+
   * The observer needs a decision model to call. It prefers the profile's `system1` service and
     falls back to the HTTP endpoint at `wireUrl` (default http://127.0.0.1:8766) when no service
     is mounted. With neither, every call is an error line in the trace.
