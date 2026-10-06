@@ -113,6 +113,51 @@ visitor. Rewriting them in the reader's terms (and adding an issues link) moved 
    surface the complaint is about, and `first_screen_sufficient` is only meaningful when the text given IS the first
    screen. Judging the whole 775-line manual is a different measurement, and a longer one.
 
+## Cross-check: a second reviewer collected the same standards in parallel
+
+A second agent (a different model, the `standard` preset) gathered the standards independently the same day. Both
+halves are recorded because each found sources the other could not fetch.
+
+**Sources it has that the tables above do not**: [Art of README](https://github.com/hackergrrl/art-of-readme) — the
+philosophical one, with a checklist (one-liner, background, unfamiliar terms linked, a runnable example, install,
+extensive API, **cognitive funneling**, caveats up front, no reliance on images, licence);
+[Make a README](https://www.makeareadme.com/); the [PurpleBooth template](https://github.com/PurpleBooth/a-good-readme-template);
+[dwyl/repo-badges](https://github.com/dwyl/repo-badges) (badge priority); `readme-score` (an automated scorer whose
+criteria are unpublished, so nothing is attributed to it).
+
+**Sources above that it could not fetch**: GitHub's own page — it received the navigation only — and
+opensource.guide's article. The sentence that settles the operator's question is GitHub's, quoted in the table.
+
+**The conflicts are three, not one**, and each has a resolution:
+
+1. **Brevity against comprehensiveness.** Art of README: *"the ideal README is as short as it can be without being
+   any shorter… Detailed documentation is good — make separate pages for it!"* Make a README: *"too long is better
+   than too short."* GitHub: getting-started only, "longer documentation is best suited for wikis". **Resolution**:
+   length is not a criterion by itself — the criteria are whether the four questions are answered and whether install
+   and usage are present and runnable.
+2. **Where the licence goes.** Art of README argues for it high up, because a reader disqualifies a project early on
+   licence terms; Standard Readme requires it **last**. **Resolution**: the specification wins where they conflict,
+   and a one-line mention near the top is compatible with both.
+3. **A table of contents.** Standard Readme requires one above 100 lines — which is itself a judgement that a README
+   past that length has stopped being a front page. A ToC is a navigation tax a landing page should not need.
+
+**Criteria it added that the twelve questions do not cover**, all text-checkable: cognitive funneling (broad →
+specific: description, install, usage, then reference); caveats named up front; an example that looks runnable rather
+than abstract; unfamiliar terms linked; a short description under 120 characters on one line; maintainers named with
+a contact. **And two it judged not checkable from text**, correctly: whether links resolve (a link checker's job, not
+a judge's) and whether the description matches `package.json`'s `description` (needs the manifest).
+
+**Where the two methods CONVERGE, without either knowing the other's answer**: both found the missing way to ask for
+help or contribute — the reviewer's words *"A6 Contributing — MISSING from BOTH candidates"*, the judge's numbers
+0.08 on the manual and 0.11 on the page — and both conclude the landing page is the right shape for a front page,
+the reviewer from funneling/length/licence-last and the judge from the audience flip (contributor 0.57 →
+first-time visitor 0.94). The gap was fixed and re-measured at 0.99.
+
+**Where they diverge**: the reviewer treats Standard Readme's required one-line description under 120 characters as a
+defect; the judge scored `states_what_it_is` 0.89–0.94 for the existing opening, so by measurement it is not the
+binding constraint. Neither is authoritative — conforming to Standard Readme is a **choice** about what the project
+claims, not a defect the measurement found.
+
 **A caveat about the instrument, stated before the figures**: this question set has no battery. Nothing here has
 shown that the questions separate a good README from a bad one on labelled cases — the standard this repository holds
 every other question set to (`system1_battery`). The measurement below is therefore a *reading*, not a calibrated
