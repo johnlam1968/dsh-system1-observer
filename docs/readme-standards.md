@@ -198,6 +198,40 @@ and it has been asked to.
 separate in the intended direction, measured with the same instrument that produced the front-page figures. The
 earlier readings are therefore not contradicted by the one blinded test that has run to completion.
 
+### Resolution: the inversion was a property of the STATES, and my explanation was wrong too
+
+The reviewer checked its own trace instead of defending the result, and retracted both of its claims:
+
+- **The parser claim was a session-layer bug reported as a harness property.** Its trace shows multi-question arrays
+  with `choice` and `score` specs reaching the model intact — including the twelve-question array behind this
+  document's front-page measurement (`questionIds` carries all twelve, `primary_audience` with five options and both
+  `score` questions with five levels). "The harness rejects arrays" was a claim about a system generalised from one
+  sample of it, which is the failure `AGENTS.md` warns about in this repository by name.
+- **The size claim was wrong**: 62 lines of zoxide's several-hundred-line README is a slice, and it had reported the
+  three candidates as whole documents.
+
+**And my own explanation was wrong.** I proposed that its questions had arrived empty — `F43`'s class. They did not.
+It then ran the repeat-call consistency check, which priced the actual cause: **state reduction**.
+
+| question | candidate B, two runs | candidate C, two runs |
+|---|---|---|
+| `install_present` | 0.97 → 0.92 | 0.08 → 0.29 |
+| `help_or_contributing_path` | **0.12 → 0.41** | **0.40 → 0.64** |
+| `internal_plumbing_present` | 0.47 → 0.56 | 0.60 → 0.65 |
+
+Same state, same provider, same model, **within-cell swings of 0.24–0.29** on the two questions it had reported as
+inverting. Its reduced states were too small for those questions: a three-sentence README and a short excerpt of a
+technical README both read as "no plumbing, no help path" unless the text is long enough to show what it is about —
+which is why the same two questions order the same two candidates correctly on the full state (0.07/0.19 and
+0.12/0.51 above) and backwards on the excerpt. **So the state scope is part of the instrument**, and a reading taken
+on an excerpt is not comparable with one taken on the document.
+
+**The rubric's status, honestly**: `install_present` separates and is stable at n=2 in two sessions;
+`getting_started_scope` separated in both checks but has not had its noise priced; the other two separate on full
+states and are demonstrably unreliable on excerpts; eight questions have never been asked of a document neither of us
+wrote. **The front-page conclusion survives this because its gaps are far larger than the measured noise** — install
+0.13 against 0.91 is a 0.78 gap, and the noise measured here is 0.29 at worst.
+
 **What is still missing** is unchanged and is the same gap: **labelled truth**. Stars are reputation, not
 measurement (the reviewer said so first); one call per cell leaves sampling variance unpriced; and eight of the twelve
 questions have never been asked of a document neither of us wrote. The next cheap step is repeat calls on the same
