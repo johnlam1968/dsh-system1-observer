@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-adapter",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "description": "The DSH session surface this repository's plugins are thin adapters over: the harness's event vocabulary in one home, the model-surface fold, the per-session event feed, and the sessionQuery-backed reads -- as importable functions AND as a `sessionAdapter` service.",
   "main": "./index.js",

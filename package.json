@@ -1,6 +1,6 @@
 {
   "name": "dsh-system1-observer",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "description": "Calls a System One model at configured points of the agent loop and writes each call, request and response, to a JSONL trace. Decides nothing.",
   "main": "./index.js",
