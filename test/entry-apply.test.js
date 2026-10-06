@@ -291,9 +291,13 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   // registered TWICE, because a duplicate name throws in the registry. A count would have had to be bumped for a
   // legitimate addition while going on passing for an illegitimate duplicate.
   const names = registered.map((definition) => definition.name)
-  // FOUR, and O19 is why this list is worth pinning: a schema the registry refuses takes the WHOLE callback down, so
-  // the symptom was a missing tool rather than a bad one.
-  assert.deepEqual([...names].sort(), ['system1_battery', 'system1_decide', 'system1_evaluate_session', 'system1_measurements', 'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'], 'every tool, and nothing else')
+  // EVERY TOOL, NAMED, and O19 is why this list is worth pinning: a schema the registry refuses takes the WHOLE callback
+  // down, so the symptom was a missing tool rather than a bad one.
+  //
+  // `system1_explain` IS FIRST IN THE ROW on purpose -- it is the tool that tells an agent what the others can do, so it
+  // is the one the model should meet first -- and the assertion is sorted, because registration ORDER is not a contract
+  // while the SET is.
+  assert.deepEqual([...names].sort(), ['system1_battery', 'system1_decide', 'system1_evaluate_session', 'system1_explain', 'system1_measurements', 'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'], 'every tool, and nothing else')
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
 
   // EVERY RENDER TAKES (args, value), WHICH IS THE ORDER THE HOST CALLS IT IN -- and the one parameter is not a

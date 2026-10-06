@@ -45,7 +45,16 @@ import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { instrumentInput, questionGroup, redactionGroup } from './lib/instrument-input.js'
 import { createObserver } from './lib/observe.js'
-import { createTraceTool } from './lib/tool.js'
+import { createTraceTool, TRACE_TOOL_NAME } from './lib/tool.js'
+import { createExplainTool, explainFacts, EXPLAIN_TOOL_NAME, TOOL_SUMMARIES } from './lib/explain-tool.js'
+import { CONFIG_TOOL_NAME } from './lib/config-tool.js'
+import { DECIDE_TOOL_NAME } from './lib/decide-tool.js'
+import { EVALUATE_TOOL_NAME } from './lib/evaluate-tool.js'
+import { QUESTIONS_TOOL_NAME } from './lib/questions-tool.js'
+import { BATTERY_TOOL_NAME } from './lib/battery-tool.js'
+import { SESSIONS_TOOL_NAME } from './lib/sessions-tool.js'
+import { RESULTS_TOOL_NAME } from './lib/results-tool.js'
+import { defaultPackageDir } from './lib/report.js'
 import { asToolDefinition } from './lib/tool-definition.js'
 import { readTraceWindow, runIds } from './lib/trace-report.js'
 import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
@@ -561,6 +570,28 @@ async function apply(ctx, config) {
     if (tools === undefined || typeof tools.register !== 'function') return
     // EVERY TOOL GOES THROUGH THE AUTHORED FORM, in one place (`lib/tool-definition.js`, `F107`).
     const register = (definition) => tools.register(asToolDefinition(definition))
+    // THE BRIEF COMES FIRST, and it is DERIVED: the writable/mount-bound split from the schema's own metadata, the
+    // live values from the running row, the sets from the directory the row points at. An explanation that restated
+    // these would be a second copy to drift; this one cannot (see `lib/explain-tool.js`).
+    register(createExplainTool({
+      facts: () => explainFacts({
+        dict: Config.dict,
+        config: liveConfig(),
+        sets: (() => {
+          const where = setSettings(questionGroup(liveConfig()).sets)
+          const listed = listSets(where.dir)
+          return {
+            dir: where.dir,
+            selected: where.name,
+            available: (listed.sets ?? []).map((set) => ({ name: String(set.name ?? ''), scopes: Array.isArray(set.seams) ? set.seams.map(String) : [], hash: String(set.hash ?? '') })),
+          }
+        })(),
+        tracePath: evidence.path,
+        measurementsDir: defaultPackageDir(),
+        tools: [EXPLAIN_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME, EVALUATE_TOOL_NAME, RESULTS_TOOL_NAME, SESSIONS_TOOL_NAME, QUESTIONS_TOOL_NAME, BATTERY_TOOL_NAME, TRACE_TOOL_NAME]
+          .map((name) => ({ name, what: TOOL_SUMMARIES[name] ?? '' })),
+      }),
+    }))
     register(createTraceTool({
       path: evidence.path,
       runId: evidence.runId(),

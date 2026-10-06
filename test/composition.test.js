@@ -34,6 +34,7 @@ import { TRACE_TOOL_NAME } from '../lib/tool.js'
 import { CONFIG_TOOL_NAME } from '../lib/config-tool.js'
 import { DECIDE_TOOL_NAME } from '../lib/decide-tool.js'
 import { OBSERVER_SERVICE } from '../lib/service.js'
+import { EXPLAIN_TOOL_NAME } from '../lib/explain-tool.js'
 
 /**
  * The real Cordis runtime, from the harness install rather than from a dependency of this repo.
@@ -198,7 +199,7 @@ test('the REAL tool registry registers the row\'s tools, and dispose takes them 
   // path against a REAL service rather than against a double that always answers.
   const fiber = ctx.plugin(plugin, configFor(join(dir, 'trace.jsonl')))
   await fiber.await()
-  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME]) {
+  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME, EXPLAIN_TOOL_NAME]) {
     assert.ok(registry.get(name), `${name} is registered while the row is mounted`)
   }
 
@@ -208,7 +209,7 @@ test('the REAL tool registry registers the row\'s tools, and dispose takes them 
   // ("dispose the contributing fiber, assert cleanup"). Disposal is the REGISTRY's work, tracked by Cordis against
   // the contributing fiber -- which is precisely why a hand-written double cannot check it: a double would have to
   // implement the tracking that is under test.
-  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME]) {
+  for (const name of [TRACE_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME, EXPLAIN_TOOL_NAME]) {
     assert.equal(registry.get(name), undefined, `${name} is gone once the row is disposed`)
   }
   // AND THE REGISTRY IS STILL THERE, which is the control: the three absences above are our disposal, not the whole

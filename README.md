@@ -113,6 +113,41 @@ get wrong: the absence of a warning is not evidence that there was nothing to wa
   `minimax-cn` is declared in the profile with no models and no catalogue, so `minimax-M3` cannot run at all; the
   review was done by a smaller model on a different provider and treated as a cross-check, not a source.
 
+## Who does what, and what only YAML can change
+
+**The agent is the primary user of this plugin, and almost everything is volatile.** Every capability is a tool, and
+**42 of the 44 settings are writable live** by an agent through `system1_settings` — the same fields the settings card
+offers a human, through the same path: the write goes to the harness's `configEditor`, lands in this profile's
+`cordis.patch.yml`, and is recorded on the trace BEFORE it takes effect. So a value in that file is the *initial* value
+only until the first write; after that it is the latest one, and it survives a restart.
+
+**The two exceptions are mount-bound**: `probeQuestion` (its text *is* the instrument identity — `probeFingerprint`
+hashes it onto every MOUNT line and into the comparability key, so a reword needs a YAML edit and a re-mount, after
+which the runs are honestly incomparable) and `tracePath` (the sink is opened once, and the path is on the mount line).
+Both can be read live (`system1_settings { action: 'get' }`) and neither can be written live.
+
+**Who does what:**
+
+| | |
+|---|---|
+| **the agent** | generates, validates and applies question sets (`system1_question_sets`); measures a session, a turn or a whole conversation (`system1_evaluate_session`, `system1_battery`, `system1_decide`); reads the record (`system1_trace`, `system1_measurements`); finds and reads sessions (`system1_sessions`); changes any live setting; and asks `system1_explain` for this brief, derived from the running row |
+| **the human** | the settings card (all 42 live fields), and **"…" → Observe this session** on a session row — convenience, not a separate mechanism: it writes the same allow-list an agent writes |
+| **the profile's YAML** | the two mount-bound fields, the bundle list, and the layer order |
+
+**What the subjects actually are**, measured on this host: **318 of 499 stored sessions are subagent (worker) runs**,
+not human conversations — which is why the session list can be filtered (`subagents: 'exclude' | 'only'`) and why
+`observeSubagents` is off by default.
+
+**And the observer decides nothing.** Each listener returns the loop's own decision *by reference*, every line says
+`enforcement: "declarative", verified: false`, and a seam that was not measured writes a `skip` naming the gate that
+stopped it. The artifacts are the trace (`~/.dsh/logs/system1-observer.jsonl`) and optional packages under
+`data/measurements/`.
+
+**This section is the stable half.** The *current* facts — which knobs exist, what each is, what the row is set to
+right now, which sets are visible, and the five cautions that decide whether a reading can be trusted — are what
+`system1_explain` returns, derived from the schema and the running config so they cannot drift from the code. An agent
+that reads no documentation meets it as the first tool in the list.
+
 ## What it depends on
 
 `@deepseek-ai/schemastery` and `yaml` — nothing else. **`@typesafe-ai/sdk` is a dev dependency**, used by

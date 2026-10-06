@@ -124,6 +124,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 
 * `egress.js` — what leaves the process, and where it goes
 * `telemetry.js` — the harness's own outbound telemetry, which is unredacted
+* `explain-tool.js` — `system1_explain`: the brief an agent reads instead of the README — what is writable LIVE (derived
+  from the schema's own `volatile` metadata, so it cannot drift), the two mount-bound fields and why, what the row is
+  set to right now, how to choose/write/validate a question set, and the cautions that make a reading trustworthy
 * `config-value.js` — reading a config field, when the field may be an accessor
 * `instrument-input.js` — THE BRIDGE: the row's settings -> the instrument's one input object (`point`, `callsEnabled`,
   `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport`). The only place a plain read of a setting is

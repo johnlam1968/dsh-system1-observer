@@ -30,6 +30,7 @@ import { createQuestionsTool } from '../lib/questions-tool.js'
 import { createBatteryTool } from '../lib/battery-tool.js'
 import { createConfigTool } from '../lib/config-tool.js'
 import { createTraceTool } from '../lib/tool.js'
+import { createExplainTool } from '../lib/explain-tool.js'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,6 +49,9 @@ function everyTool() {
     createBatteryTool(stubDeps()),
     createConfigTool(stubDeps()),
     createTraceTool(stubDeps()),
+    // THE BRIEF IS A TOOL LIKE ANY OTHER and its output is validated with them: it reports derived facts, so a field
+    // it emits that its declaration does not describe would be refused exactly like any other value (F118's class).
+    createExplainTool(),
   ]
 }
 
@@ -80,10 +84,10 @@ test('no tool declares a CLOSED object with no properties -- the shape that refu
     + offenders.join('\n  '))
 })
 
-test('the eight tools are all here, so the check above cannot shrink silently', () => {
+test('the nine tools are all here, so the check above cannot shrink silently', () => {
   const names = everyTool().map((tool) => tool.name).sort()
-  assert.deepEqual(names, ['system1_battery', 'system1_decide', 'system1_evaluate_session', 'system1_measurements',
-    'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'].sort())
+  assert.deepEqual(names, ['system1_battery', 'system1_decide', 'system1_evaluate_session', 'system1_explain',
+    'system1_measurements', 'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'].sort())
 })
 
 test('a FULL decide answer validates against its own declaration -- the call that failed live', async () => {
