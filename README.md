@@ -37,7 +37,7 @@ a model route.
 
 | claim | evidence |
 |---|---|
-| the probe separates the seams it is asked about | **88.99%** over 3,370 scored calls, against a **39.94%** majority-class floor, **κ 0.8374** — computed by `lib/probe-score.js`, reproducing the study's hand-computed figures exactly |
+| the probe separates the seams it is asked about | **88.99%** over 3,370 scored calls, against a **39.94%** majority-class floor, **κ 0.8374** — computed by `lib/probe-score.js`, reproducing the study's hand-computed figures exactly. **The figure is a function of the SEAM MIX, and a tool-heavy window measures its weakest pairs**: a live window of 62 probe calls over two agent runs scored **59.7%** (κ 0.525), with `assemble`/`pre_execute` at 1.000 and `execute`/`result` at 0.273/0.083 — the two tool-seam PAIRS are shown the same text (`name + arguments` for both call seams, one result envelope for both result seams) and asked four labels, so one member of each pair scores ~1 and the other ~0 by construction (`F121`) |
 | the confidence is worth something, and it errs the unusual way | top-1 **ECE 0.1253**, **bias −0.1242 (under-confident)**, Brier 0.0915; classwise ECE 0.0284; multi-class logLoss 0.4947 · `lib/calibrate.js` |
 | the trace's cost is knowable | **$0.256974** for 4,368 judged calls, `post_execute` alone **59.8%** of it, from `lib/cost.js` |
 | truncation changes what is measured | full excerpts **90.16%** (n=3,212) versus truncated **65.19%** (n=158) — a 25-point gap a single blended figure hides |
