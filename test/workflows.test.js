@@ -36,9 +36,14 @@ test('the publish workflow keeps the promises a release depends on', () => {
   assert.equal(publish.permissions?.['id-token'], 'write', 'provenance needs id-token: write')
   assert.equal(publish.permissions?.contents, 'write', 'the GitHub Release needs contents: write')
   const yamlText = readFileSync(join(dir, 'publish.yml'), 'utf8')
-  // THE BETA DISCIPLINE, in the three places it can be lost: the flag on the command, the guard that refuses a
-  // prerelease aimed at `latest`, and the post-publish check that the tag did not land there anyway.
-  assert.match(yamlText, /npm publish --provenance --access public --tag beta/, 'a publish without --tag beta would make the beta `latest`')
+  // THE TAG FOLLOWS THE VERSION, in the places it can be lost: the command must not hard-code a tag, because a fixed
+  // `--tag beta` publishes a STABLE release without moving `latest` -- leaving the npm page and `npm i` on an old
+  // beta -- and there must be no bare `npm publish` that would let a prerelease become `latest`.
+  assert.match(yamlText, /if \[\[ "\$ver" == \*-\* \]\]; then tag=beta; else tag=latest; fi/,
+    'the publish tag must be computed from the version')
+  assert.match(yamlText, /--tag "\$tag"/, 'the publish must use the computed tag')
+  // A COMMAND must not hard-code a tag; the comments explaining why the old one did are history and stay.
+  assert.doesNotMatch(yamlText, /npm publish[^\n]*--tag beta/, 'no publish command may hard-code a tag')
   // THE GUARD ITSELF LIVES IN `prepublishOnly`, so the promise to assert is that the workflow does NOT skip it:
   // publishing from a directory runs `prepublishOnly`, and `--ignore-scripts` would silently bypass the tag check
   // (it is the right flag for the TARBALL route, where the guard has already run by hand).

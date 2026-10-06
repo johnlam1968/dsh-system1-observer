@@ -1,11 +1,14 @@
 // THE GUARD FOR THE HAND-PUBLISH PATH, tested in both directions and through the SCRIPT rather than only the rule.
 //
-// Why it exists: `publishConfig: { tag: 'beta' }` is in the manifest and npm 11.8.0 IGNORES it -- measured, a dry run
-// announced `with tag latest` -- so a bare `npm publish` of a prerelease would make the beta the version `npm i`
-// installs. The workflow passes `--tag beta`; this is the guard for a maintainer at a terminal.
+// Why it exists: npm 11.8.0 IGNORES `publishConfig.tag` -- measured, a dry run announced `with tag latest` -- so a
+// bare `npm publish` of a PRERELEASE would make the beta the version `npm i` installs. Since 0.1.0 the manifest pins
+// no tag at all, and the workflow computes one from the version (`-beta.x` -> beta, stable -> latest); this is the
+// guard for a maintainer at a terminal, where nothing computes anything.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { publishTagProblem } from '../lib/publish-tag.js'
@@ -46,13 +49,20 @@ test('the three cases that are NOT problems stay allowed', () => {
 })
 
 test('the SCRIPT settles it by exit code, in the package it is run from', () => {
-  // The root package is a prerelease today, so the two directions are both reachable without inventing a manifest.
-  const refused = guard(root, null)
+  // A FIXTURE, because this test used to assert against the repository's own manifest and said "the root package is a
+  // prerelease today" -- which stopped being true the day the root became a stable 0.1.0, and the guard correctly
+  // allowed it. A test that tracks the release it guards breaks once per release for no reason.
+  const fixture = mkdtempSync(join(tmpdir(), 'publish-tag-'))
+  writeFileSync(join(fixture, 'package.json'), JSON.stringify({ name: 'fixture', version: '0.2.0-beta.1' }))
+  const refused = guard(fixture, null)
   assert.equal(refused.code, 1, 'no tag + a prerelease version must fail the publish')
   assert.match(refused.out, /publish tag REFUSED/)
-  const allowed = guard(root, 'beta')
+  const allowed = guard(fixture, 'beta')
   assert.equal(allowed.code, 0)
   assert.match(allowed.out, /publish tag ok/)
+  // AND A STABLE VERSION NEEDS NO TAG: `latest` is what it is for, which is the release this guard exists to allow.
+  const stable = guard(root, null)
+  assert.equal(stable.code, 0, 'a stable version with no tag is the normal release')
   // AND IT READS THE MANIFEST OF ITS OWN DIRECTORY: the adapter has its own name and version, and its
   // `prepublishOnly` calls this same script, so a guard that read the root's package.json would report the wrong
   // package -- which it did, until the relative path was measured (`packages/../scripts` does not exist).
