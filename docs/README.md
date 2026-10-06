@@ -40,7 +40,7 @@ the project's record, kept because a measurement without its reasoning is a numb
 | `port/` | porting notes for moving this capability to another host; `port/README.md` is their index |
 | `assistant-contract-small-model.md` | a draft contract for small-model assistants — an idea under discussion, not a shipped behaviour |
 | `reports/` | iteration reports: what a run of the measurement loop found, measured rather than claimed |
-| `handoff.md` | what the last working session left for the next one |
+| `.superpowers/handoff.md` | what the last working session left for the next one — kept in the gitignored `.superpowers/`, where the session notes live |
 | `../RELEASING.md` | the release runbook: the three-package order, the tokenless path, and what does not ship |
 
 If a file here contradicts the code, **the code wins** and the file is a defect: the register is where that is recorded.
