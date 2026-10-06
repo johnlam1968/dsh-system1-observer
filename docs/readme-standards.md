@@ -269,16 +269,26 @@ the second of the two the front-page argument depends on.
 documentation elsewhere?) reads cleanly on a short state, while a **presence** question (is there a help path? is
 there plumbing?) does not, because a short text cannot demonstrate presence.
 
-**The caveat that matters**: on an excerpt, an absence question can be confidently right about the EXCERPT and wrong
+**The caveat that mattered**: on an excerpt, an absence question can be confidently right about the EXCERPT and wrong
 about the DOCUMENT. zoxide's README runs to hundreds of lines, so 0.84 for "confines itself to what a developer needs
-in order to get started" is a statement about its first 62 lines, not about zoxide. The stability is real; it is
-stability about a state the decision does not use. **No one has yet repeated a measurement on the state the
-front-page argument actually uses — the full front page — and that is the next cheap check**, because a question can
-be stable and still be measuring the wrong thing.
+in order to get started" is a statement about its first 62 lines, not about zoxide. The stability was real, and it was
+stability about a state the decision does not use.
 
-**The rubric's status, honestly**: `install_present` separates and is stable at n=2 in two sessions (gap 0.78);
-`getting_started_scope` separates at n=2 with near-zero within-cell noise (gap 0.27) but on EXCERPTS, so its stability
-on the full front page — the state the decision uses — is still unmeasured; `help_or_contributing_path` and
+**It is now closed by measurement, on the states the decision actually used.** The same two questions, twice each, on
+the old 68-line front page and on the new 99-line README:
+
+| question | old front page, two runs | new README, two runs | gap |
+|---|---|---|---|
+| `install_present` | 0.13 / 0.14 | 0.90 / 0.90 | **0.77** |
+| `getting_started_scope` | 0.34 / 0.36 | 0.88 / 0.88 | **0.53** |
+
+Within-cell variance is **0.01–0.02** on both states and both questions; the gaps are 25 to 50 times that. So the two
+calibrated questions are stable on the decision-relevant states as well as on the reviewer's excerpts, and the figures
+the README's length cap cites are repeat-stable rather than single-sample. What remains unpriced is the noise of the
+OTHER questions, which is a different statement from this one.
+
+**The rubric's status, honestly**: `install_present` and `getting_started_scope` both separate with repeats on the decision-relevant states — gaps 0.77
+and 0.53 against within-cell noise of 0.01–0.02, in two independent sessions on excerpts and full front pages alike; `help_or_contributing_path` and
 `internal_plumbing_present` separate on full states and are demonstrably unreliable on excerpts; eight questions have
 never been asked of a document neither of us wrote. **The front-page conclusion survives this because its gaps are far larger than the measured noise** — install
 0.13 against 0.91 is a 0.78 gap, and the noise measured here is 0.29 at worst.
