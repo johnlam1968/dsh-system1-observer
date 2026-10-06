@@ -885,8 +885,15 @@ core never reads a log.
    and host inventories for both packages (`F109`), with the class form's two measured costs recorded there. **What
    remains of `F107`**: the audit's UNKNOWNs -- ALL FOUR now CLOSED and asserted: the waterfall `next()`
    contract (`F111`), `exec.signal` per tool (`F112`), and slot OPTIONS plus the client build pipeline (`F113`, the
-   latter confirmed in the running page) -- and ONE live check that needs a restart --
-   `listService { service: 'localSessionIndex' }`.
+   latter confirmed in the running page). **The ONE live check that needed a restart was RUN** (2026-10-05, on a
+   restarted process): `listService` still answers *"no catalogued Service"* for ours, and `F116` refutes the premise --
+   the catalogue is a GENERATED STATIC TABLE (`SERVICE_API`, 124 compile-time entries), so no third-party service can be
+   in it and the class form was never what would put one there. The class form stays for the reason
+   `services-events.md` 2.1 gives; reachability is verified through the tools that read the service at call time.
+   **And live testing found three defects no unit test could see** (`F116`, `F117`, `F118`): the catalogue refutation
+   above, the observer's own fetched store copy sitting two schema versions behind, and NINE output-schema nodes across
+   five tools declared closed over keys that come from data or another producer -- which made `system1_decide` fail the
+   first live call. All three are fixed, and each has the check whose absence let it ship.
 6. **The core extraction** -- when a second consumer exists, per §14.1. **The readiness test is one of two things and
    neither is true today**: a SECOND CONSUMER (another repo or application that measures with this instrument), or a
    FROZEN INTERFACE -- and P1's second question per call, P2's criteria dictionary and `id@version` provenance, P3's turn
