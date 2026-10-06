@@ -22,6 +22,7 @@ import { join } from 'node:path'
 import { createTraceTool, TRACE_TOOL_NAME } from '../lib/tool.js'
 import { createConfigTool } from '../lib/config-tool.js'
 import { createDecideTool, DECIDE_TOOL_NAME, TOOL_HOOK } from '../lib/decide-tool.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const tracePath = join(mkdtempSync(join(tmpdir(), 'tool-contract-')), 'trace.jsonl')
 const trace = createTraceTool({ path: tracePath, runId: () => 'run-1', liveAgents: () => [], price: 0.042 })
@@ -74,7 +75,11 @@ for (const item of CASES) {
     const tool = TOOLS[item.tool]
     assert.ok(tool, `no tool named ${item.tool}`)
     if (item.valid === true) {
-      await assert.doesNotReject(tool.execute(item.args, {}), 'a declared-valid call must not be refused: ' + label)
+      // AND WHAT IT RETURNS MUST BE ACCEPTED BY THE PIPELINE. This file had asserted only that a valid call does not
+      // REJECT, which is silent about the half `F118`/`F119` broke: a tool can succeed and still hand the registry a
+      // value its own declaration refuses. The check is the harness's own (`tool-output-validated.js`).
+      const value = await tool.execute(item.args, {})
+      assertValidOutput(tool, value, label)
       return
     }
     await assert.rejects(tool.execute(item.args, {}), (error) => {

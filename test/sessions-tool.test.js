@@ -11,6 +11,7 @@ import { buildIndex } from 'dsh-session-index/build'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const record = (id, { cwd = '/home/john/freeciv', createdAt = 1000, live = false, persisted = true } = {}) => ({ header: { id, cwd, createdAt }, live, persisted })
 
@@ -63,6 +64,7 @@ test('list marks the sessions the observer will actually MEASURE, and never conf
     observed: () => ({ every: false, match: (id) => id.startsWith('session-30500a5a') }),
   })
   const value = await pinned.execute({ action: 'list' })
+  assertValidOutput(pinned, value, 'list')
   assert.equal(value.observesEverySession, false)
   assert.equal(value.observedCount, 1)
   assert.equal(value.sessions.find((r) => r.id.startsWith('session-30500a5a')).observed, true)

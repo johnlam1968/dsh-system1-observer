@@ -13,6 +13,7 @@ import { PROBE_QUESTION } from '../lib/seams.js'
 import { noul } from '../lib/model/questions.js'
 import { stateBudgetChars } from '../lib/model/limits.js'
 import { checkAgainst } from '../lib/tool-args.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const message = (seq, type, text) => ({
   seq,
@@ -209,9 +210,17 @@ test('it judges a stored session and reports WHAT it judged, with the input\u201
   assert.deepEqual(out.answers, { review: { label: 'yes', confidence: 0.8 } })
   // `offset` RIDES BESIDE `lastMessages` ALWAYS, even at 0: the two are one paging decision, and an absent one
   // invites "was it ignored?" -- the same reason `lastMessages: 0` is written rather than omitted.
-  // `groups` and `turn` ride beside the paging decision for the same reason: a reading that does not name the evidence
-  // it was given cannot be told from one given different evidence (see `docs/measurement-depth.md`).
-  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, offset: 0, groups: null, turn: null, messages: 4, total: 4 })
+  // `groups` and `turn` ride beside the paging decision WHEN THE CALLER NAMED THEM: a reading that does not name the
+  // evidence it was given cannot be told from one given different evidence (see `docs/measurement-depth.md`).
+  // AND WHEN NOTHING WAS NAMED THEY ARE ABSENT, NOT NULL -- the fix `F119` records: the declaration promises an ARRAY
+  // for `groups` and a NUMBER for `turn`, so a `null` was a value the pipeline refuses, and the schema's own
+  // description had said "absent when no group was named" all along. The first live call after the restart answered
+  // `"value.subject.groups" is not a declared property; "value.groups" must be an array`, which is this line.
+  assert.deepEqual(out.subject, { source: 'stored', sessionId: 'S1', kinds: ['operator', 'assistant'], lastMessages: 0, offset: 0, messages: 4, total: 4 })
+  assert.equal('groups' in out.subject, false, 'absent, not null')
+  assert.equal('turn' in out.subject, false)
+  // AND THE HARNESS WOULD ACCEPT IT, which is the check whose absence shipped this.
+  assertValidOutput(h.tool, out, 'stored session, no groups named')
   assert.equal(typeof out.stateHash, 'string')
   assert.equal(out.stateHash.length, 12, 'a short hash, so two evaluations of the same input are recognisable as one')
   assert.equal(out.truncated, false)

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createBatteryTool, BATTERY_TOOL_NAME } from '../lib/battery-tool.js'
 import { checkAgainst } from '../lib/tool-args.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 /** A criteria directory with one session set of two questions, and a battery directory with one matching battery. */
 function fixture({ cases = 5, expected = (i) => ({ went_well: i < 3, served: i < 3 ? 'yes' : 'no' }), setQuestions = 2 } = {}) {
@@ -43,6 +44,7 @@ test('run scores every case, records ONE experiment line, and publishes a rate p
     record: (line) => lines.push(line),
   })
   const out = await tool.execute({ action: 'run', battery: 'trial', set: 'trial-set' })
+  assertValidOutput(tool, out, 'run')
   assert.deepEqual(out.problems, [])
   assert.equal(asked.length, 5, 'one model call per case, with every question at once')
   assert.deepEqual(out.questions.map((q) => q.id), ['served', 'went_well'])

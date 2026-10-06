@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../lib/results-tool.js'
 // THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
 import { answerOf, readTraceLines, windowOf, writerOf } from '../lib/trace-read.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const call = (over = {}) => ({
   event: 'call',
@@ -226,6 +227,7 @@ test('a call that FAILED is counted as asked and failed, not silently dropped fr
   // AND THE RENDER SHOWS THE FAILURE, rather than `n=2` beside three attempts.
   const tool = createResultsTool({ path: '/dev/null', readFile: () => lines.map((l) => JSON.stringify(l)).join('\n') })
   const value = await tool.execute({})
+  assertValidOutput(tool, value, 'summary')
   const text = tool.output.render({}, value)[0].text
   // THE TWO SHAPES ARE NEVER POOLED, so the failure appears in the tool line's own group: `n=0 FAILED=1` beside the
   // seam group's `n=2`. That is the accounting working -- the three attempts are visible and attributed.

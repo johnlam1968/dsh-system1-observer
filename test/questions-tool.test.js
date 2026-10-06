@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createQuestionsTool, QUESTIONS_TOOL_NAME, validateSpecs, WRITABLE_SCOPES } from '../lib/questions-tool.js'
 import { listSets, readSelectedSet } from '../lib/question-sets.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const noul = (id, instructions = 'is it true?') => ({ id, type: 'noul', instructions })
 const choiceWithoutAbstain = () => ({
@@ -29,6 +30,7 @@ test('list reports the compositions, and read returns what is on disk', async ()
   const dir = fixture()
   const tool = toolFor(dir)
   const listed = await tool.execute({ action: 'list' })
+  assertValidOutput(tool, listed, 'list')
   assert.equal(listed.problem, undefined)
   assert.deepEqual(listed.sets.map((s) => s.name), ['house@1'])
   assert.deepEqual(listed.sets[0].seams, ['draft'])
@@ -36,6 +38,9 @@ test('list reports the compositions, and read returns what is on disk', async ()
   assert.equal(listed.sets[0].hash.length, 12)
 
   const read = await tool.execute({ action: 'read', set: 'house@1', scope: 'draft' })
+  // THE `read` VALUE IS WHERE `specs.items`, `scopeHashes` AND THE MANIFEST'S `appliesTo` APPEAR -- three of the nine
+  // nodes `F118` found closed over keys that were not ours.
+  assertValidOutput(tool, read, 'read')
   assert.deepEqual(read.specs, [noul('draft_stands_alone', 'standalone?')])
 
   const missing = await tool.execute({ action: 'read', set: 'house@1', scope: 'result' })

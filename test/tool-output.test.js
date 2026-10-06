@@ -21,6 +21,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+import { asToolDefinition } from '../lib/tool-definition.js'
 import { createDecideTool } from '../lib/decide-tool.js'
 import { createEvaluateTool } from '../lib/evaluate-tool.js'
 import { createResultsTool } from '../lib/results-tool.js'
@@ -65,7 +66,9 @@ function walk(node, path, visit) {
 test('no tool declares a CLOSED object with no properties -- the shape that refuses every value', () => {
   const offenders = []
   for (const tool of everyTool()) {
-    walk(tool.output.schema, 'output', (node, path) => {
+    // AUTHORED FIRST, so this walks what the REGISTRY validates: `defineTool` compiles the declaration, and the
+    // author-only `type: 'json'` node becomes an annotation-only `{}` in the process (`F119`).
+    walk(asToolDefinition(tool).output.schema, 'output', (node, path) => {
       if (node.type === 'object' && node.additionalProperties === false
         && (node.properties === undefined || Object.keys(node.properties).length === 0)) {
         offenders.push(`${tool.name} at ${path}`)
@@ -100,7 +103,7 @@ test('a FULL decide answer validates against its own declaration -- the call tha
     record: () => {},
   }).execute({ state: 'the state', questions: [{ id: 'served_the_request', type: 'noul', instructions: 'Did it?' }] })
   assert.deepEqual(Object.keys(value).sort(), ['answers', 'durationMs', 'executed', 'usage', 'worstCase'])
-  assert.deepEqual(validateJsonSchemaValue(createDecideTool(stubDeps()).output.schema, value, 'value'), [])
+  assert.deepEqual(validateJsonSchemaValue(asToolDefinition(createDecideTool(stubDeps())).output.schema, value, 'value'), [])
 })
 
 test('a RETURNED failure validates, and a THROWN one is recorded and rethrown', async () => {
@@ -110,7 +113,7 @@ test('a RETURNED failure validates, and a THROWN one is recorded and rethrown', 
   const returned = createDecideTool({ decide: async () => null, record: () => {} })
   const value = await returned.execute({ state: 'the state', questions: [{ id: 'q', type: 'noul', instructions: 'Did it?' }] })
   assert.deepEqual(value, { failure: { reason: 'the model returned no result' } })
-  assert.deepEqual(validateJsonSchemaValue(returned.output.schema, value, 'value'), [])
+  assert.deepEqual(validateJsonSchemaValue(asToolDefinition(returned).output.schema, value, 'value'), [])
 
   const lines = []
   const thrown = createDecideTool({ decide: async () => { throw new Error('the wire refused the connection') }, record: (line) => lines.push(line) })
@@ -131,6 +134,6 @@ test('the trace tool\'s CARD data validates, which is the field it could never p
   const tool = createTraceTool({ path, runId: () => 'r1', liveAgents: () => [], price: 0.042 })
   return tool.execute({ tail: 10 }).then((value) => {
     assert.ok(value.data !== undefined, 'the card data is present for a non-empty trace')
-    assert.deepEqual(validateJsonSchemaValue(tool.output.schema, value, 'value'), [])
+    assert.deepEqual(validateJsonSchemaValue(asToolDefinition(tool).output.schema, value, 'value'), [])
   })
 })
