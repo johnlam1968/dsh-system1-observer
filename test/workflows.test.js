@@ -54,7 +54,8 @@ test('the publish workflow keeps the promises a release depends on', () => {
   assert.match(yamlText, /for pkg_dir in packages\/session-adapter \./, 'the installability check must cover both packages')
   // AND IT MUST RETRY: the registry is eventually consistent, so a single check a second after publishing can
   // report a staged release that merely lagged.
-  assert.match(yamlText, /for attempt in 1 2 3 4 5/, 'the installability check must retry before declaring staging')
+  // AND THE WINDOW MUST COVER npm's OWN "few minutes": 20 seconds declared a published release staged (F136).
+  assert.match(yamlText, /for attempt in \$\(seq 1 13\)/, 'the installability check must wait minutes, not seconds')
   // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
   // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
   // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on

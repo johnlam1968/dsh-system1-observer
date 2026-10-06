@@ -113,13 +113,16 @@ jobs:
           for pkg_dir in packages/session-adapter .; do
             name=$(node -p "require('./${pkg_dir}/package.json').name")
             ver=$(node -p "require('./${pkg_dir}/package.json').version")
-            # RETRY, because the registry is eventually consistent: a direct publish is not always visible to the
-            # next `npm view` a second later, and declaring a release staged when it merely lagged is its own
-            # failure. Three attempts over ~20s, then the verdict.
+            # RETRY FOR MINUTES, NOT SECONDS, and the reason is measured: npm prints the SAME two lines whether it
+            # published a version that is still being processed or STAGED one awaiting approval --
+            #   "Your package is being processed and may take a few minutes to become available."
+            #   "+ name@version"
+            # -- so only the registry, plus time, can tell them apart. A 20-second window declared a published
+            # release "staged" (F136). 13 checks over ~3 minutes covers npm's own "few minutes".
             found=false
-            for attempt in 1 2 3 4 5; do
+            for attempt in $(seq 1 13); do
               if npm view "${name}@${ver}" version >/dev/null 2>&1; then found=true; break; fi
-              sleep 5
+              sleep 15
             done
             if [ "$found" = true ]; then
               echo "installable: ${name}@${ver}"
@@ -128,7 +131,7 @@ jobs:
               # MEASURED TWICE: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run
               # signs a provenance statement, the publish step exits 0, and nothing is installable. A green job is
               # then evidence of staging, not of publication.
-              echo "::error::${name}@${ver} is NOT on the registry after 5 checks over ~20s: npm staged it, or refused it."
+              echo "::error::${name}@${ver} is still not on the registry after ~3 minutes. npm accepted it and said it was 'being processed', so either the processing is unusually slow or it was STAGED; the two are indistinguishable from the CLI's output."
             fi
           done
           if [ "$failed" -ne 0 ]; then
