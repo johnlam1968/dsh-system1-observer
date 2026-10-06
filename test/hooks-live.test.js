@@ -9,6 +9,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { registerListeners } from '../lib/register.js'
+import { PROBE_SEAMS } from '../lib/seams.js'
+import { probeHook } from '../lib/host-events.js'
+import { HOST_EVENT_MODES } from '../lib/host/index.js'
 
 /** One seam, one listener, and a record of everything the observer was asked to record. */
 function mounted(seam, hookEnabled) {
@@ -69,4 +72,54 @@ test('and switched ON, both of them do look', async () => {
   const waterfall = mounted('pre_execute', () => true)
   await waterfall.fire({ agent: { id: 'session-a' } }, () => ({ kind: 'allow' }))
   assert.equal(waterfall.observed.length, 1, 'and so does an enabled waterfall seam')
+})
+
+// EVERY SEAM LISTENER, DRIVEN OFF THE HARNESS'S OWN MODE FOR ITS EVENT.
+//
+// `F107` left "waterfall listeners calling next()" as an UNKNOWN, and the tests above pin only `draft` and
+// `pre_execute`. Nothing asserted that the SHAPE of each listener matches the MODE of the event it attaches to: that
+// classification is a hand-made transcription in `register.js` (three branches), and getting it wrong produces exactly
+// the trap the UNKNOWN names -- a waterfall listener that never calls `next()` swallows every listener behind it, and
+// an emit listener that calls one throws. Measured across all nine (2026-10-05, `F111`): no violation.
+//
+// THE ARGUMENTS ARE THE DOCUMENTED SIGNATURES, per seam (the notes on why `args[0]` was wrong at three of them are in
+// `lib/host-payload.js`). Each is built from the `next` under test, so a listener that reaches for the wrong argument
+// is measured rather than assumed.
+const SEAM_ARGS = Object.freeze({
+  assemble: (next) => [{ sections: [], contexts: [] }, { agent: { id: 'session-a' } }, next],
+  admit: (next) => [{ agent: { id: 'session-a' }, messages: [{ text: 'the operator message' }] }, next],
+  request: (next) => [{ agent: { id: 'session-a' } }, next],
+  draft: (next) => [{ purpose: undefined }, next],
+  pre_execute: (next) => [{ agent: { id: 'session-a' }, name: 'bash', arguments: { command: 'ls' } }, next],
+  execute: (next) => [{ agent: { id: 'session-a' }, name: 'bash', arguments: { command: 'ls' } }, next],
+  post_execute: (next) => [{ agent: { id: 'session-a' } }, 'the tool result', next],
+  result: () => [{ agent: { id: 'session-a' } }, 'the tool result'],
+  close: () => [{ agent: { id: 'session-a' }, turn: 1 }],
+})
+
+test('every seam listener matches the harness MODE of the event it attaches to', async () => {
+  for (const seam of PROBE_SEAMS) {
+    const mode = HOST_EVENT_MODES[probeHook(seam)]
+    assert.ok(mode, seam + ' attaches to an event with no mode in the catalogue')
+    const { fire } = mounted(seam, () => true)
+    let calls = 0
+    const decision = { kind: 'what-the-loop-produced' }
+    // `draft` is the one waterfall whose continuation PRODUCES the value rather than returning it: `next()` yields the
+    // model's stream, and the listener returns a tee of it.
+    const next = () => { calls += 1; return seam === 'draft' ? (async function* () { yield 'a chunk' })() : decision }
+    const returned = await fire(...SEAM_ARGS[seam](next))
+    if (mode === 'waterfall') {
+      assert.equal(calls, 1, seam + ' attaches to a waterfall, so next() must be called exactly once')
+      if (seam === 'draft') {
+        const relayed = []
+        for await (const chunk of returned) relayed.push(chunk)
+        assert.deepEqual(relayed, ['a chunk'], 'a draft listener relays every chunk the model produced')
+      } else {
+        assert.equal(returned, decision, seam + ' must hand the loop its OWN decision back, by reference')
+      }
+    } else {
+      assert.equal(calls, 0, seam + ' attaches to a ' + mode + ' event, which hands out no continuation to call')
+      assert.equal(returned, undefined, seam + ' must return undefined from a ' + mode + ' event')
+    }
+  }
 })

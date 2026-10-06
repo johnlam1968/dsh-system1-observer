@@ -6,8 +6,9 @@
 // eventually caught by reading a declaration. This file is that reading, made executable.
 //
 // Each test names the convention it checks and where the convention is written down. Citations are to the
-// dsh-plugin-dev-kb mirror; the catalogue table below is a CHECKSUM of the generated `cordis-surface` entries,
-// kept here so this file runs without the knowledge base installed. `docs/conventions.md` carries the record.
+// dsh-plugin-dev-kb mirror; the MODE of every event is a CHECKSUM of the generated `cordis-surface` entries, kept in
+// `lib/host/index.js` beside the declarations so this file and `test/hooks-live.test.js` read ONE table rather than
+// two. `docs/conventions.md` carries the record.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,7 +17,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { readConfigValue } from '../lib/config-value.js'
-import { HOST_EVENTS } from '../lib/host/index.js'
+import { HOST_EVENT_MODES, HOST_EVENTS } from '../lib/host/index.js'
 import { DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
 import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../lib/host/fs-journal.js'
 import { createRequire } from 'node:module'
@@ -31,36 +32,9 @@ const read = (p) => readFileSync(join(ROOT, p), 'utf8')
 const pkg = JSON.parse(read('package.json'))
 const plugin = (await import(new URL('../index.js', import.meta.url).href)).default
 
-/**
- * Every event this plugin names, with the mode the generated catalogue gives it.
- *
- * `#### `name` -- mode` is the catalogue's entry form. Sources, for re-checking after a harness upgrade:
- *   core.md:953 agent/inbox/claimed · core.md:1019 agent/pre-step · core.md:1044 agent/request
- *   core.md:1146 agent/turn-stopping · session.md:1118 session/event · filesystem.md:470 fs/observed
- *   filesystem.md:451 fs/edit-intent · filesystem.md:491 fs/write-intent · system-prompt.md:183
- *   llm-streaming.md:1068 llm/stream · tools.md:606 tools/execute · tools.md:630 tools/post-execute
- *   tools.md:655 tools/pre-execute · tools.md:705 tools/result
- */
 const TRACE_TOOL = createTraceTool({ path: '/tmp/none.jsonl', runId: () => 'r', liveAgents: () => [] })
 const CONFIG_TOOL = createConfigTool({ read: () => ({}), write: () => ({}), record: () => {} })
 const DECIDE_TOOL = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }), record: () => {} })
-
-const CATALOGUE = Object.freeze({
-  'agent/inbox/claimed': 'emit',
-  'agent/pre-step': 'waterfall',
-  'agent/request': 'waterfall',
-  'agent/turn-stopping': 'serial',
-  'session/event': 'emit',
-  'fs/observed': 'emit',
-  'fs/edit-intent': 'waterfall',
-  'fs/write-intent': 'waterfall',
-  'system-prompt/assemble': 'waterfall',
-  'llm/stream': 'waterfall',
-  'tools/execute': 'waterfall',
-  'tools/post-execute': 'waterfall',
-  'tools/pre-execute': 'waterfall',
-  'tools/result': 'emit',
-})
 
 // ---------------------------------------------------------------------------------------------------------
 // 1. Module shape -- basic/index.md:19-31, basic/config.md:31, framework/service.md:95
@@ -142,14 +116,14 @@ test('events: every declared event is in the generated catalogue, with its mode'
   const declared = Object.keys(HOST_EVENTS)
   assert.ok(declared.length > 0)
   for (const name of declared) {
-    assert.ok(CATALOGUE[name], `${name} is declared but is not in the catalogue checksum`)
+    assert.ok(HOST_EVENT_MODES[name], `${name} is declared but is not in the catalogue checksum`)
     // The mode is checked WHERE THE DECLARATION STATES ONE. Requiring every description to name its mode was my
     // first version of this assertion and it failed on `session/event`, whose declaration describes what the event
     // carries rather than how it dispatches -- a test asserting a house style, not a convention.
     const stated = /^(emit|serial|waterfall|bail)\b/.exec(String(HOST_EVENTS[name]).trim())
     if (stated !== null) {
-      assert.equal(stated[1], CATALOGUE[name],
-        `${name} is declared ${stated[1]} and the catalogue documents ${CATALOGUE[name]}`)
+      assert.equal(stated[1], HOST_EVENT_MODES[name],
+        `${name} is declared ${stated[1]} and the catalogue documents ${HOST_EVENT_MODES[name]}`)
     }
   }
 })
@@ -159,7 +133,7 @@ test('events: every catalogue name this plugin relies on appears in the sources'
   // `lib/seams.js`; they moved to `lib/host-events.js` so the instrument names no harness event at all (F110), and a
   // scan that did not follow them would report every one of them missing.
   const sources = read('index.js') + read('lib/seams.js') + read('lib/host-events.js')
-  for (const name of Object.keys(CATALOGUE)) {
+  for (const name of Object.keys(HOST_EVENT_MODES)) {
     assert.ok(sources.includes(`'${name}'`), `${name} is in the checksum but nowhere in the row, the point table or the event map`)
   }
 })

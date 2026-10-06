@@ -879,8 +879,9 @@ core never reads a log.
    refused now fixed -- including `required` not existing in the VALUE schema DSL, untyped nodes, and a **latent bug**
    (the battery's `got` was emitted and undeclared). **Also DONE**: the `Service` subclass form for all three plugins
    and host inventories for both packages (`F109`), with the class form's two measured costs recorded there. **What
-   remains of `F107`**: the audit's UNKNOWNs (`exec.signal`, waterfall `next()`, slot OPTIONS, the client build
-   pipeline) and ONE live check that needs a restart -- `listService { service: 'localSessionIndex' }`.
+   remains of `F107`**: the audit's UNKNOWNs -- `exec.signal` per tool, slot OPTIONS, the client build pipeline, the
+   waterfall `next()` contract now being CLOSED and asserted (`F111`) -- and ONE live check that needs a restart --
+   `listService { service: 'localSessionIndex' }`.
 6. **The core extraction** -- when a second consumer exists, per §14.1. **The readiness test is one of two things and
    neither is true today**: a SECOND CONSUMER (another repo or application that measures with this instrument), or a
    FROZEN INTERFACE -- and P1's second question per call, P2's criteria dictionary and `id@version` provenance, P3's turn
