@@ -48,7 +48,10 @@ test('the publish workflow keeps the promises a release depends on', () => {
   // STAGING IS NOT A RELEASE: the OIDC flow can stage a publish, exit 0 and leave nothing installable (measured).
   // The workflow must check the REGISTRY, not its own exit code.
   assert.match(yamlText, /must be INSTALLABLE/, 'nothing verifies the version actually landed')
-  assert.match(yamlText, /npm view "\$pkg@\$ver" version/, 'the installability check must query the registry')
+  assert.match(yamlText, /npm view "\$\{name\}@\$\{ver\}" version/, 'the installability check must query the registry')
+  // AND IT MUST COVER EVERY PACKAGE THE TAG PUBLISHES, not only the root one: a staged adapter beside a published
+  // plugin is half a release, which is exactly the shape that reads as success.
+  assert.match(yamlText, /for pkg_dir in packages\/session-adapter \./, 'the installability check must cover both packages')
   // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
   // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
   // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on
