@@ -96,7 +96,8 @@ document-evaluation instrument is passed per call, and this file is where its qu
 
 The two candidates, judged with the twelve questions above by `typesafe/jev-1.13-20260917` (the revision is named
 because the alias is not the fact). **State A** is the first 68 lines of `README.md` — the front page as a visitor
-meets it, ending at the CI/coverage-floor passage the operator objected to. **State B** is `docs/npm-readme.md`, the
+meets it, ending at the CI/coverage-floor passage the operator objected to. **State B** is `docs/npm-readme.md` — since retired: the README
+IS that page now, and the file no longer exists, but the measurement below stands as it was taken — the
 proposed landing page, judged twice: once as first written, and again after the measurement found two gaps in it.
 
 | question | A: the manual's front page | B: landing page, first | B: after the fixes |
