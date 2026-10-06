@@ -3,14 +3,13 @@ data/
 .superpowers/
 
 # Working notes: kept on this host, deliberately not published. The agent handoffs, the dated plans, the port study,
-# the ecosystem research and the iteration reports are the development record rather than the product, and
-# DEPLOY-A-PROFILE.md is a prompt written FOR an agent, not documentation for someone using the plugin.
+# the ecosystem research and the iteration reports are the development record rather than the product.
+# DEPLOY-A-PROFILE.md is NOT here on purpose: it is the task file an agent is meant to FIND in a clone.
 docs/port/
 docs/plans/
 docs/ECOSYSTEM_STUDY.md
 docs/assistant-contract-small-model.md
 reports/
-DEPLOY-A-PROFILE.md
 
 # npm pack output: a build artifact, never a source file
 dsh-system1-observer-*.tgz
