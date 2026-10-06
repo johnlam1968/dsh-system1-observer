@@ -1,5 +1,15 @@
 # dsh-system1-observer
 
+** Human's words: This is vibe-coded. Agents could take initiative to, and are mostly free to gather rubric and evaluate using system1 call on parts or whole of sessions.
+Almost all is volatile. Agent can change configurations which will be hot-loaded.
+Measurement being important, the actions to make use of the evaluation are interesting and useful. 
+The "seams" are there to feedback to the human or agent, and the current state of this project provides a flexible basis.
+
+Following is written by agents, self-evaluated and compared notes, with README writing standards they researched and formulated.
+These words are results of two LLM in DeepSeek Harness and a TypeSafe jev model in dsh-system1-observer plugin.
+
+--------
+
 **A seam observer for the DeepSeek Harness.** It asks a System One model what the agent loop is doing — at the points
 you choose — and writes every call, every skip and every answer to a JSONL trace.
 
