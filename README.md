@@ -210,6 +210,13 @@ Enabling a seam is a `hooks` change, which is **mount-bound** rather than live: 
 
 ## Config
 
+**Every field declares a default equal to the fallback its code already applies**, so the settings card shows what is
+actually in force rather than a blank, and `system1_explain` can report it. Three fields are deliberately UNSET, and
+each says why in its own description: `provider` and `model`, because unset means *the transport decides* (the
+`system1` service's own configuration — a schema default here would override a deployment's choice), and
+`probeQuestion`, because an empty string is reported as a problem rather than as "use the built-in one". A test in
+`test/schema.test.js` fails if a field is added without a default and without a reason.
+
 | key | default | applies |
 |---|---|---|
 | `hooks` | the four above | at mount |

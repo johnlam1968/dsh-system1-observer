@@ -1,4 +1,7 @@
 import { test } from 'node:test'
+import { DEFAULT_HOOKS } from '../lib/register.js'
+import { DEFAULT_MAX_FIELD_CHARS } from '../lib/observe.js'
+import { DEFAULT_WIRE_URL } from '../lib/model/wire.js'
 import assert from 'node:assert/strict'
 import { Config } from '../index.js'
 import { PROBE_SEAMS } from '../lib/seams.js'
@@ -181,6 +184,33 @@ test('every volatile setting is read somewhere, or is named in the exception lis
   for (const field of VIA_PLAIN_CONFIG) {
     assert.equal(dict[field]?.meta?.volatile, true, field + ' is listed as read via plainConfig, so it must be volatile')
   }
+})
+
+test('every field RESOLVES to a value -- or is one of the three where UNSET is the meaning', async () => {
+  // A FIELD WITH NO DEFAULT IS A FIELD NOBODY CAN SEE: the effective behaviour lives in a fallback somewhere in the
+  // code, the settings card draws a blank, and an agent reading `system1_explain` is told nothing. So every field
+  // either declares a default EQUAL to the fallback the code already applies, or appears here with the reason that
+  // `undefined` is the answer. Adding a field without one fails this list.
+  const { readConfigValue } = await import('../lib/config-value.js')
+  const resolved = Config({})
+  const UNSET_IS_THE_VALUE = {
+    provider: 'unset means the TRANSPORT decides: `lib/model/service.js` sends no model block at all when neither provider nor model is set, so the `system1` service\'s own configuration applies. A schema default would override a deployment\'s choice with this file\'s guess',
+    model: 'the same as `provider`, and for the same measured reason: the block is omitted rather than filled in',
+    probeQuestion: 'MOUNT-BOUND, and an EMPTY string is not the same as unset: `probeOf` reports an empty probeQuestion as a PROBLEM ("an empty string; the built-in question is in force"), so a default of \'\' would make every row that never set it carry a problem it does not have',
+  }
+  const undefinedFields = Object.keys(dict).filter((field) => readConfigValue(resolved[field]) === undefined).sort()
+  assert.deepEqual(undefinedFields, Object.keys(UNSET_IS_THE_VALUE).sort(),
+    'these fields resolve to NO value: give each a default equal to the fallback its code applies, or name it here with the reason')
+  for (const [field, reason] of Object.entries(UNSET_IS_THE_VALUE)) {
+    assert.ok(reason.length > 60, field + '\'s reason must actually explain it')
+  }
+  // AND THE THREE DEFAULTS THAT DOCUMENT A CODE CONSTANT ARE THE CONSTANT, not a copy of its value.
+  assert.deepEqual(dict.hooks.meta?.default, [...DEFAULT_HOOKS])
+  assert.equal(dict.wireUrl.meta?.default, DEFAULT_WIRE_URL)
+  assert.equal(dict.maxFieldChars.meta?.default, DEFAULT_MAX_FIELD_CHARS)
+  assert.equal(dict.callsEnabled.meta?.default, true, 'an absent kill switch means ON, so the default says so')
+  assert.equal(dict.observeSubagents.meta?.default, false)
+  assert.equal(dict.turnEveryNTurns.meta?.default, 0)
 })
 
 test('every declared default reaches a resolved config', async () => {

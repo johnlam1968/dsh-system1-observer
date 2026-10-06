@@ -44,7 +44,8 @@ import { createModel } from './lib/model/client.js'
 import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { instrumentInput, questionGroup, redactionGroup } from './lib/instrument-input.js'
-import { createObserver } from './lib/observe.js'
+import { createObserver, DEFAULT_MAX_FIELD_CHARS } from './lib/observe.js'
+import { DEFAULT_WIRE_URL } from './lib/model/wire.js'
 import { createTraceTool, TRACE_TOOL_NAME } from './lib/tool.js'
 import { createExplainTool, explainFacts, EXPLAIN_TOOL_NAME, TOOL_SUMMARIES } from './lib/explain-tool.js'
 import { CONFIG_TOOL_NAME } from './lib/config-tool.js'
@@ -64,7 +65,7 @@ import { createConfigTool } from './lib/config-tool.js'
 import { createConfigWriter } from './lib/config-writer.js'
 import { createTurnObserver } from './lib/turn-observer.js'
 import { createTurnListener } from './lib/turn-listener.js'
-import { registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
+import { DEFAULT_HOOKS, registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
 
 const name = 'system1-observer'
 
@@ -151,18 +152,24 @@ function defaultDshHome() {
 }
 
 const Config = Schema.object({
-  hooks: Schema.array(Schema.string())
+  hooks: Schema.array(Schema.string()).default([...DEFAULT_HOOKS])
     // VOLATILE, AND READ AT EVERY FIRING rather than at mount: a seam added or removed here takes effect on the
     // next event, with no restart and no lost in-memory state. Removing a seam does NOT unregister its listener --
     // the listener stays and hands the loop exactly what the loop produced -- so switching one back on resumes.
     .description(`Points of the loop to call, from: ${PROBE_SEAMS.join(', ')}. Read at every firing: a seam added or removed here takes effect on the next event, with no restart.`)
     .volatile(),
-  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row.').volatile(),
-  model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row.').volatile(),
+  // NO DECLARED DEFAULT, AND THAT IS THE DEFAULT: unset means the TRANSPORT decides. `lib/model/service.js` sends no
+  // model block at all when neither is set, so the `system1` service's own configuration applies -- and a schema
+  // default here would OVERRIDE a deployment's choice with this file's guess. The card shows the blank, and the
+  // mount line and every call line record which provider actually answered.
+  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row. UNSET (the default) means the transport decides: the `system1` service uses its own configured provider.').volatile(),
+  model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row. UNSET (the default) means the transport decides, exactly as `provider` does.').volatile(),
   // THE DECLARED DEFAULT, which the field never had: the row fell back to `?? 8000` and the model layer
   // defaulted to 5000, so an unset field meant one thing to the schema and another to the call.
   timeoutMs: Schema.number().min(0).default(DEFAULT_TIMEOUT_MS).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
-  wireUrl: Schema.string().description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
+  // THE URL IS ONE CONSTANT, and the fallback in `apply` reads the same one, so the declared default and the code's
+  // behaviour cannot drift apart.
+  wireUrl: Schema.string().default(DEFAULT_WIRE_URL).description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND, AND NOT FOR STYLE. This text IS the instrument's identity (`probeFingerprint` hashes it) and the
   // hash is written on the MOUNT line, so a value that changed mid-run would leave calls scored under one question
   // and keyed under another -- the silent mixing the comparability key exists to prevent. A reworded question needs a
@@ -205,11 +212,11 @@ const Config = Schema.object({
 
   questionSet: Schema.string().default('').volatile().description('Which set in `questionSetsDir` this row asks, by name (the file\u2019s stem). Empty means the inline `questions` object, which is what every row did before sets existed. Read at each call, so a set can be swapped on a running row.'),
   probeQuestion: Schema.string().description('The probe question asked at every seam that has no question of its own, for a domain that needs it put differently. YAML only, because it changes the instrument: the mount line records a hash of the text in force. The answer set is fixed -- reword the question, not the options.'),
-  question: Schema.string().description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
+  question: Schema.string().default('').description('The question asked at every seam until a per-seam question is configured: `noul` built from this text, or the runtime probe question when empty. Read at each firing, so a settings save reaches a running row.').volatile(),
   // MOUNT-BOUND FOR A REASON, NOT BY OMISSION: the trace writer holds an open file handle and a rotation ledger, so a
   // live change would move where evidence lands mid-run. It could be made volatile with a reopen-and-rotate story;
   // that is a design change, not a flag.
-  tracePath: Schema.string().description('Where the JSONL trace is written. Empty uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
+  tracePath: Schema.string().default('').description('Where the JSONL trace is written. EMPTY -- the default -- uses SYSTEM1_OBSERVER_TRACE, else `<DSH_HOME>/logs/`, else the package’s data directory. Read once, at mount, so this is YAML-only.'),
   // THE SCHEDULED TURN MEASUREMENT. Undeclared at first, which made the wiring inert: a field the schema does not
   // know is not a field a profile can set, so the trigger read `undefined`, computed an interval of 0 and never
   // fired. A knob that cannot be configured is not a knob.
@@ -218,6 +225,7 @@ const Config = Schema.object({
   // mount -- a deliberate split: switching a measurement off is a statement about what is being observed now, while
   // changing how often it fires is a different experiment and belongs with the other mount-time fields.
   turnEveryNTurns: Schema.number()
+    .default(0)
     .min(0)
     .step(1)
     .default(0)
@@ -253,7 +261,7 @@ const Config = Schema.object({
   // observer ON, because a switch that turns itself off when nobody set it is worse than no switch. There
   // is deliberately no `.default(true)` -- a VOLATILE field does not arrive as its value, and the schema
   // default is not what `.get()` answers for a field nobody has written.
-  callsEnabled: Schema.boolean().volatile().description('Master switch for the model calls. Off records a `skip` at every seam with reason `calls disabled` and makes no request; the questions are kept, so turning it back on resumes where it left off. Read at the point of use, so it is live.'),
+  callsEnabled: Schema.boolean().default(true).volatile().description('Master switch for the model calls. Off records a `skip` at every seam with reason `calls disabled` and makes no request; the questions are kept, so turning it back on resumes where it left off. Read at the point of use, so it is live.'),
   // PER SEAM, and the defaults are the point. MEASURED: a plain boolean inside a volatile object
   // materialises to an ABSENT KEY (`{}`), unlike an array which materialises to `[]` -- so an unset seam
   // reads `undefined`, and `.default(true)` makes the resolved config say `true` rather than nothing at
@@ -285,12 +293,12 @@ const Config = Schema.object({
   // current process. Measured: five attempts to drive that session were refused with "is not live in this process",
   // and the trace held 145 skip lines and zero call lines on the turn hook.
   sessions: Schema.array(Schema.any()).default(['*']).volatile().description('Observe only these sessions, matched by id or id prefix. `*` means EVERY session and is the default; an EMPTY list observes nothing. The “...” menu on a session in the sidebar is the way in, and it can also narrow to one session. An entry may be a bare id string or `{ id, title }` — the title is a display cache and is never matched on. A firing in any other session records a `skip` with reason `session not observed` and its text never reaches the model or the trace.'),
-  includeNonOperatorFacing: Schema.boolean().volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
-  observeSubagents: Schema.boolean().volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
+  includeNonOperatorFacing: Schema.boolean().default(false).volatile().description('Also call the model for the harness’s own purpose-tagged streaming calls, for example session titles and compaction. A stream the harness does not tag with a purpose, including a subagent’s, is observed either way. Off keeps the trace to what an operator would read.'),
+  observeSubagents: Schema.boolean().default(false).volatile().description('Observe subagent sessions too. Off (the default) records a subagent’s streams and tool calls as `skip` lines with reason `subagent session`, and their text never reaches the model. On observes a subagent like any other agent.'),
   // HOW MUCH OF THE END A CUT ALWAYS KEEPS, in characters. Beside the cap because it only means anything with one:
   // the cap decides the budget, this decides how it is spent. Zero is head-only, and legitimate.
   tailChars: Schema.number().min(0).default(TAIL_CHARS).volatile().description('Characters of the END that a truncated value always keeps, so the newest part of a long field survives the cut. Zero keeps the head only. Read at each cut, so a save reaches a running row.'),
-  maxFieldChars: Schema.number().min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
+  maxFieldChars: Schema.number().default(DEFAULT_MAX_FIELD_CHARS).min(1).volatile().description('Longest state field recorded in one trace line. Longer values are cut and the line is marked truncated.'),
   // THE SIZES THIS PLUGIN KEEPS ARE DEPLOYMENT CHOICES, NOT CONSTANTS. config.md:80-94 states the convention
   // and gives its test: can you change this in cordis.yml without editing code? These five could not, and each
   // was already a factory argument with a module default -- so the defaults below ARE the module constants, and
@@ -419,7 +427,7 @@ async function apply(ctx, config) {
   // A client is a closure, so building one per call costs an allocation and holds no state.
   const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
   const wire = () => createModel({
-    baseUrl: readConfigValue(liveConfig().wireUrl) || 'http://127.0.0.1:8766',
+    baseUrl: readConfigValue(liveConfig().wireUrl) || DEFAULT_WIRE_URL,
     timeoutMs: readConfigValue(liveConfig().timeoutMs) ?? DEFAULT_TIMEOUT_MS,
   })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
@@ -491,7 +499,7 @@ async function apply(ctx, config) {
         // "was it scoped, paused, or broken?", and this is the answer to "and what did that send?".
         egress: egressFacts({
           transport: transport.kind,
-          endpoint: transport.kind === 'service' ? `provider:${mount.provider ?? '(unset)'}` : (mount.wireUrl || 'http://127.0.0.1:8766'),
+          endpoint: transport.kind === 'service' ? `provider:${mount.provider ?? '(unset)'}` : (mount.wireUrl || DEFAULT_WIRE_URL),
           model: mount.model ?? null,
           callsEnabled: readConfigValue(live.callsEnabled) !== false,
           maxFieldChars: readConfigValue(live.maxFieldChars),
