@@ -502,7 +502,9 @@ forces: **a whole shallow layer measures that layer, while a cut of a deep layer
 ## The skill: measuring a session
 
 `skills/measure-a-session/SKILL.md` is the plugin's own workflow, for an agent asked to report on a session -- "I want
-a report on XYZ session". It is three calls, and the middle one does everything mechanical:
+a report on XYZ session". A second skill, `skills/deploy-a-profile/SKILL.md`, covers the TASK of standing this stack up
+in another profile and points at `DEPLOY-A-PROFILE.md` at the repository root, which is where the prompt, the
+acceptance criteria and the traps live; the procedure stays in `deploy/README.md`, so no two files restate it. It is three calls, and the middle one does everything mechanical:
 
 ```
 system1_sessions { action: 'list', search: 'XYZ' }
@@ -556,6 +558,9 @@ The equivalent by hand:
 npm install
 dsh plugin --profile web add "$PWD"
 ```
+
+**Deploying a SECOND profile** — to test this stack beside the one that is running — is a task with its own file:
+`DEPLOY-A-PROFILE.md` (the prompt, the acceptance criteria and the traps), with the procedure in `deploy/README.md`.
 
 `dsh plugin add` MERGES into the profile's bundle list rather than rewriting it. Read from the installed
 `reconcile()` (DSH 0.1.7-rc.2): the existing `dsh.profile.bundles` is carried forward, and a name is dropped only

@@ -6,6 +6,9 @@
 #   ./install.sh my-profile         # another profile
 #   ./install.sh web --check-only   # do everything except touch the profile
 #
+# Deploying ANOTHER profile to test this stack beside a running one, rather than adding this plugin to an
+# existing profile: see DEPLOY-A-PROFILE.md (the prompt, the acceptance criteria and the traps).
+#
 # Dependencies are PUBLIC now, and the decision runtime is source in this repository under `lib/`:
 # `npm install` needs no git credentials, and nothing is fetched from GitHub to mount the plugin.
 set -euo pipefail
