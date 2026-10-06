@@ -87,6 +87,14 @@ jobs:
       - name: The suite and every gate
         run: npm run ci
 
+      - name: The package page gets the short readme, not the manual
+        run: |
+          # npm shows the README from the TARBALL, so the repository's 775-line manual would be the package page.
+          # docs/npm-readme.md is the page: what it is, install, sixty seconds, and the four cautions. The repository
+          # README stays the manual -- only the published copy is substituted, and only in this throwaway checkout.
+          cp docs/npm-readme.md README.md
+          wc -l README.md
+
       - name: "Publish dsh-session-adapter (the anchor the observer depends on)"
         run: |
           cd packages/session-adapter

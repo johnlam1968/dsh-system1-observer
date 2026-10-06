@@ -45,6 +45,10 @@ test('the publish workflow keeps the promises a release depends on', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   assert.match(manifest.scripts.prepublishOnly, /check-publish-tag\.mjs/, 'prepublishOnly must run the tag guard')
   assert.doesNotMatch(yamlText, /npm publish[^\n]*--ignore-scripts/, 'the workflow must not skip prepublishOnly')
+  // THE PACKAGE PAGE IS PART OF THE RELEASE: npm shows the tarball's README, and this repository's is a 775-line
+  // manual, so publishing from a tree without the substitution ships the manual as the package page.
+  assert.match(yamlText, /cp docs\/npm-readme\.md README\.md/, 'the publish workflow must substitute the short package page')
+
   // STAGING IS NOT A RELEASE: the OIDC flow can stage a publish, exit 0 and leave nothing installable (measured).
   // The workflow must check the REGISTRY, not its own exit code.
   assert.match(yamlText, /must be INSTALLABLE/, 'nothing verifies the version actually landed')
