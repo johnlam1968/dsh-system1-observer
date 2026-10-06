@@ -12,10 +12,15 @@ the short version: install, one example, and the four things to know before trus
 ## Install
 
 ```bash
-dsh plugin --profile <profile> add dsh-system1-observer@beta
+dsh plugin --profile web add dsh-system1-observer@beta
 ```
 
-Or from a clone, which needs no npm account: `git clone … && cd dsh-system1-observer && ./install.sh <profile>`.
+`web` is the profile to install into — substitute the name of yours. Or from a clone, which needs no npm account:
+
+```bash
+git clone https://github.com/johnlam1968/dsh-system1-observer.git
+cd dsh-system1-observer && ./install.sh web
+```
 
 It needs a profile's harness for `@deepseek-ai/cordis` and `@deepseek-ai/dsh-tools` (they are
 **peerDependencies**, not bundled), and a model to call: the profile's `system1` service, or the HTTP wire at

@@ -119,6 +119,34 @@ different things — form against intelligibility — so Standard Readme conform
 figures in either direction. What the ablation does show is that a single sentence and a link are enough for the
 question to separate, which is the sensitivity a usable instrument needs.
 
+### The second before/after, and three cautions from the instrument's own guidance
+
+`install_present` scored **0.76** with a `## Install` heading and `dsh plugin --profile <profile> add …`. The
+suspected cost was the placeholder a reader cannot substitute; the fix was a concrete command (`--profile web`) and
+one sentence. **Re-measured: 0.91.** Together with the help-path ablation (0.10 → 0.99) this is what a usable
+question looks like: one line of text moves it by a large, repeatable margin.
+
+Three cautions, checked against this instrument's documented behaviour AFTER the measurement — two of which the
+figures had hidden:
+
+1. **The pair `getting_started_scope` / `internal_plumbing_present` is near-complementary, so neither number
+   corroborates the other.** They were asked in the same call (allowed — they are not paraphrases of one question),
+   but their sums are **1.31** (manual), **1.65** (page, first) and **1.25** (page, after), not 1.0. The guidance for
+   this model warns that logically related questions do not sum to 1 and must not be read as complements. Treating
+   "confined to getting started" as the inverse of "contains contributor plumbing" would be reading one reading twice.
+2. **The judged text argues for itself, and this measurement has no control for it.** Both candidates describe their
+   own quality — the manual's `Status` asserts its measurements, the page asserts "it decides nothing" and carries its
+   own caveats. The guidance for this model records that text reading as *evidence about the item being judged* moves
+   these models, so a favourable bias in both columns is possible and untested here.
+3. **Language routing could not be verified.** The replies carry no `routing`, and the trace contains **0** lines with
+   `is_english` — consistent with what this README's own `Status` already states: this deployment's server returned no
+   routing in 0 of 4,369 calls. Both states are English, which is the language the question set was written in, but
+   the field that would prove the checkpoint is missing on this server.
+
+**The readings are attributable**, which is the one thing that needs no caveat: every call appears on the trace as a
+`hook: "tool"` line carrying the question ids, the provider and the model (`typesafe/jev-1.13-20260917`), so the
+figures above can be traced to the exact questions that produced them.
+
 **Three honest limits of this reading.**
 1. **No battery.** Nothing here shows these questions separate a good README from a bad one on labelled cases, which
    is the standard every other question set in this repository is held to. These are readings from an uncalibrated
