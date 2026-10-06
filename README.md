@@ -1,6 +1,6 @@
 # dsh-system1-observer
 
-** Human's words: This is vibe-coded. Agents could take initiative to, and are mostly free to gather rubric and evaluate using system1 call on parts or whole of sessions.
+**Human's words:** This is vibe-coded. Agents could take initiative to, and are mostly free to gather rubric and evaluate using system1 call on parts or whole of sessions.
 Almost all is volatile. Agent can change configurations which will be hot-loaded.
 Measurement being important, the actions to make use of the evaluation are interesting and useful. 
 The "seams" are there to feedback to the human or agent, and the current state of this project provides a flexible basis.
