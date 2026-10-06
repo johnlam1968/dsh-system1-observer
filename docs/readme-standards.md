@@ -250,10 +250,37 @@ which is why the same two questions order the same two candidates correctly on t
 0.12/0.51 above) and backwards on the excerpt. **So the state scope is part of the instrument**, and a reading taken
 on an excerpt is not comparable with one taken on the document.
 
-**The rubric's status, honestly**: `install_present` separates and is stable at n=2 in two sessions;
-`getting_started_scope` separated in both checks but has not had its noise priced; the other two separate on full
-states and are demonstrably unreliable on excerpts; eight questions have never been asked of a document neither of us
-wrote. **The front-page conclusion survives this because its gaps are far larger than the measured noise** — install
+### `getting_started_scope` repeated: stable, with one caveat that cuts against over-crediting it
+
+The reviewer repeated the question it had been asked for — the second of the two the front-page argument rests on —
+twice per cell, same provider and model:
+
+| candidate | run 1 | run 2 | mean | earlier single sample |
+|---|---|---|---|---|
+| zoxide | 0.84 | 0.84 | 0.84 | 0.83 |
+| pico-pubsub | 0.83 | 0.83 | 0.83 | 0.84 |
+| File_System_Nodejs | 0.56 | 0.58 | **0.57** | 0.63 |
+
+**Within-cell variance is zero to two decimal places (or 0.02), and the gap between the two established projects and
+the three-sentence one is 0.27** — thirteen times the noise. So this question separates on reduced states, and it is
+the second of the two the front-page argument depends on.
+
+**Its explanation is recorded as a hypothesis, not a finding**: an **absence** question (does the text leave long-form
+documentation elsewhere?) reads cleanly on a short state, while a **presence** question (is there a help path? is
+there plumbing?) does not, because a short text cannot demonstrate presence.
+
+**The caveat that matters**: on an excerpt, an absence question can be confidently right about the EXCERPT and wrong
+about the DOCUMENT. zoxide's README runs to hundreds of lines, so 0.84 for "confines itself to what a developer needs
+in order to get started" is a statement about its first 62 lines, not about zoxide. The stability is real; it is
+stability about a state the decision does not use. **No one has yet repeated a measurement on the state the
+front-page argument actually uses — the full front page — and that is the next cheap check**, because a question can
+be stable and still be measuring the wrong thing.
+
+**The rubric's status, honestly**: `install_present` separates and is stable at n=2 in two sessions (gap 0.78);
+`getting_started_scope` separates at n=2 with near-zero within-cell noise (gap 0.27) but on EXCERPTS, so its stability
+on the full front page — the state the decision uses — is still unmeasured; `help_or_contributing_path` and
+`internal_plumbing_present` separate on full states and are demonstrably unreliable on excerpts; eight questions have
+never been asked of a document neither of us wrote. **The front-page conclusion survives this because its gaps are far larger than the measured noise** — install
 0.13 against 0.91 is a 0.78 gap, and the noise measured here is 0.29 at worst.
 
 **What is still missing** is unchanged and is the same gap: **labelled truth**. Stars are reputation, not
