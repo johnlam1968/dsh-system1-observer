@@ -19,6 +19,42 @@ sources**, and each says which.
 So the honest landscape: **the live protocol is standardised (ACP), the file is not — ATIF is the emerging candidate,
 and the practical answer today is one adapter per harness.**
 
+## The prerequisite: the adapter reads HARNESS sessions, not transcripts
+
+**Measured end to end by another session in this deployment** — the *Paper screening* session, whose tools and findings
+are attributed at the end of this section. A DeepSeek Chat web export (75 conversations, the operator's own archive)
+was converted into DSH v4 session logs and read back through `packages/session-adapter`: **75/75, zero failures, exact
+per-conversation parity on operator count, assistant count and visible text characters** (307 operator, 306 assistant,
+1,109,540 characters, 1,916 events), with slice paging and FTS search working. Re-run here rather than relayed.
+
+The conclusion is a **contract**, not a convenience:
+
+- **The adapter has no reader for any foreign format.** No function accepts a path, a file, a `mapping` or
+  `fragments`; `sessionId` is the only thing it takes, and its vocabulary is the harness's (`user/message`,
+  `assistant/message`, `tool/call`, `tool/result`, `turn/start`, …) rather than another product's (`REQUEST`,
+  `RESPONSE`, `THINK`, `SEARCH`, `FILE`).
+- **Conversion is the work; the adapter then reads the result unmodified.** So "point this plugin at a ChatGPT
+  export" is a type error at the boundary, not a configuration problem.
+
+**What a converter must satisfy**, each measured rather than assumed:
+
+| requirement | what happens otherwise |
+|---|---|
+| write through the harness's persistence API (`dsh-session-persistence-jsonl`, `handle.append()`), not by emitting JSONL by hand | a hand-written log pairing `assistant/message` with `turn/start` but omitting `step/start` was **refused at read time**: `SessionFormatError: assistant/message does not match an open turn and step`. The failure surfaces as a `problem` rather than as silently wrong history |
+| pin a `session/title` event with `source.kind: 'user'` | sessions arrive **untitled**. The three declared kinds are `fallback` (the built-in truncation of the first prompt), `provider`, and `user` — *"supplied from outside, and pinned"* — and only `user` is true of a title another product assigned |
+| keep the losses deliberate | `THINK` is stored as a `reasoning` block and the text reader ignores it **by design** (`F79`); an attachment whose bytes are absent becomes an **empty** message rather than a fabricated block; and provider citations, which are **not** session events, are **not** turned into `tool/call`/`tool/result` — that would fabricate tool history a measurement would then read as real. They go to a sidecar (`IMPORT-MAP.json`) |
+| point a persistence backend at the imported root, or copy the sessions in | nothing sees them: the global session index correctly returns zero for a root no deployment is mounted on, which looks like missing data and is not |
+
+**Two paths, and they are not competitors.** To *continue chatting*, `dsh-chat-import` (audited, L5 run-tested, MIT,
+210 stars — and its 25+ parsers do **not** include the DeepSeek Chat web export). To *measure the conversations with
+this plugin*, convert to DSH sessions as above: the observer reads through `sessionQuery` + this adapter, which is what
+the verification demonstrates.
+
+**Attribution.** The importer (`tools/extract-web-export.mjs`, `import-web-export.mjs`, `verify-import.mjs`,
+`export-interchange.mjs`, `search-import.mjs`, `decode-session.mjs`), its outputs and its reasoning are the *Paper
+screening* session's work: `/home/john/test-system1-observer/FINDINGS.md` and `deepseek_data-2026-10-07/`. That is a
+scratch workspace **with no git history**, which is why the durable part is recorded here.
+
 ## What ATIF already models that we recorded as MISSING
 
 This is the part that should change our plan. Three things this repository wrote down as absent capabilities are
