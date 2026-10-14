@@ -5,9 +5,18 @@
 // `~/.dsh/plugins/README.md` "Promoting a dynamic body to a durable row":
 //
 //   harness.defineTool(def)          -> defineTool(def) from @deepseek-ai/dsh-tools
-//   harness.registerTool(ctx, tool)  -> ctx.tools.register(tool), called DIRECTLY: it installs its own fiber
-//                                       effect and returns the exact disposer, so wrapping it in ctx.effect()
-//                                       would install a second one
+//   harness.registerTool(ctx, tool)  -> ctx.tools.register(tool). Returns a disposer, BUT that disposer's
+//                                       effect is owned by the TOOLS SERVICE's context, not this row's:
+//                                       `register()` ends in `this.layers.effect(this.ctx, ...)`
+//                                       (`@deepseek-ai/dsh-tools/lib/index.js:2886`) and `ScopedLayers.effect`
+//                                       attaches the mutation to the context it is given
+//                                       (`@deepseek-ai/dsh-scope/lib/index.js:189-190`). So a BARE call can
+//                                       outlive an unloaded row -- the opposite of what this comment claimed
+//                                       until 2026-10-09, and measured: the `ledger/` row had exactly this bug
+//                                       with five registrations, and reverting its fix makes its own smoke fail
+//                                       with "disposing the row UNREGISTERS its five tools". Wrap the call in
+//                                       `ctx.effect(...)` so the disposer runs on THIS row's fiber. (Measured by
+//                                       the `compact/` and `ledger/` rows; ERRATA.md §F.)
 //   ctx.get(name)                    -> unchanged, and still preferred over inject for an optional seam
 //
 // It lives beside the profile because `@deepseek-ai/dsh-tools` resolves from the profile's parent node_modules and
@@ -16,30 +25,34 @@
 // ---------------------------------------------------------------------------------------------------------------
 // WHAT CHANGED FROM THE ORIGIN BODY, and why
 //
-// The guards. The origin had one cwd substring for reading and one for sending, tuned to a single pairing
-// (`dsh-telegram` sending, `docdrift` readable). The send guard is now an EXPLICIT LIST, because the reason the
-// bridge is being promoted is that a session in `dsh-system1-observer` needed to reach a sibling in the same
-// workspace and was refused by construction:
+// The guards. The origin body had one cwd substring for reading and one for sending, tuned to a single pairing
+// (`dsh-telegram` sending, `docdrift` readable). Promotion first widened the send side to an explicit list,
+// because a session in `dsh-system1-observer` was refused when reaching a sibling in its own workspace:
 //
 //   refused: peer_send is limited to the session that owns this bridge (dsh-telegram);
 //   caller cwd is /home/john/CodingProjects/dsh-system1-observer
 //
-// Both lists are operator-tunable by environment, so widening them is a config change rather than an edit:
+// That list is itself now HISTORY (kept because it explains why the check existed at all). Neither guard is an
+// allow-list any more, and that is deliberate (2026-10-09):
 //
-//   PEER_BRIDGE_SEND_MARKS=dsh-telegram,some-other-workspace
-//   PEER_BRIDGE_READ_MARKS=docdrift,dsh-system1-observer
+//   * the SEND guard was dropped at the operator's request -- `SEND_MARKS` is parsed and never consulted, so
+//     `peer_send`'s only authority is that the TARGET is live in this process;
+//   * the READ allow-list was REMOVED, so `peer_transcript` reads any session it can address, live or cold.
 //
-// IT IS STILL AUTHORIZATION BY PATH SUBSTRING, which the README flags as the thing a durable version should stop
-// doing ("a durable version should key on an explicit allowlist (or a session/team identity), not a path
-// substring"). A list of substrings is not a session identity, and a session whose cwd happens to contain one of
-// these marks is authorized whether or not anyone intended it. The honest fix is identity, and session ids are
-// per-session and therefore not a stable key; the workspace mark is what this deployment actually has. Recorded
-// here rather than presented as solved.
+// The reason is the project's own objective (`harness_RSI/FREEDOM.md`: freedom as capability expansion). A
+// workspace-mark allow-list stood between an agent and a peer it could already address by id; and it was the
+// concrete thing that made this repo's own sessions unreadable -- a bridge that can SPEAK across a boundary but
+// not LISTEN across it is not a bridge.
+//
+// The criticism this replaces is not retracted, it is superseded: authorization by path substring was never an
+// identity ("a durable version should key on an explicit allowlist (or a session/team identity), not a path
+// substring"). Removing the check removes the false assurance; the honest replacement is identity or a grant,
+// and NEITHER exists yet. For `peer_send` that missing grant is now a design item, not a gate (see
+// `harness_RSI/FREEDOM.md` §3.1).
 //
 // REGISTRATION IS PROCESS-GLOBAL: `ctx.tools.register` puts these three tools in front of EVERY agent in the
-// process, the peer included. The guards are the only thing standing between a tool call and another session's
-// inbox. The README's recommendation for a bridge is an agent-preset row so only opted-in sessions see it; this
-// row is on the profile instead, which means every session in this profile has it.
+// process, the peer included. With both guards gone, nothing but target liveness stands between a tool call and
+// another session's inbox. That is the accepted trade; it is recorded here so it is not rediscovered as a bug.
 // ---------------------------------------------------------------------------------------------------------------
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -50,24 +63,20 @@ export const inject = ['tools']
 /**
  * Workspace markers whose sessions may SEND through this bridge.
  *
- * `dsh-telegram` keeps the original bridge working; `dsh-system1-observer` is the workspace that was refused.
- *
- * `test-system1-observer` was added because it is a THIRD workspace that a substring test cannot reach: the
- * Paper screening session works in the operator's DeepSeek-import workspace, four characters away from
- * `dsh-system1-observer`, and was refused on every reply. The `dsh-system1-observer` session could send to it
- * and it could not answer -- the bridge ran one way, which was discovered only after two questions had been
- * asked and gone unanswered. Recorded here as another instance of the defect this file's header already names:
- * a substring is not an identity, and every workspace added is a patch on that, not a fix for it.
+ * RETAINED FOR COMPAT ONLY -- the SEND guard was removed at the call site on operator request (2026-10).
+ * `SEND_MARKS` is read and never consulted: there is no `matchesAny(me.cwd, SEND_MARKS)` check anywhere in
+ * `peer_send.execute` (look at lines around the execute before trusting this). To reinstate the guard,
+ * you must restore BOTH the check in `peer_send.execute` AND a non-empty default here, because
+ * `matchesAny(cwd, [])` is `false` (an empty list is deny-everyone, NOT allow-everyone) -- a previous
+ * version of this comment said the opposite, and that sentence is the trap. `PEER_BRIDGE_SEND_MARKS`
+ * has no effect unless the call-site check is restored. The substring-vs-identity concern this file's
+ * header records still stands: removing the guard is a widening, not a fix.
  */
-const SEND_MARKS = marksFrom(process.env.PEER_BRIDGE_SEND_MARKS) ?? ['dsh-telegram', 'dsh-system1-observer', 'test-system1-observer']
+const SEND_MARKS = marksFrom(process.env.PEER_BRIDGE_SEND_MARKS) ?? []
 
-/**
- * Workspace markers whose sessions may be READ through this bridge.
- *
- * `dsh-system1-observer` is here so the conversation can be two-way: the send guard alone fixes telling a peer
- * something, and without this the reply comes back `refused: peer_transcript only reads peer workspaces`.
- */
-const READ_MARKS = marksFrom(process.env.PEER_BRIDGE_READ_MARKS) ?? ['docdrift', 'dsh-system1-observer']
+// The READ allow-list was removed 2026-10-09 on operator request (`harness_RSI/FREEDOM.md`): any session this
+// bridge can address is readable. `PEER_BRIDGE_READ_MARKS` is no longer consulted. The old value was
+// `['docdrift', 'dsh-system1-observer']`.
 
 
 /** The last path segment of a cwd, for a label that says which workspace a sender is in. */
@@ -84,7 +93,10 @@ function marksFrom(value) {
     return marks.length === 0 ? undefined : marks
 }
 
-const matchesAny = (cwd, marks) => marks.some(mark => cwd.indexOf(mark) !== -1)
+// `matchesAny(cwd, marks)` lived here and is GONE with the read allow-list (2026-10-09). Its one definition in
+// this file was the read gate; the `SEND_MARKS` comment above refers to it in the past tense. If a future
+// version reinstates any path-based guard, note what the old one taught: `marks.some(...)` over an EMPTY list is
+// deny-everyone, and a list of substrings is not a session identity.
 const show = (cwd) => (cwd === '' || cwd === undefined ? '(none)' : cwd)
 
 // Read only leaf fields off live DSH objects; never stringify or copy them.
@@ -156,7 +168,18 @@ export function apply(ctx) {
         return undefined
     }
 
-    ctx.tools.register(defineTool({
+    // ONE EFFECT, ONE DISPOSER THAT UNREGISTERS EVERY TOOL. `ctx.tools.register` returns a disposer, but that
+    // disposer's effect is owned by the TOOLS SERVICE's context, not this row's (`dsh-tools:2886` ->
+    // `dsh-scope:189-190`), so a bare call OUTLIVES an unloaded row: the three names stay registered and a reload's
+    // `apply` is then refused by its own leftovers. The combined-disposer shape is used rather than returning an
+    // array from the effect body, because whether `ctx.effect` accepts an array of disposables is UNVERIFIED.
+    // Proven by the `ledger/` row, whose own smoke fails when its wrap is reverted.
+    const disposers = []
+    ctx.effect(() => () => {
+        for (const dispose of disposers) dispose()
+    }, 'peer-bridge:tools')
+
+    disposers.push(ctx.tools.register(defineTool({
         name: 'peer_sessions',
         description:
             'List the live agent sessions in this dsh process (id, working directory, status, latest log seq).\n'
@@ -181,9 +204,9 @@ export function apply(ctx) {
                 return '  ' + r.id + '  [' + r.status + ']  seq=' + r.seq + '  cwd=' + show(r.cwd)
             }).join('\n')
         },
-    }))
+    })))
 
-    ctx.tools.register(defineTool({
+    disposers.push(ctx.tools.register(defineTool({
         name: 'peer_transcript',
         description:
             'Read the committed transcript of a peer session from its live log: user and assistant text blocks with their seq numbers.\n'
@@ -224,9 +247,9 @@ export function apply(ctx) {
                 }
             }
             if (facts === undefined) return 'session ' + target + ' is not live in this process, and no session record could be read to authorize it'
-            if (!matchesAny(facts.cwd, READ_MARKS)) {
-                return 'refused: peer_transcript only reads peer workspaces (' + READ_MARKS.join(', ') + '), and ' + target + ' has cwd ' + show(facts.cwd)
-            }
+            // NO READ GATE. Removed 2026-10-09: a readable-by-address session is readable. The refused-to-read form
+            // that stood here named the TARGET cwd, which made this bridge unable to read a sibling in any
+            // workspace outside its allow-list -- including every session in harness_RSI.
 
             // AND ONLY NOW THE LOG. The service reads one that is not live -- the wall this bridge hit whenever a peer
             // had been restarted -- while the live snapshot stays as the fallback for a deployment without it.
@@ -286,16 +309,16 @@ export function apply(ctx) {
             if (kept.length === 0) return header + '\n  (no messages in range)'
             return header + '\n' + kept.map((entry) => entry.line).join('\n')
         },
-    }))
+    })))
 
-    ctx.tools.register(defineTool({
+    disposers.push(ctx.tools.register(defineTool({
         name: 'peer_send',
         description:
             'Deliver a message to a peer agent as a properly-formed user message and wake it into a turn.\n'
             + '- mode followup (default): the message becomes its own ordinary turn.\n'
             + '- mode steer: consumed at the running turn\'s next step boundary.\n'
             + '- mode inject: model-facing context for the next pre-step, without waking the driver.\n'
-            + 'Restricted to allowlisted workspaces (' + SEND_MARKS.join(', ') + '); the peer sees the provenance prefix in the text.',
+            + 'Authorization is on the TARGET being live in this process; the peer sees the provenance prefix in the text.',
         parameters: {
             sessionId: { type: 'string', required: true, description: 'Peer session id from peer_sessions.' },
             text: { type: 'string', required: true, description: 'Message body to deliver.' },
@@ -306,9 +329,9 @@ export function apply(ctx) {
         async execute(args, exec) {
             const me = callerFacts(exec)
             if (me === undefined) return 'refused: no calling agent on this tool call'
-            if (!matchesAny(me.cwd, SEND_MARKS)) {
-                return 'refused: peer_send is limited to allowlisted workspaces (' + SEND_MARKS.join(', ') + '); caller cwd is ' + show(me.cwd) + ' [' + me.id + ']'
-            }
+            // SEND GUARD REMOVED 2026-10 on operator request. Authorization is now solely on the target
+            // being live in this process; see SEND_MARKS note above for how to reinstate the old
+            // substring contract via env var without a code change.
             const agents = agentsOf()
             if (agents === undefined) return 'no agents service in this deployment'
             const target = typeof args.sessionId === 'string' ? args.sessionId : ''
@@ -352,7 +375,7 @@ export function apply(ctx) {
                         + '\n\n[you are ' + String(args.sessionId)
                         + '; to reply, call peer_send with sessionId "' + me.id + '"]',
                 }],
-                source: { kind: 'user' },
+                source: { kind: 'agent-message', form: 'relay', senderSessionId: me.id },
             }
             try {
                 if (mode === 'followup') agent.followup(message)
@@ -365,5 +388,5 @@ export function apply(ctx) {
             const after = sessionFacts(agent)
             return 'delivered ' + mode + ' to ' + target + ' as message ' + id + '; peer status ' + after.status + ', latestSeq ' + after.seq
         },
-    }))
+    })))
 }

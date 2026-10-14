@@ -6,9 +6,9 @@
 // things that would silently break the promotion:
 //
 //   1. it loads and registers exactly the three tools, with the same parameter schemas as the origin body;
-//   2. the SEND guard admits an allowlisted workspace and refuses one that is not, naming it;
-//   3. the READ guard is on the TARGET while the SEND guard is on the CALLER -- the asymmetry the origin body
-//      relies on, and the one that decides who can say what to whom.
+//   2. the SEND guard is GONE: the only authority on `peer_send` is that the target is live in this process;
+//   3. READS ARE UNGATED: `peer_transcript` reads a session it can address, whatever its cwd -- the read
+//      allow-list was removed 2026-10-09 (see index.js header and harness_RSI/FREEDOM.md).
 import assert from 'node:assert/strict'
 
 const registered = []
@@ -52,38 +52,49 @@ console.log('schemas: intact (13 parameters, 2 required, all three return text)'
 /** A caller with a given cwd, as `exec.agent` looks on a real tool call. */
 const caller = (cwd) => ({ agent: { id: 'session-test', status: 'running', session: { header: { cwd, createdAt: 1 }, seq: 5 } } })
 
-// (2) The guard change, which is the whole point of the promotion.
+// (2) The SEND guard was removed 2026-10 on operator request. Authorization is now solely on the target
+// being live in this process -- any cwd may call peer_send and the refusal (if any) is "is not live".
 const send = byName.get('peer_send')
-const refused = await send.execute({ sessionId: 'x', text: 'hi' }, caller('/home/john/CodingProjects/some-other-thing'))
-assert.match(refused, /^refused: peer_send is limited to allowlisted workspaces/)
-assert.match(refused, /some-other-thing/, 'the refusal names the caller cwd')
+const delivered = await send.execute({ sessionId: 'no-such-session', text: 'hi' }, caller('/home/john/CodingProjects/some-other-thing'))
+assert.match(delivered, /is not live in this process/, 'any caller is admitted, then refused for the right reason')
+assert.doesNotMatch(delivered, /^refused: peer_send is limited to allowlisted workspaces/, 'the SEND cwd guard is gone')
+console.log('send guard: removed -- any caller reaches the live-peer check')
 
-// An allowlisted caller gets past the guard and fails later, on the absent peer -- which proves admission.
-const admitted = await send.execute({ sessionId: 'no-such-session', text: 'hi' }, caller('/home/john/CodingProjects/dsh-system1-observer'))
-assert.match(admitted, /is not live in this process/, 'admitted, then refused for the right reason')
-console.log('send guard: refuses an unknown workspace, admits dsh-system1-observer')
-
-// (3) The asymmetry: peer_transcript guards the TARGET, so the caller's own cwd is irrelevant to it.
-const target = { id: 'session-peer', status: 'running', session: { header: { cwd: '/home/john/CodingProjects/some-other-thing', createdAt: 1 }, seq: 5 } }
+// (3) READS ARE UNGATED. The read allow-list was removed 2026-10-09, so a target in a workspace that the old
+// list did NOT contain is readable -- which is exactly the case this repo's own sessions hit. The old refusal
+// named the target's cwd, so its absence is the assertion.
+const targetCwd = '/home/john/CodingProjects/harness_RSI'
+const target = {
+    id: 'session-peer', status: 'running',
+    session: {
+        header: { cwd: targetCwd, createdAt: 1 },
+        seq: 5,
+        snapshotEvents: () => [],
+    },
+}
 const isolated = []
 const ctx2 = { get: () => ({ get: () => target, list: () => [target] }), tools: { register: (tool) => { isolated.push(tool); return () => {} } } }
 await mod.apply(ctx2, {})
 const read = isolated.find(tool => tool.name === 'peer_transcript')
-const readRefused = await read.execute({ sessionId: 'session-peer' }, caller('/home/john/CodingProjects/dsh-telegram'))
-assert.match(readRefused, /^refused: peer_transcript only reads peer workspaces/)
-assert.match(readRefused, /some-other-thing/, 'it names the TARGET cwd, not the caller')
-console.log('read guard: on the target, as in the origin body')
+const readResult = await read.execute({ sessionId: 'session-peer' }, caller('/home/john/CodingProjects/dsh-telegram'))
+assert.doesNotMatch(readResult, /only reads peer workspaces/, 'the READ allow-list must be gone')
+assert.match(readResult, /harness_RSI/, 'an out-of-allow-list target is read and its cwd is reported')
+console.log('read guard: removed -- any addressable session is readable')
 
-// The environment override must be able to widen both lists without an edit.
+// PEER_BRIDGE_SEND_MARKS is retained for compat but no longer narrows who may send (the guard is gone).
+// The override is still read, so a deployment that wants the substring contract back can set it and
+// reinstate the guard without a code change. Here we just confirm the env is consumed and does not
+// produce a SEND-side refusal: any caller still passes that step.
 process.env.PEER_BRIDGE_SEND_MARKS = 'only-this-one'
 const fresh = await import('./index.js?fresh=1')
 const second = []
-await fresh.apply({ get: () => undefined, tools: { register: (tool) => { second.push(tool); return () => {} } } }, {})
+const emptyAgents = { get: () => undefined, list: () => [] }
+await fresh.apply({ get: () => emptyAgents, tools: { register: (tool) => { second.push(tool); return () => {} } } }, {})
 const overridden = second.find(tool => tool.name === 'peer_send')
-const stillRefused = await overridden.execute({ sessionId: 'x', text: 'hi' }, caller('/home/john/CodingProjects/dsh-system1-observer'))
-assert.match(stillRefused, /only-this-one/, 'the override replaces the list, so the default workspace is now refused')
-assert.match(stillRefused, /some-other|dsh-telegram|allowlisted/, 'and the refusal names the new list')
-console.log('env override: PEER_BRIDGE_SEND_MARKS replaces the list')
+const stillDelivered = await overridden.execute({ sessionId: 'no-such-session', text: 'hi' }, caller('/home/john/CodingProjects/dsh-system1-observer'))
+assert.match(stillDelivered, /is not live in this process/, 'env override is read but the SEND guard stays removed')
+assert.doesNotMatch(stillDelivered, /only-this-one/, 'the override does not narrow senders any more')
+console.log('env override: PEER_BRIDGE_SEND_MARKS still parsed; SEND guard stays removed')
 
 console.log('\nOK -- the row loads, registers all three tools, and both guards behave.')
 

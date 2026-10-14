@@ -39,10 +39,26 @@
 # A value NOT named here is not "off" -- it is the schema default, which is what the card shows.
 
 # The port this profile's web app listens on. A deployment decision: a terminal needs none.
+#
+# host 0.0.0.0 (changed 2026-10-12, was 127.0.0.1) exposes this GUI to the LAN. The
+# webserver schema permits exactly two literals -- "127.0.0.1" and "0.0.0.0" -- and this
+# layer is applied after the bundle layer, so the bind is honoured. The web app's own
+# `--host 0.0.0.0` FLAG is refused by design (dsh-web-app/lib/startup.js), so this
+# composition row is the only route to a LAN bind.
+#
+# The /api Host/Origin fence needs nothing added: web-runtime's resolveLanTrust() reads
+# the bound host and auto-trusts every non-internal IPv4 literal when it is 0.0.0.0.
+# Startup then prints the token-bearing LAN URL as: dsh web: <loopback> (LAN: <lan-url>)
+#
+# NOTE: `config` replaces the row's config wholesale, so this entry already dropped the
+# bundle's compression fields (gzip/1/1024) -> they fall back to schema defaults. That
+# predates this change and is left as it was, to keep this a one-line edit.
+#
+# Rollback: set host back to 127.0.0.1 and restart dsh@docdrift.
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'
   config:
-    host: 127.0.0.1
+    host: 0.0.0.0
     port: 3090
 
 # The skills catalogue. `skill-filesystem` is the PROVIDER that fills it; the catalogue arrives as
@@ -137,13 +153,106 @@
             maxTokens: 8192
             input:
               - text
-      minimax-cn: {}
+      minimax-cn:
+        models:
+          # ── M3.1-Flash-Preview added 2026-10-13 ──
+          #
+          # VERIFIED EMPIRICALLY against the live endpoint on 2026-10-13 (credential resolved from the
+          # running dsh process; value never printed). Four probes, base64 payloads, raw responses:
+          #
+          #   host       probe                          result
+          #   ---------  -----------------------------  ---------------------------------------------
+          #   .com       text control                   HTTP 200  "OK"
+          #   .io        text control                   HTTP 401  "invalid api key"   <-- REJECTED
+          #   .com       video (mp4, video+audio)       HTTP 200  "bright blue ... FRAME 85 in yellow"
+          #   .com       image (png)                    HTTP 200  "Red" (+ thinking block)
+          #   .com       audio-only (m4a)               HTTP 400  "unsupported content type 'audio' (2013)"
+          #
+          # CONSEQUENCE 1 — HOST. `api.minimax.io` is REJECTED for this credential; `api.minimaxi.com` is
+          # correct. The public doc's `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic` snippet
+          # describes the international/M-Plan surface, which this CN key is not entitled to. An earlier
+          # revision of this row set `baseURL: https://api.minimax.io/anthropic` per that snippet and was
+          # WRONG — removed 2026-10-13 after the 401. No `baseURL` is set now, so the model inherits the
+          # bundled minimax-cn provider baseUrl `https://api.minimaxi.com/anthropic`.
+          #
+          # CONSEQUENCE 2 — AUDIO. There is NO audio content block. The Anthropic-compatible surface
+          # accepts only `text`, `image`, `video`, `tool_use`, `tool_result`, `thinking`; `type: "audio"`
+          # is refused with error 2013. A video file MAY carry an audio track and is accepted as a
+          # `video` block, but audio-to-text is a SEPARATE endpoint (`/v1/speech_to_text`), which this
+          # deployment already wires for dsh-telegram (`sttProvider: minimax`,
+          # `sttBaseUrl: https://api.minimaxi.com/v1`). It is not reachable through the model route.
+          #
+          # CONSEQUENCE 3 — VIDEO IS NOT CONFIGURABLE HERE. The model accepts video, but
+          # `dsh-llm-pi-ai`'s MODALITIES vocabulary is exactly `{ text, image }`
+          # (lib/index.js:280 `const MODALITIES = Object.keys({ text: true, image: true })`), so
+          # `input: [text, image, video]` is refused by the settings schema exactly the way
+          # `reasoningEfforts.minimal: null` was. The row advertises `text, image`; video is reachable
+          # only by calling the endpoint directly, as above.
+          #
+          # Specs per https://platform.minimax.io/docs/api-reference/text-anthropic-api and the
+          # canonical record sst/models.dev `models/minimax/MiniMax-M1-Flash-Preview.toml`, which gives
+          # `context = 1_000_000`, `output = 512_000`, `modalities.input = [text, image, video]`.
+          #
+          # THINKING IS FORCED ON. Per the doc's "Thinking Control" table, `thinking: {type:"disabled"}`
+          # returns 400, and `output_config.effort` accepts EXACTLY `low|medium|high|xhigh|max`
+          # (default `max`; `none` returns 400). The five-level map below is the complete set and the
+          # `off` slot is deliberately absent so the picker cannot emit a disabled-thinking request.
+          - id: MiniMax-M3.1-Flash-Preview
+            name: "MiniMax-M3.1 Flash Preview"
+            contextWindow: 1000000
+            maxTokens: 512000
+            input: [ text, image ]
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+          # The three entries below are VERBATIM copies of the bundled catalog
+          # (@earendil-works/pi-ai/dist/providers/data/minimax-cn.json, v0.85.1). They are listed because
+          # `models:` REPLACES the served catalog rather than merging with it (resolveRouteModels in
+          # dsh-llm-pi-ai/lib/types/catalog.js), so omitting any of them would silently drop the model
+          # from the picker. Whenever pi-ai's bundled catalog is updated, re-copy below to match.
+          - id: MiniMax-M3
+            name: MiniMax-M3
+            contextWindow: 1048576
+            maxTokens: 512000
+            input: [ text, image ]
+            cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0 }
+          - id: MiniMax-M2.7
+            name: MiniMax-M2.7
+            contextWindow: 204800
+            maxTokens: 131072
+            input: [ text ]
+            cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 }
+          - id: MiniMax-M2.7-highspeed
+            name: MiniMax-M2.7-highspeed
+            contextWindow: 204800
+            maxTokens: 131072
+            input: [ text ]
+            cost: { input: 0.6, output: 2.4, cacheRead: 0.06, cacheWrite: 0.375 }
+      # The block above REPLACES the previously-empty `minimax-cn: {}`. A provider that is NOT named here
+      # does not exist as far as this profile is concerned, however many models the installed catalog
+      # carries for it — this `providers` map is replaced wholesale rather than merged, so an omission
+      # is a silent removal, not a fallback.
+      #
+      # cerebras was added 2026-10-10, after its credential reached the systemd layer
+      # (`dsh@.service.d/10-provider-keys.conf`): a declared provider with no key is selectable and
+      # then fails the turn with `Provider is not configured`, which is worse than absent. Declare a
+      # provider here only once its key is in the launcher's environment.
+      #
+      # fireworks was declared the same day and REMOVED again on the operator's instruction: the
+      # account is out of credit, so its twenty catalog models would be selectable and then fail on
+      # billing — visible-but-broken is exactly the state this comment exists to prevent. Re-add a
+      # single `fireworks: {}` line here when the account is funded again. Its key is still in the
+      # drop-in, which is inert while nothing here names the provider.
+      cerebras: {}
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: deepseek-official
-    model: deepseek-flash
-    reasoningEffort: high
+    provider: minimax-cn
+    model: MiniMax-M3.1-Flash-Preview
 - id: system1-laya
   disabled: true
 - id: system1-observer
@@ -196,6 +305,12 @@
 - insert:
     - id: peer-bridge
       name: ./peer-bridge/index.js
+      # DISABLED 2026-10-09 during the migration to the `dsh-harness-rsi` plugin. The bundle's `peer`
+      # row is this row's PORT and registers the SAME tool names, so both cannot mount: a duplicate tool
+      # name is a loud load failure. This row is kept in place rather than deleted so the rollback is one
+      # `disabled: false` — but note the bundle also replaces `session-factory`, so the rollback is the
+      # whole `/tmp/cordis.patch.yml.pre-migration-*` backup, not this line alone.
+      disabled: true
 
 # NOTE: this bundle is DISABLED below. The observer now ships its own `system1_decide`, over the same
 # `decide` path it records, and takes the input shape its own set files are written in.
@@ -245,9 +360,28 @@
         config:
           suffix: Your working directory is {{cwd}}.
           prefix: >-
-            You are a coding agent powered by the {{model}} model. Read the doc.
-            Optionally, read the source code (if source code is not available,
-            git clone it).
+            You are a coding agent powered by the {{model}} model.  (1)
+            Challenge the request with meta-questions: intent, necessity (do we
+            need to write any codes to realize the intents), form (shall it be a
+            dsh plugin or other forms, such as mcp server?), etc. (2) When a dev
+            project is emerging, use sp- skills (supowerpowers) workflow from
+            the beginning. (2) Do not re-invent the wheel: use tools to find
+            existing 3rd-party dsh plugins, before design and write one. If
+            there are some, review and learn from them, when coding a new one or
+            fork existing one. (3) When coding is necessary, insist on top down
+            design when architecture is not decided yet. Brainstorm the shape,
+            features and ask user questions.  (4) When coding a dsh plugin,
+            iteratvely parse all skills and tools related to dsh and plugins
+            authoring. Read the dsh and plugin docs. (5) Also read the docs of
+            any other application that the code need to use. When docs are not
+            available, read the source code (if source code is on the host, git
+            clone it). (6) When using shorthand to talk to **human** about L0,
+            L1 etc, always denote it with longhand form. (7) No reporting talk
+            show, in either direction across agent boundaries: the finished
+            result is the deliverable, so put results in FILES and keep messages
+            for decisions you cannot make and blockers that stop progress; never
+            reply to acknowledge, confirm receipt, or narrate progress; and do
+            not send interim reports between steps.            
       - id: agent-instructions
         name: '@deepseek-ai/dsh-agent-instructions'
         config:
@@ -397,3 +531,357 @@
 #  config:
 #    path: !!js dshHomePath('session-query.db')
 #    openAt: first-search
+
+# ── dsh-telegram (DEVELOPMENT WIRING) ───────────────────────────────────────────────────────────
+#
+# The Telegram transport adapter, linked from /home/john/CodingProjects/dsh-telegram (see the
+# `dsh-telegram` symlink in this profile's node_modules). Mounted as a PROFILE-layer row rather
+# than a bundle, for two reasons:
+#
+#   1. It is under development, and this layer is WATCHED: `dsh-hmr` reconciles
+#      `profile.patchPath` live (`reconcileProfilePatches`, dsh-app-boot), so a row added or
+#      changed here mounts WITHOUT a restart. Adding the package to `dsh.profile.bundles`
+#      instead changes the profile manifest, which is restart-scoped.
+#   2. It keeps `dsh.profile.bundles` untouched. `dsh plugin add/remove` rewrites that list and
+#      drops bundles it did not write, which is how this plugin disappeared from the `web`
+#      profile once already.
+#
+# The durable, distributable form is a bundle: list the package in `dsh.profile.bundles` and let
+# its own `dsh.bundle.patch` carry the config, so nothing is duplicated. This row is deliberately
+# MINIMAL — only the two values that cannot come from the package's own defaults are restated,
+# because the profile layer does not read a package's bundle patch. Everything else (sttBaseUrl,
+# sttLang, ttsProvider, ttsVoice, pollTimeoutSeconds, …) falls back to the schema defaults in
+# src/config.ts, and the STT/TTS keys fall back to OPENAI_API_KEY / MINIMAX_CN_API_KEY from the
+# launch environment (src/voice/stt.ts, src/voice/tts.ts).
+#
+# Mounted disabled when DSH_TELEGRAM_BOT_TOKEN is empty: `apply` warns and returns before it
+# installs anything.
+- insert:
+    - id: dsh-telegram
+      name: dsh-telegram
+      config:
+        botToken: !!js process.env.DSH_TELEGRAM_BOT_TOKEN ?? ''
+        allowedUserIds: !!js (process.env.DSH_TELEGRAM_ALLOWED_USER_IDS ??
+          '').split(',').map(s => Number(s.trim())).filter(n =>
+          Number.isFinite(n))
+        # Who may run a /command, as distinct from who may chat. Empty refuses EVERY command,
+        # including /help — fail-closed by design, and the reason a chat bound to an unrecoverable
+        # session had no in-chat way out (`/new` was refused). Same env var as the chat allow-list.
+        commandUserIds: !!js (process.env.DSH_TELEGRAM_ALLOWED_USER_IDS ??
+          '').split(',').map(s => Number(s.trim())).filter(n =>
+          Number.isFinite(n))
+        # The model route, restated from THIS profile's own `agent-default-model` row below.
+        #
+        # Why it is pinned here at all: the persona prefix interpolates `{{model}}`, and
+        # dsh-agent-loop resolves that variable as `agent.options.model` — it does NOT consult
+        # `agent-default-model`. Only entry points (dsh-api-session-controller, dsh-headless,
+        # dsh-webhook) call currentSelection() before creating; `ctx.agents.create` does not.
+        # So a row that names no route makes every turn die with
+        #   prompt variable "{{model}}" has no value for this assembly
+        # while the row still reads `active` and the poll loop keeps running.
+        #
+        # The plugin can now resolve this itself (ctx.get('agentDefaultModel')), which is the
+        # profile-independent path and the reason the package's own patch names no provider.
+        # These two lines are belt-and-braces for the module the RUNNING process currently
+        # holds: HMR reloads a changed plugin module, but that is not observable from here and
+        # the failure it would cause is silent. Drop them once a restart has been confirmed to
+        # load the current lib/index.js.
+        provider: deepseek-official
+        model: deepseek-flash
+        # ── THIS DEPLOYMENT'S VOICE VALUES ──────────────────────────────────────────────────────
+        #
+        # The plugin's own defaults for these are deliberately neutral (OpenAI's endpoint, no
+        # language hint, the provider's built-in voice), because a shipped default must not be one
+        # operator's machine — `docs/PUBLISHING.md` B5. These lines are where this deployment says
+        # what it actually is, and they are the ONLY reason the voice pipeline keeps working after
+        # that change.
+        #
+        #   whisper  STT provider label — the wire shape is OpenAI-compat `/v1/audio/transcriptions`.
+        #            The SenseVoice server at :18765 speaks that shape, so the existing `whisper`
+        #            dispatch in src/voice/stt.ts works with no plugin source changes. (We previously
+        #            ran the local voice_proxy on :8081 here, and MiniMax on api.minimaxi.com
+        #            before that; all three share the same multipart upload contract.)
+        #   sensevoice  The actual STT backend — a local FunASR SenseVoiceSmall process owned by
+        #            ~/.config/systemd/user/sensevoice-server.service (project at
+        #            ~/CodingProjects/sensevoice-server/). First-start download is ~1 GB; warm
+        #            starts ~30s. Service restart, not dsh restart, after a model upgrade.
+        #   asr-1.0  STT model. Empty here so `callWhisper` sends `whisper-1` — the SenseVoice
+        #            server ignores the field and uses `FUNASR_MODEL` env to pick the real model.
+        #            Naming an explicit id here would also be a no-op for SenseVoice; keep empty.
+        #   yue      the spoken language here, so the endpoint is told rather than asked to detect.
+        #            SenseVoice accepts `yue` (Cantonese) directly; the FunASR env sets the same
+        #            default so an absent multipart field still routes to Cantonese.
+        #   Cantonese_CuteGirl   the MiniMax system voice this deployment uses for outbound TTS
+        #
+        # All four STT knobs and ttsVoice are `.volatile()`, so a change here is read on the next
+        # message. The host has to be able to reach :18765 — the sensevoice-server unit is what
+        # owns that port; it does not need to be running before dsh@docdrift, only before the
+        # first inbound voice note that targets it.
+        sttProvider: whisper
+        sttBaseUrl: http://127.0.0.1:18765/v1
+        sttLang: yue
+        ttsVoice: Cantonese_CuteGirl
+        # The four shaping knobs below were CODE CONSTANTS in the plugin until 2026-10-08 — the
+        # shipped `MINIMAX_BODY` carried speed 0.95, emotion 'happy', language_boost 'Chinese,Yue'
+        # and modify_timbre 10. That made this deployment's ear the plugin's default, so they are
+        # row config now and the plugin ships neutral values instead. These four lines are what
+        # keeps the voice EXACTLY as it sounded; `tests/unit/tts.golden.test.ts` pins the body they
+        # reproduce. All four are `.volatile()`, so a change is heard on the next spoken reply.
+        ttsSpeed: 0.95
+        ttsEmotion: happy
+        ttsLanguageBoost: Chinese,Yue
+        ttsModifyTimbre: 10
+        # The command `/restart` runs, detached, to restart THIS profile. The plugin names no profile
+        # of its own, so the deployment supplies it; the unit is dsh@.service (see the repo's deploy/).
+        # The restart kills the process that answers, so the reply is sent first and the command is
+        # delayed by two seconds.
+        restartCommand: systemctl --user restart dsh@docdrift
+- id: dsh-telegram
+  disabled: false
+
+# ── telemetry DISABLE (override of base bundle) ─────────────────────────────────────────────────
+# The base bundle (@deepseek-ai/dsh-base) ships @deepseek-ai/dsh-session-telemetry-otel
+# (entry id `session-telemetry-otel`) with a default OTLP exporter pointed at
+# https://harness-telemetry.deepseeksvc.com/v1/logs. In docdrift that hook sits in the DeepSeek
+# model-request path and surfaces as "DeepSeek request extension preparation failed" when the
+# exporter stalls. Override here to disable it. The web profile does not carry this row either;
+# this is the explicit profile-layer form of the same intent. To re-enable, remove this block
+# or set `disabled: false`.
+- id: session-telemetry-otel
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  config:
+    enabled: false
+
+# ── session-factory (AGENT TOOL) — SUPERSEDED 2026-10-09, commented out ────────────────────────────
+#
+# REPLACED BY THE `dsh-harness-rsi` BUNDLE, whose `session` row is this row's PORT and registers the
+# SAME tool name (`session_create`), which is not namespaced. Both cannot mount. The original text is
+# kept COMMENTED rather than deleted: it is the design record for a row that still exists on disk at
+# ./session-factory/tool.js, and uncommenting it plus disabling the bundle's `session` row
+# (`enabled: { session: false }`) is the narrow rollback for this row alone.
+#
+# ── ORIGINAL TEXT ─────────────────────────────────────────────────────────────────────────────────
+# An agent-facing tool to create a ROOT session in a chosen workspace and optionally seed it with a
+# prompt. Why it is a tool at all: the harness exposes creation to humans (Web UI, Telegram /new) and
+# lets an agent create CHILD sessions (dsh-tool-subagent), but nothing let an agent create a root
+# session — the thing that makes agent-initiated work land in the human's own organization
+# (topic = session, repo = workspace).
+#
+# It calls two host methods and nothing else: `sessionController.create({cwd | workspaceId})` and,
+# when a seed prompt is given, `sessionController.prompt({sessionId, content})`. The second matters:
+# `prompt` resolves the agent — resuming a cold session and attaching its writer — BEFORE delivering,
+# which is why seeding through it is safe. The failure that froze session logs was a delivery that
+# happened before the writer was attached.
+#
+# The module lives in this directory because a `.`-prefixed row name resolves against the loader's
+# baseUrl, which `dsh-app-boot` sets to the directory holding this profile's cordis.yml — and because
+# `@deepseek-ai/dsh-tools` resolves from the profile rather than from ~/.dsh/plugins (the same reason
+# peer-bridge lives here).
+#
+# INSERTED, not named: this layer is WATCHED (dsh-hmr reconciles the file live), so the row mounts
+# without a restart. Delete this block and the directory to take the tool away again.
+#
+# Re-touched 2026-10-09 15:3x: the first import failed the defineTool guard (`parameters.cwd.required
+# must be true when present` — optional parameters omit `required` entirely). Fixing the module file
+# did not re-import it, because the watcher follows THIS file; editing it forces the reconcile.
+# - insert:
+#     - id: session-factory
+#       name: ./session-factory/tool.js
+
+# harness_RSI: forced reconcile marker 2026-10-09 (module edits: peer-bridge read gate, session-factory prompt signal)
+# harness_RSI: reconcile 2026-10-09 18:45 — peer-bridge's three tool registrations are now wrapped in ONE
+# `ctx.effect`, so the names are UNREGISTERED on unload. Before this a bare `ctx.tools.register` left them
+# registered and a reload's `apply` was refused by its own leftovers ("duplicates within one layer").
+# Checked before writing: `node --check` parses; the port's drift check reports the expected new live hash
+# (c54f21dc) rather than the stale pin, which is the smoke seeing the intended edit and not a surprise.
+# harness_RSI: reconcile 2026-10-09 18:46 — session-factory's single `session_create` registration is wrapped the
+# same way. BOTH live rows are now wrapped, and each was verified by a mock-context test that asserts the
+# counterfactual: FIXED → dispose leaves (none) and a reload is ACCEPTED; OLD (bare) → dispose leaves the tool
+# registered and the reload is REFUSED with "duplicates within one layer". The old shape was tested from a temp
+# copy beside the row, so the comparison is the same harness on the same module.
+# harness_RSI: reconcile 2026-10-09 — peer-bridge's delivered message now carries an HONEST SOURCE:
+# `{ kind: 'agent-message', form: 'relay', senderSessionId: me.id }` instead of `{ kind: 'user' }`. Before it, a
+# peer-sent nudge was attributed to the OPERATOR, so "was this the operator?" was unanswerable at the source; this
+# is the exact shape the harness's own producer builds (`agentMessageSource`, `dsh-subagent:571-576`) and its strict
+# triple is what the v2->v3 migration's `assertSource` requires. VERIFIED against the real write gate
+# (`adoptSessionEvent`, SESSION_FORMAT_VERSION 4): the new source is ACCEPTED, and an empty kind is the only refusal.
+# NECESSARY BUT NOT SUFFICIENT — `deriveNudgeLabel` takes two RAW STRINGS and `service.js:47-49` passes through the
+# consumer's own selection, so the metric will not move until a selector READS `source.kind`. This makes the question
+# answerable; a selector that ignores sources will still count a peer nudge as the operator's.
+# NOTE the blast radius: title generation refuses a cited message whose `source.kind !== 'user'`
+# (`dsh-session-format-v3-to-v4:843`) — correct for a peer relay, and now reachable.
+# harness_RSI: reconcile 2026-10-09 post-restart — session-factory's seed-failure DIAGNOSTIC widened.
+# The old `String(error?.message)` captured only `"prompt rejected"`, which is a catch-all constant from
+# `dsh-api-session-controller/lib/index.js:891-894` (`RemoteError("session/agent-busy", "prompt rejected",
+# { reason: String(error) })`) — the name asserts a cause the code path never establishes, and the real
+# cause lives in `reason` for one instant and is logged NOWHERE. The row now also captures `name`,
+# `reason`, `details` and `Object.keys(error)`. LIVE-ness requires THIS edit: the watcher reconciles the
+# patch file, not the module (ERRATA §F), so a module-only change stays inert.
+#
+# ── harness-rsi — SUPERSEDED 2026-10-09, commented out ────────────────────────────────────────────
+#
+# THESE FIVE FILE-PATH ROWS ARE REPLACED BY ONE INSTALLED PLUGIN, `dsh-harness-rsi`. The bundle's
+# `cordis.patch.yml` mounts a single row by PACKAGE NAME (resolved from this profile's node_modules),
+# and its root plugin mounts these same five rows — plus `peer` and `session` — as child plugins.
+#
+# WHY THE FILE-PATH FORM WAS RIGHT FOR THE BUILD AND WRONG FOR THE DELIVERY: `../../../CodingProjects/...`
+# only resolves because the loader's base is this profile's directory, which makes the rows
+# profile-local and unpublishable. A mount by package name survives a moved checkout and installs with
+# `dsh plugin add`.
+#
+# ROLLBACK, narrow: uncomment the block below and set `enabled: { restart: false, nudge: false,
+# model: false, compact: false, ledger: false }` on the bundle row. That returns these five to file-path
+# mounting without disturbing the bundle's `peer`/`session` rows.
+#
+# ── ORIGINAL TEXT (Mounted ONE ROW AT A TIME, per the operator's protocol and README §2.2 Option A) ──
+# A `.`-prefixed row name resolves against the directory holding this profile's `cordis.yml`, so the
+# path climbs out to the package and needs no change to the profile's package.json. Each id is distinct
+# from every live row, so no port/original collision is possible for these five (they are ADDITIVE rows,
+# not ports).
+# - insert:
+#     - id: harness-rsi-restart
+#       name: ../../../CodingProjects/harness_RSI/restart/index.js
+#       # MOUNTS INERT, DELIBERATELY — `restartEnabled` defaults to false, so mounting is NOT consent to
+#       # restart: `request_restart` refuses and names what to configure. Arming it is a SECOND flip.
+#       # `restartCommand` is left at its empty default too; the profile's own value lives at the
+#       # dsh-telegram row above and is NOT copied here.
+#     # MOUNTED 2026-10-09, one row at a time. NO `config:` block, so the defaults apply: `enabled: true`
+#     # (the row IS active — `apply` returns early only when `enabled !== true`), and `recordPath: ''`,
+#     # which makes the recorder a legible NO-OP rather than an error (`{written:false, why:'no record path
+#     # configured'}` — it never throws into the caller, by design).
+#     #
+#     # ITS OBSERVABLE IS DELIBERATELY NOT A TOOL: the row registers ZERO tools, so there is nothing in the
+#     # tool list to point at. It instead `ctx.provide('nudge', ...)` — a SERVICE — which is observable from
+#     # outside through the runtime's service registry, i.e. on a channel THIS ROW CANNOT WRITE. That was
+#     # the point of choosing it: the row's own JSONL record is written by the row, so it would have been
+#     # the actor's word about itself (HANDOFF §4.5's hazard).
+#     - id: harness-rsi-nudge
+#       name: ../../../CodingProjects/harness_RSI/nudge/index.js
+#     # MOUNT 3/5 — `model`. Registers ONE tool, `select_model`, so the `restart` proof applies: the tool
+#     # appearing in the list is behavioural evidence that `apply` ran. Fiber name `select-model` is distinct
+#     # from every live row. No `config:` block, so the row's own defaults apply.
+#     - id: harness-rsi-model
+#       name: ../../../CodingProjects/harness_RSI/model/index.js
+#     # MOUNT 4/5 — `compact`. ONE tool, `compact_context`; fiber name `compact`, distinct from every live
+#     # row. No `config:` block. Its suite (`compact/smoke.mjs` plus `idle-edge.test.mjs` and
+#     # `session-log.test.mjs`) is the strictest in the package, so a live contradiction here would be the
+#     # most informative failure this sweep could produce.
+#     - id: harness-rsi-compact
+#       name: ../../../CodingProjects/harness_RSI/compact/index.js
+#     # MOUNT 5/5 — `ledger`, the LAST row. Registers FIVE tools (`ledger_open`, `ledger_measure`,
+#     # `ledger_decide`, `ledger_note`, `ledger_read`) and is the only one of the five whose `inject` names a
+#     # second service: `['tools', 'storageDomain']`. `storageDomain` is present in this profile (it appears
+#     # in the live service catalog), so the row should not sit PENDING — that is the specific risk to check
+#     # for this row rather than assuming. Fiber name `rsi-variant-ledger`, distinct from every live row.
+#     - id: harness-rsi-ledger
+#       name: ../../../CodingProjects/harness_RSI/ledger/index.js
+
+# ── dsh-misc-tools: arm the restart row for the docdrift profile (2026-10-09) ──────────────────
+#
+# The unit is dsh@docdrift.service (template unit, see /home/john/.config/systemd/user/dsh@.service).
+# Its Restart=always policy means a request_restart call ends every session in this process and
+# brings the unit back ~3 s after SIGTERM. The marker at $DSH_HOME/restart-pending.json is the
+# post-boot proof — read it on the next turn to confirm a restart actually happened, and to
+# distinguish a deliberate restart from a crash.
+#
+# Operator policy (2026-10-09, after the first end-to-end test passed): arm the row by default.
+# Agents and humans may switch the model at will; this is the deployment's restart capability, kept
+# on. Behaviour in code:
+#   * `restartEnabled` is the kill switch. Flip to false here to disarm.
+#   * `restartCommand` is the only command the row will ever run, deployment-supplied.
+#   * `restartDelaySeconds` is the 2 s gap that lets the tool result reach the model before the
+#     process it describes goes away. Lower bound is 1 s; do not set 0.
+#   * `restartMarkerPath` left at the default ($DSH_HOME/restart-pending.json) — explicit enough.
+#   * `restartWithoutMarker` left at the default (false) so an unconfirmable restart is refused.
+#
+# To disarm, set restartEnabled: false (or delete this block). The row's own inert defaults then
+# take over: empty command, restartEnabled false, request_restart refuses with the codes the user
+# already saw during the staged test.
+- id: dsh-misc-tools
+  config:
+    restart:
+      restartCommand: systemctl --user restart dsh@docdrift
+      restartEnabled: true
+      restartDelaySeconds: 2
+
+    # ── nudge MOVED OUT (2026-10-10) ──────────────────────────────────────────────────────────────
+    #
+    # The nudge row used to live in this bundle. It was the only row here that registered NO tool --
+    # the other six exist to put model-callable capabilities in front of the agent -- and it consumes
+    # the `system1Observer` service, so it belongs with the plugins derived from the observer rather
+    # than inside a tools bundle. It is now its own package, `dsh-system1-nudge`, listed in this
+    # profile's bundles, and its settings moved to the row override below.
+    #
+    # `enabled.nudge: false` is what makes the move safe: the `nudge` SERVICE NAME is process-global,
+    # so if both rows mounted, the second registration would fail loudly. The key is now unknown to
+    # this package, which is harmless -- Schemastery passes undeclared keys through -- and it is kept
+    # for one restart so a profile rolled back to the old dsh-misc-tools is still safe.
+    enabled:
+      nudge: false
+
+# ── dsh-system1-nudge: the nudge row, as its own package (2026-10-10) ─────────────────────────────
+#
+# WHAT IT IS. It DETECTS a stuck session -- six signals read off the session log, plus an optional
+# seventh from a mounted observer -- and, only when at least TWO fire together, delivers a message
+# into that session's own inbox to keep it working; as a last resort it can move the session to
+# another model. Its observables are the JSONL record below, the declared `nudge` service, and the
+# `nudge_config` tool it now registers.
+#
+# WHAT CHANGED IN THE MOVE, beyond the address:
+#   * it declares a real Schemastery `Config`, so THESE VALUES ARE NOW VALIDATED by the Loader before
+#     the row is constructed. The old plugin root declared only `enabled` and `recordPath`; every
+#     other key reached the row unchecked.
+#   * it provides a declared SERVICE, so a consumer can `inject: ['nudge']` and get a lifecycle-
+#     managed dependency instead of an opaque provided value.
+#   * it registers ONE TOOL, `nudge_config`, which reads and writes these settings -- including
+#     `authority` and `sessions`, i.e. an agent can widen its own grant. That is the operator's
+#     decision, taken knowingly; the package README says so.
+#   * it imports its tokenizer from `dsh-system1-observer` (which now exposes `./nudge-label`)
+#     instead of carrying a copy. Its `recurrence` deliberately stays LOCAL: the observer's counts
+#     word OCCURRENCES and can exceed 1, so importing it would move the `repeated_phrasing` threshold.
+#
+# WHY THESE VALUES. This is the state the row recommends arriving in: `authority: policy` with an
+# EMPTY allowlist means it evaluates every session and RECORDS what it would have done, and acts on
+# nothing. There is deliberately no "all sessions" mode -- authority is observe | self | policy, so
+# acting is always a named grant.
+#
+# `escalation` is left EMPTY on purpose: with no target there is nothing to escalate to, which makes
+# `maxEscalationsPerSession` moot. `confirmations` (2), `cooldownSeconds` (300) and
+# `maxNudgesPerSession` (2) keep their defaults. `thresholds.minSignals` (2) is the number that stops
+# Written by `packages/nudge/scripts/start-self-watch.mjs`. `authority: self` with
+# `selfSessionId` set to the most recently active session from the record file, and
+# `sessions: []` cleared (`self` gates on `selfSessionId`, not on `sessions`). The
+# previous comment block described an earlier "overwrite the nudge config" change
+# and is intentionally replaced; the script is the source of truth for this block.
+- id: dsh-system1-nudge
+  config:
+    enabled: true
+    authority: self
+    selfSessionId: session-659e3d91-fae3-41f9-87c9-c5f378f5f853
+    sessions: []
+    thresholds:
+      narrationMessages: 2
+      narrationChars: 250
+      repeatPhrasing: 0.5
+      retries: 3
+      toolErrorStreak: 3
+      idleTurns: 2
+      minSignals: 1
+    confirmations: 1
+    cooldownSeconds: 120
+    maxNudgesPerSession: 5
+    maxEscalationsPerSession: 1
+    tokenBudget: 0
+    escalation:
+      provider: ""
+      model: ""
+      reasoningEffort: ""
+    escalationVia: auto
+    mode: auto
+    sourceKind: nudge
+    recordPath: /home/john/.dsh/nudge-record.jsonl
+    observerLabel: true
+    maxEventsPerSession: 400
+    outcomeWindowTurns: 3

@@ -8,15 +8,21 @@ importers:
 
   .:
     dependencies:
+      '@deepseek-ai/dsh-deepseek-llm-api-extensions':
+        specifier: link:/home/john/.config/nvm/versions/node/v25.3.0/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-deepseek-llm-api-extensions
+        version: link:../../../.config/nvm/versions/node/v25.3.0/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-deepseek-llm-api-extensions
       '@local/dshso-mcp':
         specifier: link:/home/john/CodingProjects/dshso-mcp-bundle
         version: link:../../../CodingProjects/dshso-mcp-bundle
       dsh-capability-inspector:
-        specifier: github:tree201/dsh-capability-inspector
-        version: https://codeload.github.com/tree201/dsh-capability-inspector/tar.gz/7dded4f1137bf424d86a8c1e71807bc3370faaf3(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-tools@0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd))
+        specifier: link:/home/john/CodingProjects/dsh-capability-inspector
+        version: link:../../../CodingProjects/dsh-capability-inspector
       dsh-find-plugin:
         specifier: ^0.4.0
         version: 0.4.0(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-tools@0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd))
+      dsh-misc-tools:
+        specifier: link:/home/john/CodingProjects/dsh-misc-tools
+        version: link:../../../CodingProjects/dsh-misc-tools
       dsh-plugin-dev-kb:
         specifier: github:Pasumao/dsh-plugin-dev-kb
         version: https://codeload.github.com/Pasumao/dsh-plugin-dev-kb/tar.gz/9e2baf878d2dc4cf7f0edec29d152aa32ca596ab(@deepseek-ai/cordis@4.0.4)
@@ -197,13 +203,6 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  dsh-capability-inspector@https://codeload.github.com/tree201/dsh-capability-inspector/tar.gz/7dded4f1137bf424d86a8c1e71807bc3370faaf3:
-    resolution: {gitHosted: true, integrity: sha512-k+35cZaovmU50vpd3zm61bQ9+DJW/fj7odZjEdN71NxkpnUpHFcuOOLcV6JjyYEmthrCi3oUULE7KkKnTlorpQ==, tarball: https://codeload.github.com/tree201/dsh-capability-inspector/tar.gz/7dded4f1137bf424d86a8c1e71807bc3370faaf3}
-    version: 0.1.0
-    peerDependencies:
-      '@deepseek-ai/cordis': '>=4.0.1-rc.1 <5'
-      '@deepseek-ai/dsh-tools': '>=0.0.1-rc.1 <0.2'
-
   dsh-find-plugin@0.4.0:
     resolution: {integrity: sha512-XO0zQb3iHxK7IGGygfiGDxI3t4HUEBNLK4knqYmh8KuT2cbCWzmH+4PViaIgVPsiytC7mXN5p94u5fJc3VNsBw==}
     peerDependencies:
@@ -382,11 +381,6 @@ snapshots:
       '@standard-schema/spec': 1.1.0
 
   '@standard-schema/spec@1.1.0': {}
-
-  dsh-capability-inspector@https://codeload.github.com/tree201/dsh-capability-inspector/tar.gz/7dded4f1137bf424d86a8c1e71807bc3370faaf3(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-tools@0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd)):
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.4
-      '@deepseek-ai/dsh-tools': 0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd)
 
   dsh-find-plugin@0.4.0(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-tools@0.1.7-rc.2(ead59e2384682bf741eae1c9eaa56bcd)):
     dependencies:
