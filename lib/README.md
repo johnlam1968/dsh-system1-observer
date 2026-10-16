@@ -59,6 +59,13 @@ and this map stay, because the filesystem journal is not session-shaped.
   the DeepSeek one wipes its root, because it writes beside a live deployment's own sessions.
 
 **THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
+* `zeroclaw-interchange.js` — **a third foreign store, and the first that is not a transcript**: zeroclaw keeps
+  sessions in a **SQLite** database (`~/.zeroclaw-jane/data/sessions/sessions.db`, a flat message list), where
+  `dsh-chat-import`'s `openclaw` parser expects **JSONL** under `~/.openclaw/agents` — so despite zeroclaw being
+  an OpenClaw variant, the shipped parser cannot read it, and the plugin's sqlite family does not list it either.
+  Measured rather than assumed, and the supported way in is the plugin's own escape hatch: it produces the
+  `interchange v1` document the `dsh-chat-import-convert` skill documents, and nothing else. The writer half that
+  needs a harness is `scripts/zeroclaw-to-interchange.mjs`.
 * `exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
 * `sessions.js` — which sessions the observer watches at all
 * `subject.js` — which model produced the text being judged

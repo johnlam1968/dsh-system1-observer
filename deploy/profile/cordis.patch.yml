@@ -40,25 +40,31 @@
 
 # The port this profile's web app listens on. A deployment decision: a terminal needs none.
 #
-# host 0.0.0.0 (changed 2026-10-12, was 127.0.0.1) exposes this GUI to the LAN. The
-# webserver schema permits exactly two literals -- "127.0.0.1" and "0.0.0.0" -- and this
-# layer is applied after the bundle layer, so the bind is honoured. The web app's own
-# `--host 0.0.0.0` FLAG is refused by design (dsh-web-app/lib/startup.js), so this
-# composition row is the only route to a LAN bind.
+# host 127.0.0.1 (was 0.0.0.0 from 2026-10-12 until 2026-10-14). The webserver schema
+# permits exactly two literals -- "127.0.0.1" and "0.0.0.0" -- and this layer is applied
+# after the bundle layer, so the bind is honoured. The web app's own `--host 0.0.0.0`
+# FLAG is refused by design (dsh-web-app/lib/startup.js), so this composition row is
+# the only route to a LAN bind.
 #
-# The /api Host/Origin fence needs nothing added: web-runtime's resolveLanTrust() reads
-# the bound host and auto-trusts every non-internal IPv4 literal when it is 0.0.0.0.
-# Startup then prints the token-bearing LAN URL as: dsh web: <loopback> (LAN: <lan-url>)
+# WHY IT WENT BACK TO LOOPBACK (2026-10-14). While host was 0.0.0.0 this GUI answered the
+# whole LAN, and anyone who reached it could DRIVE THE AGENT -- which runs commands on
+# this machine. The only barrier was the launch token in the URL, which is not a security
+# boundary. dsh-relay now sits in front of the loopback bind and terminates TLS plus
+# password authentication, which is the layer that was missing. dsh-relay REFUSES TO START
+# in front of a harness already bound to 0.0.0.0, so this row and that bundle are mutually
+# dependent: change one and the other stops working.
 #
-# NOTE: `config` replaces the row's config wholesale, so this entry already dropped the
-# bundle's compression fields (gzip/1/1024) -> they fall back to schema defaults. That
-# predates this change and is left as it was, to keep this a one-line edit.
+# Consequence: the plain-HTTP LAN URL is gone; reach the GUI at https://<lan-ip>:3443.
+# That also removes the secure-context problem, because over HTTPS the browser exposes
+# both navigator.mediaDevices (voice input) and crypto.randomUUID (which mints every RPC
+# id) -- neither exists on an http:// LAN origin.
 #
-# Rollback: set host back to 127.0.0.1 and restart dsh@docdrift.
+# Rollback: set host back to 0.0.0.0 AND disable the `relay` row, or dsh-relay refuses to
+# start. Then restart dsh@docdrift.
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'
   config:
-    host: 0.0.0.0
+    host: 127.0.0.1
     port: 3090
 
 # The skills catalogue. `skill-filesystem` is the PROVIDER that fills it; the catalogue arrives as
@@ -289,6 +295,7 @@
     subjectSource: stored
     composeMaxChars: 8000
     observeSubagents: false
+  disabled: false
 
 # peer-bridge -- reach a SIBLING ROOT session. Promoted 2026-09-30 from the sandbox body kept at
 # ~/.dsh/plugins/peer-bridge.dynamic-host.js (that file is the origin record of what the sandbox ran; this row is
@@ -521,7 +528,7 @@
         disabled: !!js "!ctx.get('profileContext')"
 
 # FULL-TEXT SESSION SEARCH, ENABLED. `dsh-base` ships this row as `path: ':memory:'`, `openAt: never`, which is why
-# `session_index_search` refuses with "session search is disabled". A patch replaces `config`
+# `system1_sessions { action: 'search' }` refuses with "session search is disabled". A patch replaces `config`
 # WHOLESALE, so both fields are restated here:
 #   * a FILE path, not `:memory:`, so the derived index survives a restart instead of being rebuilt from the logs;
 #   * `first-search`, so no startup is delayed -- the build is paid by the first search that needs it.
@@ -859,7 +866,7 @@
   config:
     enabled: true
     authority: self
-    selfSessionId: session-659e3d91-fae3-41f9-87c9-c5f378f5f853
+    selfSessionId: session-362b0f1f-3d5b-42e3-8989-39bf6087d358
     sessions: []
     thresholds:
       narrationMessages: 2
@@ -885,3 +892,27 @@
     observerLabel: true
     maxEventsPerSession: 400
     outcomeWindowTurns: 3
+
+- id: relay
+  config:
+    bind: 0.0.0.0
+    port: 3443
+    stateDir: !!js dshHomePath('relay')
+    tls: self-signed
+    publicHostnames: []
+    auth: both
+    sessionTtlMs: 43200000
+    deviceTokenTtlMs: 2592000000
+    pairingWindowMs: 300000
+    maxFailedAttempts: 5
+    lockoutMs: 900000
+    rateLimitPerMinute: 600
+    privilegedMethods: allow-authenticated
+    extraProxyPaths: []
+    compat:
+      addressGrants: false
+      addressGrantTtlMs: 86400000
+      plainPort: 0
+    uiLink: true
+    mdns: true
+  disabled: true

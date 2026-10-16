@@ -17,7 +17,9 @@
         "dsh-session-adapter",
         "@local/dshso-mcp",
         "dsh-misc-tools",
-        "dsh-system1-nudge"
+        "dsh-system1-nudge",
+        "dsh-speech-funasr-http",
+        "system1-bridge"
       ]
     }
   },
@@ -31,6 +33,7 @@
     "dsh-plugin-factory": "file:/home/john/Downloads/dsh-plugin-factory-0.3.2.tgz",
     "dsh-session-adapter": "link:/home/john/CodingProjects/dsh-system1-observer/packages/session-adapter",
     "dsh-session-index": "link:/home/john/CodingProjects/dsh-session-index",
+    "dsh-speech-funasr-http": "link:/home/john/CodingProjects/dsh-speech-funasr-http",
     "dsh-system1": "github:exoticknight/dsh-system1",
     "dsh-system1-nudge": "link:/home/john/CodingProjects/dsh-system1-plugins/packages/nudge",
     "dsh-system1-observer": "link:/home/john/CodingProjects/dsh-system1-observer",
