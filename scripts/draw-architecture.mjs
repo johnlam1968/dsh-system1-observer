@@ -364,7 +364,7 @@ const TOOLS = [
   ['system1_decide', 'decide-tool.js', 'ask the judge about one state, with a question set'],
   ['system1_evaluate_session', 'evaluate-tool.js', 'judge a session: reads it, segments it, packages the run'],
   ['system1_measurements', 'results-tool.js', 'summarise the readings, write a package, attach an interpretation'],
-  ['system1_sessions', 'sessions-tool.js', 'find the subject — list, read, or full-text search'],
+  ['system1_session_subject', 'session-subject-tool.js', 'the SUBJECT a judgement is made from'],
   ['system1_question_sets', 'questions-tool.js', 'compose, validate and write a question set'],
   ['system1_battery', 'battery-tool.js', 'did this REWRITE measure better, or only differently'],
   ['system1_trace', 'tool.js · trace-report.js', 'the agent-facing reader over the JSONL trace'],
@@ -386,6 +386,11 @@ const REPO = [
   {
     title: 'docs/ — the record behind the code',
     note: 'manual.md is the reference; findings.md is the register of every defect with its cause, its consequence and the measurement that found it; conventions.md is each rule with the measurement that produced it. None of it ships to npm.',
+  },
+  {
+    title: 'A second corpus — pi',
+    accent: ACCENT.repo,
+    note: 'A foreign harness becomes measurable by BECOMING a dsh session: `lib/pi-session-export.js` maps pi\'s DAG, its absent turn and its injected messages into dsh events, `scripts/import-pi-sessions.mjs` writes them through the harness\'s own persistence API into the live root, and every tool on this page then reads a pi session with no change at all. 223 sessions on this host, measured end to end; the rules and the losses are in `docs/pi-adapter.md`.',
   },
   {
     title: 'The packages around it',
@@ -461,17 +466,21 @@ const repoCols = 4
 const repoGap = 18
 const repoW = (W - M * 2 - repoGap * (repoCols - 1)) / repoCols
 const repoRows = []
+// ROWS STACK, AND THE CURSOR ACCUMULATES. The first version placed row `r` at `r * (its own height + gap)`, which
+// looks right while every row is the same height and overlaps the moment one is not -- which a ninth box did.
+let repoY = cTop + 42
 for (let r = 0; r * repoCols < REPO.length; r++) {
   const slice = REPO.slice(r * repoCols, (r + 1) * repoCols)
   const rowH = Math.max(...slice.map((item) => card({ x: 0, y: 0, w: repoW, title: item.title, note: item.note, blocks: [] }).h))
   repoRows.push(slice.map((item, i) => card({
     x: M + i * (repoW + repoGap),
-    y: cTop + 42 + r * (rowH + 20),
+    y: repoY,
     w: repoW,
     title: item.title,
     note: item.note,
     blocks: [],
   })))
+  repoY += rowH + 20
 }
 const repoBodyH = repoRows.reduce((sum, row) => sum + Math.max(...row.map((c) => c.h)) + 20, 0) - 20
 
@@ -506,7 +515,9 @@ ${judgeCard.svg}
 ${recordCard.svg}
 ${arrowsA}
 
-${panelHeading(M, bTop - 52, INNER_W, 'THE NINE AGENT-FACING TOOLS', 'what an agent calls, and the module behind each')}
+${panelHeading(M, bTop - 52, INNER_W, 'THE NINE AGENT-FACING TOOLS',
+  'what an agent calls, and the module behind each — FINDING a session belongs to the store: '
+  + '`session_index_list` / `_search` / `_refresh`, answered from SQLite in milliseconds')}
 ${tools.join('\n')}
 
 ${panelHeading(M, cTop - 52, INNER_W, 'THE REPOSITORY AROUND IT', 'not on the data path — the code that checks, explains and ships it')}

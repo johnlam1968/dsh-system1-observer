@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1980" height="1813" viewBox="0 0 1980 1813">
+<svg xmlns="http://www.w3.org/2000/svg" width="1980" height="1986" viewBox="0 0 1980 1986">
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path d="M 0 1 L 9 5 L 0 9 z" fill="context-stroke"/>
 </marker>
 </defs>
-<rect width="1980" height="1813" fill="#ffffff"/>
+<rect width="1980" height="1986" fill="#ffffff"/>
 
 <text x="40" y="60" font-size="34" fill="#111827" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">dsh-system1-observer — the major parts</text>
 <text x="40" y="92" font-size="15" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">A seam observer for the DeepSeek Harness. It asks a System One model what the agent loop is doing, at the points you choose,</text>
@@ -252,7 +252,7 @@
 
 <rect x="40" y="1028.5" width="1900" height="2" rx="0" fill="#dfe3ea" stroke="#dfe3ea" stroke-width="1"/>
 <text x="40" y="1052.5" font-size="12.5" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">THE NINE AGENT-FACING TOOLS</text>
-<text x="267.25" y="1052.5" font-size="11.5" fill="#9aa3b2" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">what an agent calls, and the module behind each</text>
+<text x="267.25" y="1052.5" font-size="11.5" fill="#9aa3b2" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">what an agent calls, and the module behind each — FINDING a session belongs to the store: `session_index_list` / `_search` / `_refresh`, answered from SQLite in milliseconds</text>
 <rect x="40" y="1122.5" width="622.67" height="66" rx="9" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
 <text x="55" y="1148.5" font-size="12.5" fill="#111827" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="bold" text-anchor="start">system1_explain</text>
 <text x="55" y="1164.5" font-size="10.5" fill="#9aa3b2" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="normal" text-anchor="start">explain-tool.js</text>
@@ -279,10 +279,10 @@
 <text x="1286.33" y="1228.5" font-size="13" fill="#e3e7ee" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="end">5</text>
 <text x="693.67" y="1260.5" font-size="11" fill="#3f4653" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">summarise the readings, write a package, attach an interpretation</text>
 <rect x="1317.33" y="1202.5" width="622.67" height="66" rx="9" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
-<text x="1332.33" y="1228.5" font-size="12.5" fill="#111827" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="bold" text-anchor="start">system1_sessions</text>
-<text x="1332.33" y="1244.5" font-size="10.5" fill="#9aa3b2" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="normal" text-anchor="start">sessions-tool.js</text>
+<text x="1332.33" y="1228.5" font-size="12.5" fill="#111827" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="bold" text-anchor="start">system1_session_subject</text>
+<text x="1332.33" y="1244.5" font-size="10.5" fill="#9aa3b2" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="normal" text-anchor="start">session-subject-tool.js</text>
 <text x="1925" y="1228.5" font-size="13" fill="#e3e7ee" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="end">6</text>
-<text x="1332.33" y="1260.5" font-size="11" fill="#3f4653" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">find the subject — list, read, or full-text search</text>
+<text x="1332.33" y="1260.5" font-size="11" fill="#3f4653" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">the SUBJECT a judgement is made from</text>
 <rect x="40" y="1282.5" width="622.67" height="66" rx="9" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
 <text x="55" y="1308.5" font-size="12.5" fill="#111827" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="bold" text-anchor="start">system1_question_sets</text>
 <text x="55" y="1324.5" font-size="10.5" fill="#9aa3b2" font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-weight="normal" text-anchor="start">questions-tool.js</text>
@@ -330,36 +330,46 @@
 <text x="1493.5" y="1523.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">with its cause, its consequence and the measurement that found it;</text>
 <text x="1493.5" y="1538" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">conventions.md is each rule with the measurement that produced it. None</text>
 <text x="1493.5" y="1552.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">of it ships to npm.</text>
-<rect x="40" y="1593.5" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
-<rect x="40" y="1604.5" width="3" height="87" rx="1.5" fill="#334155"/>
-<text x="55" y="1617.5" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">The packages around it</text>
-<text x="55" y="1638" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">packages/session-adapter — the pure half of session-shaped reading,</text>
-<text x="55" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">importable because the composer runs in a synchronous path that cannot</text>
-<text x="55" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">await a service. dsh-session-index — the store, in its own repository,</text>
-<text x="55" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">importing no dsh code.</text>
-<rect x="519.5" y="1593.5" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
-<rect x="519.5" y="1604.5" width="3" height="87" rx="1.5" fill="#334155"/>
-<text x="534.5" y="1617.5" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">deploy/ · scripts/ · skills/</text>
-<text x="534.5" y="1638" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">deploy/ records the profile as applied, and check-deploy says whether</text>
-<text x="534.5" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">it still describes the machine. scripts/trace.mjs reads the trace from</text>
-<text x="534.5" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">a terminal; scripts/import-deepseek-web.mjs writes a foreign transcript</text>
-<text x="534.5" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">as harness events. Two operator skills ship with the package.</text>
-<rect x="999" y="1593.5" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
-<rect x="999" y="1604.5" width="3" height="87" rx="1.5" fill="#334155"/>
-<text x="1014" y="1617.5" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">What it is mounted into</text>
-<text x="1014" y="1638" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">peerDependencies, not bundled: @deepseek-ai/cordis and</text>
-<text x="1014" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">@deepseek-ai/dsh-tools — a renamed export is refused by ESM resolution</text>
-<text x="1014" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">before apply() runs. cordis.patch.yml replaces config wholesale, never</text>
-<text x="1014" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">deep-merges, so the plugin list in it is a snapshot.</text>
-<rect x="1478.5" y="1593.5" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
-<rect x="1478.5" y="1604.5" width="3" height="87" rx="1.5" fill="#334155"/>
-<text x="1493.5" y="1617.5" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">The rest of the repository</text>
-<text x="1493.5" y="1638" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">ROADMAP.md (§14 carries the current plan) · AGENTS.md · RELEASING.md ·</text>
-<text x="1493.5" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">install.sh · locale/ · icon.svg · .github/workflows. The published</text>
-<text x="1493.5" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">tarball is the code, the README and the criteria — docs/ and test/ are</text>
-<text x="1493.5" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">not in it.</text>
+<rect x="40" y="1608" width="461.5" height="152.5" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
+<rect x="40" y="1619" width="3" height="130.5" rx="1.5" fill="#334155"/>
+<text x="55" y="1632" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">A second corpus — pi</text>
+<text x="55" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">A foreign harness becomes measurable by BECOMING a dsh session:</text>
+<text x="55" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">`lib/pi-session-export.js` maps pi's DAG, its absent turn and its</text>
+<text x="55" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">injected messages into dsh events, `scripts/import-pi-sessions.mjs`</text>
+<text x="55" y="1696" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">writes them through the harness's own persistence API into the live</text>
+<text x="55" y="1710.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">root, and every tool on this page then reads a pi session with no</text>
+<text x="55" y="1725" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">change at all. 223 sessions on this host, measured end to end; the</text>
+<text x="55" y="1739.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">rules and the losses are in `docs/pi-adapter.md`.</text>
+<rect x="519.5" y="1608" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
+<rect x="519.5" y="1619" width="3" height="87" rx="1.5" fill="#334155"/>
+<text x="534.5" y="1632" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">The packages around it</text>
+<text x="534.5" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">packages/session-adapter — the pure half of session-shaped reading,</text>
+<text x="534.5" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">importable because the composer runs in a synchronous path that cannot</text>
+<text x="534.5" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">await a service. dsh-session-index — the store, in its own repository,</text>
+<text x="534.5" y="1696" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">importing no dsh code.</text>
+<rect x="999" y="1608" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
+<rect x="999" y="1619" width="3" height="87" rx="1.5" fill="#334155"/>
+<text x="1014" y="1632" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">deploy/ · scripts/ · skills/</text>
+<text x="1014" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">deploy/ records the profile as applied, and check-deploy says whether</text>
+<text x="1014" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">it still describes the machine. scripts/trace.mjs reads the trace from</text>
+<text x="1014" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">a terminal; scripts/import-deepseek-web.mjs writes a foreign transcript</text>
+<text x="1014" y="1696" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">as harness events. Two operator skills ship with the package.</text>
+<rect x="1478.5" y="1608" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
+<rect x="1478.5" y="1619" width="3" height="87" rx="1.5" fill="#334155"/>
+<text x="1493.5" y="1632" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">What it is mounted into</text>
+<text x="1493.5" y="1652.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">peerDependencies, not bundled: @deepseek-ai/cordis and</text>
+<text x="1493.5" y="1667" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">@deepseek-ai/dsh-tools — a renamed export is refused by ESM resolution</text>
+<text x="1493.5" y="1681.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">before apply() runs. cordis.patch.yml replaces config wholesale, never</text>
+<text x="1493.5" y="1696" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">deep-merges, so the plugin list in it is a snapshot.</text>
+<rect x="40" y="1780.5" width="461.5" height="109" rx="10" fill="#ffffff" stroke="#dfe3ea" stroke-width="1"/>
+<rect x="40" y="1791.5" width="3" height="87" rx="1.5" fill="#334155"/>
+<text x="55" y="1804.5" font-size="13" fill="#334155" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="start">The rest of the repository</text>
+<text x="55" y="1825" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">ROADMAP.md (§14 carries the current plan) · AGENTS.md · RELEASING.md ·</text>
+<text x="55" y="1839.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">install.sh · locale/ · icon.svg · .github/workflows. The published</text>
+<text x="55" y="1854" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">tarball is the code, the README and the criteria — docs/ and test/ are</text>
+<text x="55" y="1868.5" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">not in it.</text>
 
-<rect x="40" y="1735" width="1900" height="46" rx="8" fill="#f6f7f9" stroke="none" stroke-width="1"/>
-<text x="56" y="1761" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">Read off the working tree:  lib/ 71 modules · index.js 1389 lines · client.js 1927 lines · test/ 99 test files · criteria/ 49 question-set files in 16 directories · docs/ 27 files.</text>
-<text x="56" y="1778" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">Regenerate with `node scripts/draw-architecture.mjs`. Every box names the file that owns it, so a box that has gone stale names the place to look.</text>
+<rect x="40" y="1908" width="1900" height="46" rx="8" fill="#f6f7f9" stroke="none" stroke-width="1"/>
+<text x="56" y="1934" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">Read off the working tree:  lib/ 70 modules · index.js 1391 lines · client.js 1927 lines · test/ 99 test files · criteria/ 49 question-set files in 16 directories · docs/ 27 files.</text>
+<text x="56" y="1951" font-size="11" fill="#6b7280" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="normal" text-anchor="start">Regenerate with `node scripts/draw-architecture.mjs`. Every box names the file that owns it, so a box that has gone stale names the place to look.</text>
 </svg>

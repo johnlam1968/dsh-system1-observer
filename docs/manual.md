@@ -500,7 +500,8 @@ in another profile and points at `DEPLOY-A-PROFILE.md` at the repository root, w
 acceptance criteria and the traps live; the procedure stays in `deploy/README.md`, so no two files restate it. It is three calls, and the middle one does everything mechanical:
 
 ```
-system1_sessions { action: 'list', search: 'XYZ' }
+session_index_search { query: 'XYZ' }          # from dsh-session-index, not this row
+system1_session_subject { sessionId, lastMessages: 20 }   # optional: see what would be judged
 system1_evaluate_session { sessionId, segmentChars: 57600, package: true }   # read, segment, judge, package
 system1_measurements { action: 'interpret', package: '<dir>', text: '...', by: '...' }
 ```

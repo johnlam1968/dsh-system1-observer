@@ -31,20 +31,34 @@ fold (`surface`) and the event feed (`feed`) are the pure half of the session ad
 [`dsh-session-adapter`](packages/session-adapter/), imported by name. The reason is measured (`F104`): they must be
 **importable**, because the composer runs inside a synchronous path that cannot await a Cordis service. `fs-journal.js`
 and this map stay, because the filesystem journal is not session-shaped.
+* `session-subject-tool.js` — **the SUBJECT a judgement is composed from**: one stored session's operator and
+  assistant messages, sliced by `kinds` and `lastMessages` exactly as `system1_evaluate_session` slices them,
+  with `offset` to page backwards and `format: 'subject'` for the composed state. It was `lib/sessions-tool.js`
+  (`system1_sessions`, four actions); `list`, `search` and `refresh` moved to the `dsh-session-index` plugin's
+  `session_index_*` tools, which answer them from a SQLite store in milliseconds where `list` here took ~54 s,
+  and the name changed so what remains says what it is. `lib/sessions-search.js` (the two-backend precedence
+  policy, whose first backend this deployment leaves at `openAt: never`) and `lib/sessions-tool-output.js` (the
+  schema and render for all four actions) went with them; the read's schema and render are in the tool now
 * `subject-settings.js` — the row's own subject settings (`source`, `sessionId`, `kinds`, `lastMessages`), read
   live. It is the ONE part of the old `session-subject.js` that read OUR config; the rest was the harness's shapes
   and is now `dsh-session-adapter/reader`, with `surface-authority` beside it. Both take the `sessionQuery`
   service as a PARAMETER, so they still contain no host call for the inventory to find.
-* `sessions-search.js` — the search action and its two backends: the harness index first, the hand-rolled store second, and which one answered always stated
 * `deepseek-web-export.js` — **intake for a foreign transcript**: a DeepSeek Chat web export (`conversations.json`)
   as DSH session events, because the adapter reads HARNESS sessions and has no reader for any other format. Every
   rule in it was measured by the *Paper screening* session and is carried with its reasoning — the deepest-subtree
   branch rule, the pinned `source.kind: 'user'` title, the `step/start` pairing the harness enforces at read time,
   and the losses it refuses to fabricate (`F147`, `docs/adapters-and-standards.md`). The half that needs a harness
   is the writer, `scripts/import-deepseek-web.mjs`.
+* `pi-session-export.js` — **the same conversion for pi** (`pi-coding-agent`), the format `docs/adapters-and-standards.md`
+  names as the cheapest second adapter: 223 sessions on this host, a flat JSONL log, the same store layout. Three
+  rules make it a conversion rather than a copy, each measured on the corpus rather than read off a spec: the live
+  branch is pi's **leaf path** (not file order — a session can branch, and flattening two branches would merge two
+  conversations), a **turn is derived from the operator ask** because *pi has no turn at all*, and an injected
+  `custom_message` is a **message inside a turn, never an ask** — 183 of them on this host would otherwise have
+  become 183 invented operator turns. The writer is `scripts/import-pi-sessions.mjs`, and it is **additive** where
+  the DeepSeek one wipes its root, because it writes beside a live deployment's own sessions.
 
 **THE STORE IS NO LONGER IN THIS REPOSITORY.** It is its own plugin and repo, [`dsh-session-index`](https://github.com/johnlam1968/dsh-session-index), which imports no dsh code: FTS5 search, listing, reading, and an incremental rebuild behind a `localSessionIndex` service, plus four agent-facing tools of its own. `lib/sessions-search.js` and the tool consume it through that package, and the map above no longer lists its files because they are not this plugin's files any more.
-* `sessions-tool-output.js` — the tool's output schema and its rendering, split out of `sessions-tool.js` when the fourth action arrived
 * `exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
 * `sessions.js` — which sessions the observer watches at all
 * `subject.js` — which model produced the text being judged
@@ -109,7 +123,6 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `decide-tool.js` — `system1_decide`
 * `evaluate-tool.js` — `system1_evaluate_session`
 * `results-tool.js` — `system1_measurements`
-* `sessions-tool.js` — `system1_sessions`
 * `questions-tool.js` — `system1_question_sets`
 * `battery-tool.js` — `system1_battery`
 * `config-tool.js` — `system1_settings`

@@ -12,7 +12,7 @@ failures if you do not know why they are there.
 ## The short version, and it is three calls
 
 ```
-1. FIND      system1_sessions { action: 'list', search: 'XYZ' }
+1. FIND      session_index_search { query: 'XYZ' }        # dsh-session-index; session_index_list by cwd
 2. MEASURE   system1_evaluate_session { sessionId: '<id>', segmentChars: 57600, package: true }
 3. INTERPRET system1_measurements { action: 'interpret', package: '<the dir from step 2>', text: '<your reading>', by: '<you>' }
 ```

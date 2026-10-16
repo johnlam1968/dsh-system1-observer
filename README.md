@@ -42,7 +42,7 @@ not bundled), and a model to call: the profile's `system1` service, or the HTTP 
 
 ```
 system1_explain                                    what it can do, what it is set to now, what a reading covers
-system1_sessions  { action: 'list', search: 'XYZ' }                 find the session
+session_index_search { query: 'XYZ' }                    find the session  (dsh-session-index)
 system1_evaluate_session { sessionId: '…', segmentChars: 57600, package: true }   judge it, and package the run
 system1_measurements { action: 'interpret', package: '…', text: '…', by: 'you' }  attach your reading
 ```
@@ -52,7 +52,7 @@ every question of every segment, aggregates in code and writes a report package.
 deliberately yours — prose cannot be derived from numbers.
 
 Nine tools in all: `system1_explain`, `system1_settings`, `system1_decide`, `system1_evaluate_session`,
-`system1_measurements`, `system1_sessions`, `system1_question_sets`, `system1_battery`, `system1_trace`.
+`system1_measurements`, `system1_session_subject`, `system1_question_sets`, `system1_battery`, `system1_trace`. Finding a session is `dsh-session-index`'s — `session_index_list`/`search`/`refresh`, in milliseconds.
 
 ## What you get
 

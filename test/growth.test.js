@@ -56,6 +56,18 @@ const SIZE_EXEMPTIONS = {
             + 'manifest and the reproducible-file list. Splitting it invites the parts to disagree about the same '
             + 'measurement, which is the defect the package exists to prevent.',
     },
+    'lib/pi-session-export.js': {
+        max: 606,
+        reason: 'ONE conversion, held whole on purpose: parse -> live branch -> ask-groups -> events -> the facts the '
+            + 'log does not carry. The half that is easy to get wrong is the STRUCTURE -- an `assistant/message` '
+            + 'outside an open turn and step, or a `tool-call` block with no matching `tool/call`, is refused at '
+            + 'read time by the harness -- and splitting the mapper from the accounting would put the accounting '
+            + 'where it cannot see the events it counts. 137 of the 606 lines are the measured corpus rules the '
+            + 'header carries, and they are why the NEXT conversion will not get them wrong again. THE CUT WORTH '
+            + 'MAKING, when it is made: the LOSS ACCOUNTING (the `facts` object and `countNonMessageEntries`, ~90 '
+            + 'lines) into its own module, so the mapper is the seam and the sidecar is the receipt. Not before -- '
+            + 'one importer is not two.',
+    },
     // `lib/sessions-tool.js` USED TO BE EXEMPT AND IS NOT ANY MORE. Its own note said the seam to cut was by concern,
     // and when the fourth action (`refresh`) arrived the cut was made -- the schema and the render moved to
     // `lib/sessions-tool-output.js` -- so the tool now sits at 285 lines, under the ceiling, with no exemption. The

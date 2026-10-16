@@ -521,7 +521,7 @@
         disabled: !!js "!ctx.get('profileContext')"
 
 # FULL-TEXT SESSION SEARCH, ENABLED. `dsh-base` ships this row as `path: ':memory:'`, `openAt: never`, which is why
-# `system1_sessions { action: 'search' }` refuses with "session search is disabled". A patch replaces `config`
+# `session_index_search` refuses with "session search is disabled". A patch replaces `config`
 # WHOLESALE, so both fields are restated here:
 #   * a FILE path, not `:memory:`, so the derived index survives a restart instead of being rebuilt from the logs;
 #   * `first-search`, so no startup is delayed -- the build is paid by the first search that needs it.
