@@ -19,6 +19,9 @@ the project's record, kept because a measurement without its reasoning is a numb
 |---|---|
 | `manual.md` | the reference manual: hooks, every setting, the trace, mounting, the measured claims and the unverified ones |
 | [`architecture.svg`](architecture.svg) | **the picture of the whole row in one page**: the data path from the harness loop to the JSONL trace, the nine agent-facing tools, and the repository around it. Drawn by `node scripts/draw-architecture.mjs`, so a moved module is re-drawn rather than re-explained |
+| [`pi-adapter.md`](pi-adapter.md) | **the second foreign corpus**: pi sessions converted into DSH sessions and measured live — the four conversion rules with the corpus measurement behind each, what the log refuses to fabricate, `origin: 'subagent'`, and **§Running it: the `scripts/import-pi-sessions.mjs` commands, in three steps, with the commit point last** |
+| [`session-tools-plan.md`](session-tools-plan.md) | **the session tools, and where each half lives**: why `list`/`search`/`refresh` left this row, what `system1_session_subject` is, what `session_index_read` still owes, and where the pi importer belongs now that `dsh-chat-import` exists |
+| [`pi-seams.md`](pi-seams.md) | **the next step, designed not built**: the same nine points mapped onto pi's own hooks, what in-band measurement costs there, and the act layer left undecided |
 | `case-study-readme-review.md` | **a worked example of using this plugin**: two agents collected what the sources require of a README, measured this repository's own front page with it, checked each other and recorded their mistakes |
 | `readme-standards.md` | the standards, the twelve text-checkable questions derived from them, and every reading taken with them — including the questions that did not survive checking |
 | `settings.md` | every setting: what it does, what it costs, and why it exists (the table the settings card is built from) |
@@ -33,6 +36,7 @@ the project's record, kept because a measurement without its reasoning is a numb
 |---|---|
 | `findings.md` | **the register**: every defect, its cause, its consequence, and its status, numbered in the order they were found. The reason the code is shaped the way it is |
 | `conventions.md` | the rules this repository holds itself to, each with the measurement that produced it |
+| `self-improvement.md` | **a position, not a measurement**: whether System 1 evaluation is the right instrument for agent self-improvement, argued against — and the one paired experiment that would settle it. Read before `plans/2026-10-15-persona-as-expectation.md` |
 ### Kept locally, deliberately not in this repository
 
 | file | what it is |
