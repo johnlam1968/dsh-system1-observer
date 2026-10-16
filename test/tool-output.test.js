@@ -25,7 +25,7 @@ import { asToolDefinition } from '../lib/tool-definition.js'
 import { createDecideTool } from '../lib/decide-tool.js'
 import { createEvaluateTool } from '../lib/evaluate-tool.js'
 import { createResultsTool } from '../lib/results-tool.js'
-import { createSessionsTool } from '../lib/sessions-tool.js'
+import { createSessionSubjectTool } from '../lib/session-subject-tool.js'
 import { createQuestionsTool } from '../lib/questions-tool.js'
 import { createBatteryTool } from '../lib/battery-tool.js'
 import { createConfigTool } from '../lib/config-tool.js'
@@ -38,13 +38,13 @@ import { join } from 'node:path'
 /** A factory that returns stubs for whatever the tool asks for; the tools only STORE these. */
 const stubDeps = () => new Proxy({}, { get: (_target, key) => (key === 'then' ? undefined : () => undefined) })
 
-/** The eight tools this plugin registers, constructed but never executed. */
+/** The nine tools this plugin registers, constructed but never executed. */
 function everyTool() {
   return [
     createDecideTool(stubDeps()),
     createEvaluateTool(stubDeps()),
     createResultsTool(stubDeps()),
-    createSessionsTool(stubDeps()),
+    createSessionSubjectTool(stubDeps()),
     createQuestionsTool(stubDeps()),
     createBatteryTool(stubDeps()),
     createConfigTool(stubDeps()),
@@ -86,8 +86,12 @@ test('no tool declares a CLOSED object with no properties -- the shape that refu
 
 test('the nine tools are all here, so the check above cannot shrink silently', () => {
   const names = everyTool().map((tool) => tool.name).sort()
+  // `system1_session_subject` is the READ half of what used to be `system1_sessions` with four actions. The other
+  // three (`list`, `search`, `refresh`) moved to the `dsh-session-index` plugin's `session_index_*` tools, which answer
+  // them from a SQLite store rather than the harness service. The count is still nine: three went out, and the read
+  // came back under a name that says what it is.
   assert.deepEqual(names, ['system1_battery', 'system1_decide', 'system1_evaluate_session', 'system1_explain',
-    'system1_measurements', 'system1_question_sets', 'system1_sessions', 'system1_settings', 'system1_trace'].sort())
+    'system1_measurements', 'system1_question_sets', 'system1_session_subject', 'system1_settings', 'system1_trace'].sort())
 })
 
 test('a FULL decide answer validates against its own declaration -- the call that failed live', async () => {

@@ -72,9 +72,12 @@ async function subjectOf(query) {
   const registered = new Map()
   const ctx = fakeCtx({ query, registered })
   await apply(ctx, { hooks: ['draft'], tracePath: join(mkdtempSync(join(tmpdir(), 'surface-authority-')), 'trace.jsonl'), sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
-  const tool = registered.get('system1_sessions')
-  assert.ok(tool !== undefined, 'the sessions tool was registered')
-  const value = await tool.execute({ action: 'read', sessionId: 'agent-1', format: 'subject' })
+  // THE READ, under the name it now answers to. This is the case that keeps the surface authority honest: the
+  // composer must ask the HOST which events are current, and the tool that shows a preview is the one place an
+  // agent will notice if it stops.
+  const tool = registered.get('system1_session_subject')
+  assert.ok(tool !== undefined, 'the subject tool was registered')
+  const value = await tool.execute({ sessionId: 'agent-1', format: 'subject' })
   return { value, registered }
 }
 

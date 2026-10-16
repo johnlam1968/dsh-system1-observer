@@ -22,7 +22,7 @@ import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, b
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject } from 'dsh-session-adapter/reader'
 import { subjectSettings } from './lib/subject-settings.js'
 import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
-import { observesEverySession, readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
+import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
 import { egressFacts } from './lib/egress.js'
 import { attachRedactionRule } from './lib/telemetry.js'
 import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
@@ -33,7 +33,7 @@ import { createResultsTool } from './lib/results-tool.js'
 import { labelHash } from './lib/label-hash.js'
 import { createQuestionsTool } from './lib/questions-tool.js'
 import { createBatteryTool } from './lib/battery-tool.js'
-import { createSessionsTool } from './lib/sessions-tool.js'
+import { createSessionSubjectTool } from './lib/session-subject-tool.js'
 import { createEvidence } from './lib/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
@@ -53,7 +53,7 @@ import { DECIDE_TOOL_NAME } from './lib/decide-tool.js'
 import { EVALUATE_TOOL_NAME } from './lib/evaluate-tool.js'
 import { QUESTIONS_TOOL_NAME } from './lib/questions-tool.js'
 import { BATTERY_TOOL_NAME } from './lib/battery-tool.js'
-import { SESSIONS_TOOL_NAME } from './lib/sessions-tool.js'
+import { SUBJECT_TOOL_NAME } from './lib/session-subject-tool.js'
 import { RESULTS_TOOL_NAME } from './lib/results-tool.js'
 import { defaultPackageDir } from './lib/report.js'
 import { asToolDefinition } from './lib/tool-definition.js'
@@ -596,7 +596,7 @@ async function apply(ctx, config) {
         })(),
         tracePath: evidence.path,
         measurementsDir: defaultPackageDir(),
-        tools: [EXPLAIN_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME, EVALUATE_TOOL_NAME, RESULTS_TOOL_NAME, SESSIONS_TOOL_NAME, QUESTIONS_TOOL_NAME, BATTERY_TOOL_NAME, TRACE_TOOL_NAME]
+        tools: [EXPLAIN_TOOL_NAME, CONFIG_TOOL_NAME, DECIDE_TOOL_NAME, EVALUATE_TOOL_NAME, RESULTS_TOOL_NAME, SUBJECT_TOOL_NAME, QUESTIONS_TOOL_NAME, BATTERY_TOOL_NAME, TRACE_TOOL_NAME]
           .map((name) => ({ name, what: TOOL_SUMMARIES[name] ?? '' })),
       }),
     }))
@@ -652,12 +652,14 @@ async function apply(ctx, config) {
         },
         toolId: 'system1-observer',
       }))
-      register(createSessionsTool({
+      // FINDING A SESSION IS NOT THIS ROW'S JOB ANY MORE: `session_index_list`, `session_index_search` and
+      // `session_index_refresh` (the `dsh-session-index` plugin) answer it from a SQLite store in milliseconds, where
+      // this tool's own `list` went through `sessionQuery` and resolved a title per row -- measured at ~54 s against
+      // the store's 78 ms. What stays here is the one thing the store will not do: hand back the WINDOW a judgement
+      // is composed from, tool calls and results included.
+      register(createSessionSubjectTool({
         query: () => sessionQuery,
         settings: () => subjectSettings(liveConfig()),
-        // THE ALLOW-LIST, READ ONCE PER CALL AND MATCHED BY ITS OWN MODULE. An agent cannot see which sessions this
-        // row will measure without it, and `list` is where that question lands.
-        observed: () => ({ every: observesEverySession(liveConfig()), match: (id) => sessionObserved(liveConfig(), id) }),
         compose: composeSubject,
       }))
     // THE REPOSITORY'S OWN DECISION TOOL, over the SAME `decide` the observer uses. The closure is deliberate:
