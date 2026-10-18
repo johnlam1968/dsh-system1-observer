@@ -27,12 +27,13 @@
 // THE KEY IS READ FROM THE ENVIRONMENT and named by `--key-env`, never taken as an argument: a key on a command line
 // is a key in the shell history, in the process table, and in every `ps` on the host.
 import { readFileSync } from 'node:fs'
+import { validateSpecs } from '../lib/questions.js'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // THE THREE OPERATIONS, from the one module every surface uses. `scripts/ask.mjs` has no question code of its own:
 // what it adds is a STATE (a file, a URL, stdin), a credential, and a place to print -- and none of that is a rule
 // about questions, so none of it is written here.
-import { composeQuestions, listQuestionSets, askQuestions, wireTransport, renderAnswerLines, MACHINE_UNCOVERED } from '../lib/system1.js'
+import { composeQuestions, listQuestionSets, askQuestions, wireTransport, writeQuestionSet, renderAnswerLines } from '../lib/system1.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -44,6 +45,15 @@ const flag = (name, fallback = null) => {
   return i === -1 ? fallback : (argv[i + 1] ?? fallback)
 }
 const has = (name) => argv.includes(name)
+/**
+ * EVERY value of a repeated flag, not the first.
+ *
+ * Found by composing three questions as three `--question` flags and storing ONE of them. `flag` returns
+ * `argv[indexOf(name) + 1]`, so a second `--question` was not ignored -- it was never read, and the composition it
+ * belonged to was written without it. Silent, and the count was right: one question was asked and one was stored.
+ * A flag whose whole purpose is repetition has to collect; `flag` stays for the flags that are single-valued.
+ */
+const flags = (name) => argv.reduce((all, value, index) => (value === name ? [...all, argv[index + 1]].filter(Boolean) : all), [])
 
 const USAGE = `ask.mjs -- a question set and a state, answered by a System One model, with no harness
 
@@ -51,10 +61,13 @@ const USAGE = `ask.mjs -- a question set and a state, answered by a System One m
   --set NAME                 the composition, e.g. news-claim-check@2 (or skip it and use --question)
   --scope SCOPE              which scope of the set, e.g. admit, turn, session
   --question TEXT            ONE question inline, as key=value fields separated by ' ;; ' -- the same
-                             format system1_question_sets writes and system1_decide accepts
+                             format system1_question_sets writes and system1_decide accepts.
+                             REPEAT the flag per question: every occurrence is read, not just the first.
   --state TEXT               the state, as text
   --file PATH                the state, from a file ("-" reads stdin)
   --url HTTPS://...          the state, fetched and stripped of markup
+  --compose NAME             STORE the composed questions as a composition, then stop
+  --force                    allow --compose to rewrite a scope file that already exists
   --lint                     check the set against the authoring rules, spend nothing
   --json                     machine-readable answers
   --raw                      print exactly what was sent, beside the answers
@@ -116,14 +129,35 @@ const name = flag('--set')
 // ONE CALL, THREE ROUTES: a stored set by name, questions inline as DSL strings, or nothing at all. The module that
 // answers it is the same one `system1_decide` answers with, so a question means the same thing in both -- which is the
 // point of this script existing beside the tool rather than beside a copy of it.
-const questionArg = flag('--question')
+const repeated = flags('--question')
 const composed = composeQuestions({
   set: name,
   scope: flag('--scope'),
-  question: questionArg === null ? undefined : [questionArg],
+  // `--compose` has no scope of its own unless the caller names one, and `call` is the seam name the loader wants.
+  question: repeated,
   setsDir: () => SETS,
 })
 if (!composed.ok) die(composed.reason)
+
+// COMPOSE: store what was just composed, and stop. The set becomes a NAME that `system1_decide`, `system1_battery`,
+// `system1_evaluate_session` and this script can all ask by -- which is the point of storing it rather than passing
+// questions around, and the reason a stored set has a HASH: two runs are comparable only while the instrument's bytes
+// are the same. An existing scope file is refused unless `--force`, and the refusal says to write `@next` instead.
+if (has('--compose')) {
+  const target = flag('--compose')
+  if (composed.source !== 'question' && composed.source !== 'specs') {
+    die('`--compose` needs questions to store: give `--question` (or `--set`, which is already stored)')
+  }
+  const scopeForWrite = flag('--scope') ?? 'call'
+  const written = writeQuestionSet({
+    dir: SETS, name: target, scope: scopeForWrite, specs: composed.specs,
+    replace: has('--force'), validate: validateSpecs,
+  })
+  if (!written.ok) die(written.reason)
+  process.stdout.write(`stored ${written.written}\n  hash ${written.hash}${written.created ? ' (new composition)' : written.replaced ? ' (REPLACED -- earlier runs are no longer comparable)' : ''}\n`)
+  process.stdout.write(`  ask it: --set ${written.setName} --scope ${written.scope}\n`)
+  process.exit(0)
+}
 
 // `--lint` COSTS NOTHING AND ANSWERS A DIFFERENT QUESTION from `--state`: whether the questions are well formed, not
 // whether they separate. It reports the rules no machine can check too, because a clean report must not read as a pass.
@@ -153,7 +187,7 @@ if (has('--raw')) {
 }
 
 // OPERATION THREE, whole: load the set and call the model with it.
-const asked = await askQuestions({ set: name, scope: flag('--scope'), question: questionArg === null ? undefined : [questionArg], setsDir: () => SETS, state: state.text }, transport)
+const asked = await askQuestions({ set: name, scope: flag('--scope'), question: repeated.length === 0 ? undefined : repeated, setsDir: () => SETS, state: state.text }, transport)
 if (!asked.ok) die(asked.reason)
 const result = asked.result
 
@@ -168,4 +202,4 @@ if (has('--json')) {
 
 process.stdout.write(`${asked.setLabel ?? '(inline)'}  [${asked.setHash ?? '-'} from ${asked.source}]\n`)
 process.stdout.write(`  ${asked.ids.length} question(s), answered by ${JSON.stringify(envelope.executed ?? null)}\n\n`)
-for (const line of renderAnswerLines(result.answers)) process.stdout.write(`  ${line}\n`)
+for (const line of renderAnswerLines(result.answers, asked.scales)) process.stdout.write(`  ${line}\n`)

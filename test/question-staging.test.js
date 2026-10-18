@@ -285,3 +285,25 @@ test('the row hands every tool a sets directory that RESOLVES -- the wiring is t
 
 
 
+
+
+// ── A SCORE IS AN EXPECTED VALUE, NOT A LEVEL ──────────────────────────────────────────────────────────
+
+test('a score renders with its scale, computed from the BUILT question -- not from a spec that was never loaded', async () => {
+  const { resolveQuestions, renderAnswerLines } = await import('../lib/question-request.js')
+  const { scoreScales } = await import('../lib/system1.js')
+  const LADDER_QUESTION = ['id=graded ;; type=score ;; instructions=How well? ;; level=no ;; level=partly ;; level=yes']
+  // THROUGH THE REAL LOADER. The stub in `evaluate-tool.test.js` feeds a question in the SPEC shape, where `levels`
+  // is present, and it agreed with itself for a year: `scoreScales` read `levels` while the loader produces `criteria`,
+  // so every score in a live run rendered as a bare number. This drives the loader and asserts on what it emits.
+  const resolved = resolveQuestions({ question: LADDER_QUESTION })
+  assert.deepEqual(Object.keys(resolved.questions.graded), ['type', 'instructions', 'criteria'], 'and this is the shape the loader really produces')
+  assert.deepEqual(scoreScales(resolved.questions), { graded: 2 })
+
+  // 1.85 IS NOT LEVEL 1.85. It is the EXPECTED VALUE of a three-level ladder, whose mode may be 2 -- measured on the
+  // live wire as `level: 0.82` with `probabilities {0: 0, 1: 0.23, 2: 0.77}`. Printed bare it reads as a level.
+  const lines = renderAnswerLines({ graded: { type: 'score', level: 1.85, confidence: 0.77 } }, scoreScales(resolved.questions))
+  assert.match(lines[0], /1\.85 of 2/)
+  // AND A QUESTION WITH NO SCALE GETS NONE, rather than a false `of undefined`.
+  assert.equal(/of undefined/.test(renderAnswerLines({ x: { type: 'noul', probability: 0.5 } }, {}).join('')), false)
+})
