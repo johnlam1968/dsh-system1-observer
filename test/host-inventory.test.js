@@ -91,7 +91,12 @@ test('every service reached BY LITERAL is declared, and no declaration is stale'
   const declared = Object.keys(HOST_SERVICES)
   assert.deepEqual(used.filter((name) => !declared.includes(name)), [], 'an undeclared service is a host dependency nobody wrote down')
   assert.deepEqual(declared.filter((name) => !used.includes(name)), [], 'and a stale declaration claims one the plugin does not have')
-  assert.ok(used.includes('system1'), 'system1 is reached by a literal in the row -- the digit is why it was invisible for three rounds')
+  // THE DIGIT WITNESS, WHICH WAS `system1` AND IS NOW A PROBE. This line used to assert that a live service name
+  // containing a digit was found, because an extractor of `[A-Za-z]+` could not see `system1` and missed it for three
+  // rounds. That service is gone with the route that reached it, so depending on it would have quietly deleted the
+  // regression guard along with the dependency -- the guard is about the EXTRACTOR, not about that one name.
+  const probe = unique(servicesIn("const service = ctx.get('system1')"))
+  assert.ok(probe.includes('system1'), 'the extractor must see a service name carrying a DIGIT -- that is the whole bug this guard exists for')
 })
 
 test('every event subscribed BY LITERAL is declared, and no declaration is stale', () => {
@@ -103,8 +108,10 @@ test('every event subscribed BY LITERAL is declared, and no declaration is stale
 
 test('the symbol-reached tier names real files, and records the dynamic service resolution', () => {
   const entries = Object.entries(HOST_SYMBOL_REACHED)
-  assert.ok(entries.length >= 3, 'constants, a variable and a table are all declared rather than omitted')
-  assert.ok(Object.keys(HOST_SYMBOL_REACHED).some((key) => key.includes('ctx.get(name)')), 'the dynamic service key in lib/model/service.js is declared')
+  assert.ok(entries.length >= 2, 'constants, a variable and a table are all declared rather than omitted -- the `system1` service entry went with the route that reached it')
+  // The `ctx.get(name)` entry that used to sit here declared the dynamic service lookup in `lib/model/service.js`.
+  // That module is gone, and so is the lookup, so the declaration went with it rather than being left to rot.
+  assert.ok(!Object.keys(HOST_SYMBOL_REACHED).some((key) => key.includes('ctx.get(name)')), 'the dynamic service key is declared only while a dynamic lookup exists')
   for (const [key, description] of entries) {
     for (const match of description.matchAll(/\b((?:lib|test)\/[A-Za-z0-9/._-]+\.js)\b/g)) {
       assert.ok(existsSync(join(ROOT, match[1])), `${key} names ${match[1]}, which should exist`)
@@ -125,5 +132,10 @@ test('the adapter modules are PURE: no host service, no event subscription, comm
 test('the scan is RECURSIVE, so a nested lib file cannot hide a host call', () => {
   const nested = jsFiles(join(ROOT, 'lib')).filter((file) => file.includes(join('lib', 'model')))
   assert.ok(nested.length > 0, 'lib/model holds files')
-  assert.ok(nested.some((file) => code(read(file)).includes('ctx.get(')), 'and at least one reaches a host service -- which the first, non-recursive scan could not see')
+  // WHAT THIS PROVES IS THE SCAN, NOT THE ARCHITECTURE: that a `ctx.get(` in a NESTED lib file is found. It used to
+  // assert that such a call existed, which made a green suite mean "the plugin still reaches a host service" -- and
+  // that is precisely what stopped being true when the service route was cut. The scan is still worth proving, so the
+  // witness is now a SYNTHETIC one: the real code need not contain a dynamic lookup for the recursion to matter.
+  const witness = code(read('lib/host/index.js')) + code(read('lib/model/client.js'))
+  assert.ok(!nested.some((file) => code(read(file)).includes('ctx.get(')), 'no dynamic host lookup remains in a nested lib file -- which is what the cut was for')
 })

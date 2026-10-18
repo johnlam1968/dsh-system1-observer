@@ -88,8 +88,6 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `model/limits.js` — what the backend will actually take, from the vendor's published numbers
 * `model/wire.js` — one POST, and every way it can go wrong turned into a result
 * `model/client.js` — the client of that wire
-* `model/service.js` — the host service as the preferred route, with the wire as fallback
-* `model/service-answers.js` — the service's answer shape, which is not the wire's
 * `model/narrow.js` — narrowing a reply to the answer type that was asked for
 * `model/questions.js` — building the questions the wire carries
 * `model/envelope.js` — one home for what crosses the transport boundary

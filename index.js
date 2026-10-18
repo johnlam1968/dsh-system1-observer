@@ -41,7 +41,6 @@ import { IDLE_GAP_MS } from './lib/cost.js'
 import { MAX_LANES } from './lib/compare.js'
 import { BINS } from './lib/calibrate.js'
 import { createModel } from './lib/model/client.js'
-import { createServiceModel } from './lib/model/service.js'
 import { plainConfig, readConfigValue } from './lib/config-value.js'
 import { instrumentInput, questionGroup, redactionGroup } from './lib/instrument-input.js'
 import { createObserver, DEFAULT_MAX_FIELD_CHARS } from './lib/observe.js'
@@ -162,14 +161,18 @@ const Config = Schema.object({
   // model block at all when neither is set, so the `system1` service's own configuration applies -- and a schema
   // default here would OVERRIDE a deployment's choice with this file's guess. The card shows the blank, and the
   // mount line and every call line record which provider actually answered.
-  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev or `laya`. Read at each call, so a settings save reaches a running row. UNSET (the default) means the transport decides: the `system1` service uses its own configured provider.').volatile(),
-  model: Schema.string().description('The model id to pass to that provider, for example `jev-latest`. Read at each call, so a settings save reaches a running row. UNSET (the default) means the transport decides, exactly as `provider` does.').volatile(),
+  provider: Schema.string().description('The system1 provider id, for example `typesafe` for Jev. RECORDED, and used as the provider name in `executed`; the endpoint and the credential are `wireUrl` and `apiKeyEnv`. Read at each call, so a settings save reaches a running row.').volatile(),
+  model: Schema.string().description('The model id to ask for, for example `jev-latest`. Read at each call, so a settings save reaches a running row. UNSET (the default) sends none, and the endpoint chooses.').volatile(),
   // THE DECLARED DEFAULT, which the field never had: the row fell back to `?? 8000` and the model layer
   // defaulted to 5000, so an unset field meant one thing to the schema and another to the call.
   timeoutMs: Schema.number().min(0).default(DEFAULT_TIMEOUT_MS).description('Per-call bound in milliseconds. Read at each call, so a settings save reaches a running row.').volatile(),
   // THE URL IS ONE CONSTANT, and the fallback in `apply` reads the same one, so the declared default and the code's
   // behaviour cannot drift apart.
-  wireUrl: Schema.string().default(DEFAULT_WIRE_URL).description('Base URL used only when the profile mounts no system1 service. Read at each call, so a settings save reaches a running row.').volatile(),
+  wireUrl: Schema.string().default(DEFAULT_WIRE_URL).description('Base URL of the System One endpoint. The path is NOT part of it: `/v1/systemone` is appended here, so an OpenAI-compatible gateway is named by its root (`https://openrouter.ai/api`) and a hosted one by its host. Read at each call, so a settings save reaches a running row.').volatile(),
+  // A NAME AND NEVER A KEY. The row resolves this variable at each call, so the secret stays in the environment and
+  // nothing sensitive is written into the profile patch -- which is checked into git, diffed in review, and printed
+  // by `check:deploy`. Reading it per call also means a wrong name is fixable without a restart.
+  apiKeyEnv: Schema.string().description('The NAME of an environment variable holding the API key, for example `OPENROUTER_API_KEY` -- never the key itself. Unset (the default) sends no credential, which reaches only an endpoint that needs none, such as a local laya-serve. Read at each call.').volatile(),
   // MOUNT-BOUND, AND NOT FOR STYLE. This text IS the instrument's identity (`probeFingerprint` hashes it) and the
   // hash is written on the MOUNT line, so a value that changed mid-run would leave calls scored under one question
   // and keyed under another -- the silent mixing the comparability key exists to prevent. A reworded question needs a
@@ -425,9 +428,28 @@ async function apply(ctx, config) {
   // are volatile, so a settings save has to be able to reach a RUNNING row: a client captured here would keep the
   // values the row mounted with, the save would be reported as "Saved", and the next call would use the old ones.
   // A client is a closure, so building one per call costs an allocation and holds no state.
+  // ONE TRANSPORT. The row used to hold two and prefer a host service when one was mounted, which meant the whole
+  // composing core needed a second plugin installed to reach a model at all: `postSystemone` sent no credential, so
+  // an authenticated call could only be made by whoever else owned the key. The wire now carries one, measured
+  // standalone with nothing but `fetch`, so the service path is gone rather than preferred. See
+  // `archived/architecture/2026-10-18-standalone-typesafe-auth.md`.
   const transport = { kind: 'wire', provider: mount.provider ?? null, model: mount.model ?? null }
+  // THE CREDENTIAL IS RESOLVED HERE, FROM A VARIABLE THIS ROW NAMES, AND IS NEVER WRITTEN DOWN. `apiKeyEnv` is the
+  // same convention the deployment already used for its own provider row: a NAME, so no key is stored in the
+  // profile patch. The lookup is per call, because a settings save reaches a running row and a key that cannot
+  // change is a key that cannot be fixed without a restart.
+  const apiKeyFor = () => {
+    const name = readConfigValue(liveConfig().apiKeyEnv)
+    if (typeof name !== 'string' || name.trim() === '') return undefined
+    const value = process.env[name.trim()]
+    return typeof value === 'string' && value.trim() !== '' ? value : undefined
+  }
   const wire = () => createModel({
     baseUrl: readConfigValue(liveConfig().wireUrl) || DEFAULT_WIRE_URL,
+    // THE MODEL GOES OUT NOW. It did not before the cut, because the service that used to carry the call was the
+    // thing that sent it -- so the field was recorded on the mount line and never asked for.
+    model: readConfigValue(liveConfig().model) ?? undefined,
+    apiKey: apiKeyFor(),
     timeoutMs: readConfigValue(liveConfig().timeoutMs) ?? DEFAULT_TIMEOUT_MS,
   })
   // BOTH FACTORIES RETURN A CLIENT `{decide, health}`, NOT A FUNCTION. This indirection is what keeps one call
@@ -499,7 +521,7 @@ async function apply(ctx, config) {
         // "was it scoped, paused, or broken?", and this is the answer to "and what did that send?".
         egress: egressFacts({
           transport: transport.kind,
-          endpoint: transport.kind === 'service' ? `provider:${mount.provider ?? '(unset)'}` : (mount.wireUrl || DEFAULT_WIRE_URL),
+          endpoint: mount.wireUrl || DEFAULT_WIRE_URL,
           model: mount.model ?? null,
           callsEnabled: readConfigValue(live.callsEnabled) !== false,
           maxFieldChars: readConfigValue(live.maxFieldChars),
@@ -901,23 +923,8 @@ async function apply(ctx, config) {
     configEditor = child.get('configEditor') ?? null
   })
 
-  ctx.inject(['system1'], (child) => {
-    const service = child.get('system1')
-    if (service === undefined) return
-    // BUILT PER CALL, for the same reason as the wire client: `provider` and `model` are volatile, and a client
-    // captured here would keep the values this row mounted with.
-    const viaService = () => createServiceModel({
-      service,
-      provider: readConfigValue(liveConfig().provider) ?? undefined,
-      model: readConfigValue(liveConfig().model) ?? undefined,
-    })
-    // THE SERVICE PATH CANNOT CARRY A SIGNAL. `dsh-system1`'s `decide(request)` is another plugin's API and takes no
-    // signal, so a call made through the service cannot be aborted in flight -- the tool's entry check is what a
-    // cancelled call gets, and saying so is better than pretending the transport is uniform.
-    decide = (request) => viaService().decide(request)
-    transport.kind = 'service'
-    writeMount()
-  })
+  // NO SERVICE INJECTION, AND THAT IS THE POINT: the row authenticates for itself, so nothing has to be installed
+  // beside it for it to reach a model.
 
   // THE VOLATILE FIELDS ARE READ FRESH ON EVERY CALL. `plainConfig` unwraps each `Volatile` with
   // `.get()` at this moment, which is what lets a saved setting reach a RUNNING row: the harness does

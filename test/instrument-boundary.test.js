@@ -48,8 +48,7 @@ export const INSTRUMENT = Object.freeze([
   'lib/model/narrow.js',
   'lib/model/questions.js',
   'lib/model/result-envelope.js',
-  'lib/model/service.js',
-  'lib/model/service-answers.js',
+  'lib/question-lint.js',
   'lib/model/wire.js',
 ])
 
@@ -80,7 +79,7 @@ test('every file in the instrument set exists, and the set is the one that was m
   assert.deepEqual(missing, [], 'the instrument set names files that are not there: ' + missing.join(', '))
   // A SET THAT SHRANK SILENTLY IS THE FAILURE THIS PAIR EXISTS FOR. 23 is not a target; it is what the boundary was
   // measured at, so a file moving out of it has to be a change somebody made on purpose (`F110`).
-  assert.equal(INSTRUMENT.length, 23, 'the instrument set changed size: say so in docs/findings.md and update this list')
+  assert.equal(INSTRUMENT.length, 22, 'the instrument set changed size: say so in docs/findings.md and update this list')
 })
 
 test('no instrument file imports, or calls, a config reader', () => {
@@ -125,10 +124,16 @@ test('no instrument file names a harness event, or reads the adapter\'s event ca
   assert.deepEqual(offenders, [], 'an instrument file names a harness event:\n  ' + offenders.join('\n  '))
 })
 
-test('the ONE host edge in the instrument is the service route, and it is named here', () => {
-  // `ctx` IS THE HOST. `ROADMAP.md` §14.1 records that `lib/model/service.js` is the instrument's host edge -- the
-  // decision model reached as a Cordis service, with the wire as fallback -- and this asserts it is still the ONLY
-  // one, so a second edge cannot appear without a reader being told.
+test('the instrument has NO host edge: it reaches a model over HTTP and nothing else', () => {
+  // THIS WAS THE WHOLE ARGUMENT, AND IT IS NOW THE WHOLE RESULT. `ROADMAP.md` §14.1 recorded one host edge in the
+  // instrument -- `lib/model/service.js`, the decision model reached as a Cordis service -- and this asserted it
+  // stayed the only one, so a second could not appear without a reader being told. The edge existed because
+  // `postSystemone` sent NO CREDENTIAL: the host route existed to borrow another plugin's key. The wire carries one
+  // now (measured standalone, nothing but `fetch`), so the module is gone and so is the edge.
+  //
+  // The assertion is `[]` and not a list with one entry. A test that names the expected host dependency is a
+  // description of the present, and this one used to read as a floor -- which is how a portable core can hold a hard
+  // dependency for years while a green suite says "the ONE edge".
   const reaching = INSTRUMENT.filter((file) => /\bctx\.\w/.test(code(read(file))))
-  assert.deepEqual(reaching, ['lib/model/service.js'], 'the instrument\'s host edge moved or multiplied: ' + reaching.join(', '))
+  assert.deepEqual(reaching, [], 'the instrument reaches the host again:\n  ' + reaching.join('\n  '))
 })

@@ -10,7 +10,7 @@
 // property that was violated, not the value of any one field.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { ENVELOPE_KEYS, projectEnvelope } from '../lib/model/envelope.js'
 
 test('every field the observer reads is in the shared list, `requested` included', () => {
@@ -48,15 +48,18 @@ test('a reply with no listed field has no envelope, rather than an empty one', (
   assert.equal(projectEnvelope([{ model: 'x' }]), undefined, 'an array is not a record')
 })
 
-test('BOTH transports project through the shared list, and neither keeps a private copy', () => {
-  // The regression this file exists for: a second copy of the list. Asserted against the source because the
-  // defect was structural -- the halves were each correct and disagreed with each other.
+test('the transport projects through the shared list and keeps no private copy', () => {
+  // The regression this file exists for: a second copy of the list. Asserted against the source because the defect
+  // was structural -- the halves were each correct and disagreed with each other.
+  //
+  // THERE IS ONE HALF NOW. The assertion used to walk two files, and "BOTH" in its name was doing real work: a
+  // private whitelist in either transport silently drops a field the other records. With the service gone there is
+  // nothing to disagree WITH, so the guard that matters is that the remaining module imports the shared list rather
+  // than declaring one -- which is what a second transport would have to fight, whenever it comes.
   const wire = readFileSync(new URL('../lib/model/client.js', import.meta.url), 'utf8')
-  const service = readFileSync(new URL('../lib/model/service.js', import.meta.url), 'utf8')
-  for (const [name, source] of [['client.js', wire], ['service.js', service]]) {
-    assert.match(source, /from '\.\/envelope\.js'/, `${name} must take the list from the shared module`)
-    assert.equal(/const ENVELOPE = \[/.test(source), false, `${name} must not keep its own copy of the list`)
-  }
+  assert.match(wire, /from '\.\/envelope\.js'/, 'the transport must take the list from the shared module')
+  assert.equal(/const ENVELOPE = \[/.test(wire), false, 'it must not keep its own copy of the list')
+  assert.equal(existsSync(new URL('../lib/model/service.js', import.meta.url)), false, 'and there is no second transport left to keep a private copy of anything')
 })
 
 test('a WIRE reply that carries `requested` puts it in the envelope -- the list can be right while nothing reaches it', async () => {

@@ -85,7 +85,12 @@ window.__ModuleLoader__.load({
       { panel: 'send', field: 'timeoutMs', kind: 'number', min: 1, fallback: 8000, label: 'Timeout (ms)',
         hint: 'How long one judgement may take before it is abandoned and recorded as a timeout.' },
       { panel: 'send', field: 'wireUrl', kind: 'text', label: 'Wire URL',
-        hint: 'The endpoint the HTTP transport posts to. Only used when the wire transport is the one mounted.' },
+        hint: 'The endpoint the HTTP transport posts to. `/v1/systemone` is appended here, so name the root: `https://openrouter.ai/api` for a hosted gateway, `http://127.0.0.1:8766` for a local one.' },
+      // THE KEY IS A VARIABLE'S NAME, NEVER THE KEY. A control here because the UI ratchet in
+      // `test/client-card.test.js` fails on any writable setting without one, and because a field that decides whether
+      // this row can reach a model at all cannot be YAML-only. The secret itself never comes near this file.
+      { panel: 'send', field: 'apiKeyEnv', kind: 'text', label: 'API key variable',
+        hint: 'The NAME of an environment variable holding the key, e.g. OPENROUTER_API_KEY — never the key itself, which is never written to this profile. Empty sends no credential, which reaches only an endpoint that needs none.' },
       // FOUND BY THE UI RATCHET, not by reading: this field had no control anywhere in the card, so the fallback
       // question was writable from YAML and from the agent's config tool and from nowhere a person would look.
       // QUESTION SETS AS FILES (§12). Both live, so both need a control here -- the UI ratchet in

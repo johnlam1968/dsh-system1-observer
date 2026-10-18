@@ -72,7 +72,29 @@ const AGENT = { id: 'session-live', session: { snapshotEvents: () => [] } }
 
 const readLines = (path) => (existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) : [])
 
-test('a stored session is judged through the real registry, and its line stays out of the calibration', async () => {
+/**
+ * THE MODEL, stubbed at `fetch` -- which is where the wire goes.
+ *
+ * It used to be a `system1` service returning that service's OWN answer shape, `{status: 'ok', answer: {type,
+ * probabilityTrue}}`, which `lib/model/service-answers.js` flattened into the wire's shape before anything else saw
+ * it. That boundary is gone with the route, so the stub answers in the wire's shape directly: one fewer shape to get
+ * wrong, and the comment that recorded the third wrong guess is retired with the file it described.
+ */
+function stubModel(answers) {
+  const original = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true,
+    status: 200,
+    json: async () => ({
+      answers,
+      executed: { provider: 'stub', model: 'stub-1' },
+      usage: { inputTokens: 120 },
+      durationMs: 7,
+    }),
+  })
+  return () => { globalThis.fetch = original }
+}
+
+test('a stored session is judged through the real registry, and its line stays out of the calibration', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'evaluate-live-'))
   const tracePath = join(dir, 'trace.jsonl')
   const ctx = new Context()
@@ -86,20 +108,10 @@ test('a stored session is judged through the real registry, and its line stays o
       return { session: { id: 'S1', cwd: '/tmp/x' }, events: STORED }
     },
   })
-  // THE MODEL, stubbed one layer below the tool: the real transport shim, composer and writer all run.
-  ctx.provide('system1', {
-    // THE SERVICE'S OWN ANSWER SHAPE, which is NOT the wire's: `{ type, value, confidence, probabilities }`,
-    // flattened to the wire's shape by `lib/model/service-answers.js` and only then narrowed. Two wrong guesses
-    // first -- `{ label, confidence }`, then the WIRE's `{ noul: 0.8 }` -- and both came back `type: 'unreadable'`.
-    // The shape is a real boundary rather than a detail: the whole path is under test here.
-    decide: async () => ({
-      // `lib/model/service-answers.js:39-52` is the authority: `status: 'ok'`, `answer.type`, `answer.probabilityTrue`.
-      answers: { review: { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } } },
-      // THE SERVICE'S ENVELOPE IS `meta`, not `envelope` -- `lib/model/service.js:49`'s `envelopeOf` reads
-      // `reply.meta.{executed,requested,usage,durationMs,requestId}`. A third boundary shape, and the last one.
-      meta: { executed: { provider: 'stub', model: 'stub-1' }, usage: { inputTokens: 120 }, durationMs: 7 },
-    }),
-  })
+  // THE MODEL, stubbed one layer below the tool: the real wire, composer and writer all run.
+  const restore = stubModel({ review: { type: 'noul', noul: 0.8 } })
+  t.after(restore)
+  t.after(restore)
   await ctx.plugin(ToolRuntime).await()
 
   const fiber = ctx.plugin(plugin, {
@@ -164,7 +176,7 @@ test('a stored session is judged through the real registry, and its line stays o
 //      `{questions: {session: <inline specs>}}` by hand instead of handing `buildQuestions` the config that NAMES the
 //      set, so a row selecting a session set was asked the PROBE question. Measured live: the trace line read
 //      `"questionIds":["probe"]` while the row had `agent-helpfulness-session@1` selected.
-test('a stored session is asked the SELECTED SET\'s questions, and the render the host calls shows what was judged', async () => {
+test('a stored session is asked the SELECTED SET\'s questions, and the render the host calls shows what was judged', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'evaluate-set-'))
   const tracePath = join(dir, 'trace.jsonl')
   // A COMPOSITION, WRITTEN HERE RATHER THAN BORROWED FROM `criteria/`: a test that reads the shipped corpus breaks
@@ -184,17 +196,19 @@ test('a stored session is asked the SELECTED SET\'s questions, and the render th
     listSessions: async () => [{ header: { id: 'S1', cwd: '/tmp/x' }, live: false, persisted: true }],
     readSession: async () => ({ session: { id: 'S1', cwd: '/tmp/x' }, events: STORED }),
   })
-  ctx.provide('system1', {
-    // ONE ANSWER PER QUESTION THE SET ASKS. A stub that answered only `review` would leave this test unable to tell
-    // "the set was asked" from "some answer came back".
-    decide: async () => ({
-      answers: {
-        went_well: { status: 'ok', answer: { type: 'noul', probabilityTrue: 0.7 } },
-        served: { status: 'ok', answer: { type: 'score', value: 2, levels: ['no', 'partly', 'yes'], probabilities: [0, 0, 1] } },
-      },
-      meta: { executed: { provider: 'stub', model: 'stub-1' }, durationMs: 5 },
-    }),
+  // ONE ANSWER PER QUESTION THE SET ASKS. A stub that answered only `review` would leave this test unable to tell
+  // "the set was asked" from "some answer came back".
+  const restore = stubModel({
+    // THE WIRE'S OWN SHAPES, which are NOT the service's -- and this stub got both of them wrong before it got
+    // them right, which is the third and fourth wrong guess this file's header used to record for the adapter it no
+    // longer has. A noul carries `noul`, not `probability`; a score carries `score` as an INDEX into the levels
+    // offered; and `probabilities` is a RECORD KEYED BY LEVEL TEXT, not an array -- `narrow.js` reads it with
+    // `isRecord` and its own comment says so. The array form was the SERVICE's, flattened by the module that is gone.
+    // Every wrong guess came back `unreadable`, which is the right answer: the shape really was wrong.
+    went_well: { type: 'noul', noul: 0.7 },
+    served: { type: 'score', score: 2, legend: ['no', 'partly', 'yes'], probabilities: { no: 0, partly: 0, yes: 1 } },
   })
+  t.after(restore)
   await ctx.plugin(ToolRuntime).await()
 
   const fiber = ctx.plugin(plugin, {

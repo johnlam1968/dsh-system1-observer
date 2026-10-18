@@ -29,7 +29,10 @@ test('the live-writable list IS the schema\'s volatile set -- derived, so it can
   // AND IT IS NOT EVERYTHING: a list that named every field would be wrong in the way that matters most, because the
   // agent would try to write a mount-bound one and be refused.
   assert.equal(value.agentWritable.includes('probeQuestion'), false)
-  assert.equal(value.agentWritable.length, 42, 'measured on this schema: 42 of 44')
+  // The COUNT IS DERIVED HERE TOO. This read a literal `42`, and the render assertion below read the same literal,
+  // so adding a writable setting broke both in a way that read as "the schema changed" rather than "the number
+  // moved". `apiKeyEnv` -- the name of the variable holding the API key -- is the field that proved it.
+  assert.equal(value.agentWritable.length, volatileFromSchema.length, 'the count is the schema\'s volatile set, not a number someone remembered')
 })
 
 test('the mount-bound list IS the schema\'s non-volatile set, each with its reason', () => {
@@ -69,7 +72,7 @@ test('the tool\'s value is one the harness ACCEPTS, and its render says the four
   assertValidOutput(tool, value, 'the brief')
   assert.equal(tool.name, EXPLAIN_TOOL_NAME)
   const text = tool.output.render({}, value)[0].text
-  assert.match(text, /WRITABLE LIVE \(42\)/)
+  assert.match(text, new RegExp('WRITABLE LIVE \\(' + value.agentWritable.length + '\\)'), 'the render states the SAME count the value carries, rather than a literal')
   assert.match(text, /MOUNT-BOUND: probeQuestion/)
   assert.match(text, /SET NOW:/)
   assert.match(text, /set in force: session@1/)

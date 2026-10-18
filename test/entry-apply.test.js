@@ -60,32 +60,31 @@ test('apply wires a callable decide, so a streamed reply reaches the transport i
 // truth in an `event` the spec never defines. `ctx.inject` runs its callback through a cordis fiber, so the
 // swap happens after `apply` returns; a microtask cannot fix that. The mount line must be written when the
 // transport is known, and the first observation must write it if no service ever arrives.
-test('a service arriving after apply writes the mount line as service, and no transport event', async () => {
+test('the mount line states the ONE transport, and nothing rewrites it later', async () => {
+  // THIS USED TO BE TWO TESTS. One asserted that a service arriving after apply rewrote the mount line as `service`;
+  // the other asserted that with no service the line said `wire`. Both described a preference between two transports,
+  // and the preference is gone: the row authenticates over the wire for itself, so there is nothing to arrive.
+  //
+  // What is left is the property both were reaching for -- the mount line states the transport the calls actually
+  // use, and it is written ONCE. That is worth asserting, because the old code rewrote the line on arrival and a
+  // reader comparing a run's mount line against a later call had to work out which transport was live at which moment.
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
-  let arrive
-  const ctx = fakeCtx({
-    // The shim makes the fiber's asynchrony explicit and lets the test choose when the service lands.
-    inject(_services, callback) {
-      arrive = () => Promise.resolve().then(() => callback({ get: () => ({ decide: async () => ({ kind: 'answers', answers: {} }) }) }))
-    },
-  })
+  const ctx = fakeCtx()
   await apply(ctx, { hooks: ['close'], tracePath, sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
-  await arrive()
-
   await ctx.handlers.get('agent/turn-stopping')({ agent: { id: 'agent-1' } })
 
   const lines = readLines(tracePath)
   const mount = lines.find(line => line.event === 'mount')
-  assert.equal(mount?.transport, 'service', 'the mount line must state the transport the calls use')
+  assert.equal(mount?.transport, 'wire', 'the mount line must state the transport the calls use')
   assert.equal(lines.filter(line => line.event === 'mount').length, 1, 'one mount line per mount')
   assert.equal(lines.some(line => line.event === 'transport'), false, 'the spec defines only call, skip, error and mount')
 })
 
-test('when no service ever arrives the first observation writes a wire mount line before its own line', async () => {
+test('the first observation writes the mount line before its own line', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
-  const ctx = fakeCtx()   // inject is a no-op: no system1 service ever appears
+  const ctx = fakeCtx()   // inject is a no-op: nothing else can arrive and rewrite anything
   await apply(ctx, { hooks: ['close'], tracePath, sessions: ['agent-1'], wireUrl: 'http://127.0.0.1:9', timeoutMs: 200 })
 
   // NOTHING IS WRITTEN AT APPLY TIME. The live trace shows the service landing 355 ms later, so a mount
@@ -110,24 +109,43 @@ const OPERATOR = { id: 'op-1', session: { header: { origin: 'operator' } } }
 const SUBAGENT = { id: 'sub-1', session: { header: { origin: 'subagent' } } }
 
 /** A ctx whose system1 service counts `decide` calls, with a settable current initiator. */
-function serviceCtx(decide) {
+/**
+ * A context whose MODEL CALLS ARE INTERCEPTED AT `fetch`, which is where the wire goes.
+ *
+ * It used to hand the row a Cordis service through `inject`, which is how these three tests controlled the judge while
+ * the row preferred that transport. The route is gone, so the fixture moves down a level: the wire posts to
+ * `{wireUrl}/v1/systemone` with `globalThis.fetch`, and a stub of that answers it. No production surface is added for
+ * a test's benefit -- the alternative, an injectable `fetch` in the row's config, is a field nobody would ever set.
+ *
+ * RESTORED BY THE CALLER through `t.after`, because a global left stubbed is a cross-test failure with a message that
+ * points at the wrong file.
+ */
+function wireCtx(decide) {
   const handlers = new Map()
   let current
+  const original = globalThis.fetch
+  globalThis.fetch = async (_url, init) => {
+    const posted = JSON.parse(init.body)
+    const result = await decide({ state: posted.state, questions: posted.questions })
+    return { ok: result.kind !== 'error', status: 200, json: async () => ({ answers: result.answers ?? {} }) }
+  }
   return {
     handlers,
     setInitiator(agent) { current = agent },
     on(event, handler) { handlers.set(event, handler); return () => handlers.delete(event) },
-    inject(_services, callback) { callback({ get: () => ({ decide }) }) },
+    inject() { /* NOTHING ARRIVES ANY MORE, and nothing rewrites the mount line when it does */ },
     provide: () => () => {},
     agents: { currentInitiator: () => current },
+    restore() { globalThis.fetch = original },
   }
 }
 
-test("by default a subagent's admit, pre_execute and draft are skips and decide is never called", async () => {
+test("by default a subagent's admit, pre_execute and draft are skips and decide is never called", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   let calls = 0
-  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  const ctx = wireCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  t.after(() => ctx.restore())
   ctx.setInitiator(SUBAGENT)
   await apply(ctx, { hooks: ['admit', 'pre_execute', 'draft'], tracePath, sessions: [OPERATOR.id] })
 
@@ -158,11 +176,12 @@ test("by default a subagent's admit, pre_execute and draft are skips and decide 
   assert.ok(mountIndex !== -1 && mountIndex < lines.indexOf(skips[0]), 'the mount line must still be written, before the first skip')
 })
 
-test("observeSubagents true calls the model for a subagent's seam", async () => {
+test("observeSubagents true calls the model for a subagent's seam", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   let calls = 0
-  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  const ctx = wireCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  t.after(() => ctx.restore())
   ctx.setInitiator(SUBAGENT)
   await apply(ctx, { hooks: ['pre_execute'], tracePath, sessions: [SUBAGENT.id], observeSubagents: true })
 
@@ -174,11 +193,12 @@ test("observeSubagents true calls the model for a subagent's seam", async () => 
   assert.equal(lines.some(line => line.event === 'skip'), false)
 })
 
-test('a non-subagent is still observed when observeSubagents is off', async () => {
+test('a non-subagent is still observed when observeSubagents is off', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   let calls = 0
-  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  const ctx = wireCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  t.after(() => ctx.restore())
   ctx.setInitiator(OPERATOR)
   await apply(ctx, { hooks: ['pre_execute'], tracePath, sessions: [OPERATOR.id] })
 
@@ -190,11 +210,12 @@ test('a non-subagent is still observed when observeSubagents is off', async () =
   assert.equal(lines.some(line => line.event === 'skip'), false)
 })
 
-test("by default a subagent's assemble seam is a skip and decide is never called", async () => {
+test("by default a subagent's assemble seam is a skip and decide is never called", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   let calls = 0
-  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  const ctx = wireCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  t.after(() => ctx.restore())
   ctx.setInitiator(SUBAGENT)
   await apply(ctx, { hooks: ['assemble'], tracePath, sessions: [SUBAGENT.id] })
 
@@ -217,11 +238,12 @@ test("by default a subagent's assemble seam is a skip and decide is never called
 // which carries no `agent` -- while the agent is on `args[1]`. Nothing noticed until a session filter existed,
 // because nothing read `meta.agentId` before; then EVERY assemble recorded `session not observed`, including
 // inside the session the row was pointed at, and `assemble` could not be observed at all.
-test('an assemble in the TARGETED session is attributed to it, not skipped as unattributable', async () => {
+test('an assemble in the TARGETED session is attributed to it, not skipped as unattributable', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'system1-observer-'))
   const tracePath = join(dir, 'trace.jsonl')
   let calls = 0
-  const ctx = serviceCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  const ctx = wireCtx(async () => { calls += 1; return { kind: 'answers', answers: {} } })
+  t.after(() => ctx.restore())
   ctx.setInitiator(OPERATOR)
   await apply(ctx, { hooks: ['assemble'], tracePath, sessions: [OPERATOR.id] })
 

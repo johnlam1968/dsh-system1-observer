@@ -124,6 +124,10 @@ test('every declared field is either volatile or declared mount-bound, and none 
     // two sizes of the composed state. Each one's read site had to move with it, or the flag would be a promise the
     // code does not keep.
     'hooks', 'provider', 'model', 'timeoutMs', 'wireUrl', 'question', 'composeMaxChars', 'toolBlockMaxChars',
+    // AND THE NAME OF THE VARIABLE HOLDING THE KEY, which is what made the wire able to authenticate at all after
+    // the service path was cut. Volatile because a wrong name is a 401 that names nothing, and fixing it without a
+    // restart is the difference between a typo and an outage.
+    'apiKeyEnv',
     'harnessLabel', 'operatorLabel', 'questionSet', 'questionSetsDir', 'subjectSource', 'subjectSession', 'subjectKinds', 'subjectLastMessages', 'nudgeExtraMarkers', 'nudgeExtraStopwords', 'nudgeRecurrenceThreshold', 'redactPatterns', 'calibrationBins', 'maxCompareLanes', 'tailChars', 'idleGapMs',
     // AND THE CAP ON THE EVENT FEED, once it was checked: the cap is consulted on every record, so a live value is
     // natural rather than a rebuild.
@@ -194,8 +198,9 @@ test('every field RESOLVES to a value -- or is one of the three where UNSET is t
   const { readConfigValue } = await import('../lib/config-value.js')
   const resolved = Config({})
   const UNSET_IS_THE_VALUE = {
-    provider: 'unset means the TRANSPORT decides: `lib/model/service.js` sends no model block at all when neither provider nor model is set, so the `system1` service\'s own configuration applies. A schema default would override a deployment\'s choice with this file\'s guess',
-    model: 'the same as `provider`, and for the same measured reason: the block is omitted rather than filled in',
+    provider: 'unset means the REQUEST SAYS NOTHING: the wire sends a model block only when `model` is set, so with both unset the endpoint applies its own default. A schema default here would override a deployment\'s choice with this file\'s guess, and the endpoint already has one',
+    model: 'the same as `provider`, and for the same reason: the model block is OMITTED rather than filled in, so an endpoint\'s own default applies. A default here would pin every deployment to whatever this file was written against',
+    apiKeyEnv: 'unset sends NO CREDENTIAL, and that is a real state rather than a gap: an endpoint that needs none -- a local laya-serve on 127.0.0.1 -- is reached with nothing set. A default naming some variable would be this file inventing a convention, and a wrong name fails as a 401 that names neither this field nor the variable that was actually missing',
     probeQuestion: 'MOUNT-BOUND, and an EMPTY string is not the same as unset: `probeOf` reports an empty probeQuestion as a PROBLEM ("an empty string; the built-in question is in force"), so a default of \'\' would make every row that never set it carry a problem it does not have',
   }
   const undefinedFields = Object.keys(dict).filter((field) => readConfigValue(resolved[field]) === undefined).sort()

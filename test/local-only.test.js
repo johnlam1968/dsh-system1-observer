@@ -52,14 +52,15 @@ test('every local runtime module loads from lib/', async () => {
   const payload = await import('../lib/host-payload.js')
   const evidence = await import('../lib/evidence.js')
   const client = await import('../lib/model/client.js')
-  const service = await import('../lib/model/service.js')
 
   assert.equal(typeof payload.probeText, 'function')
   assert.equal(seams.PROBE_SEAMS.length, 9)
   assert.equal(seams.PROBE_QUESTION.type, 'choice')
   assert.equal(typeof evidence.createEvidence, 'function')
   assert.equal(typeof client.createModel, 'function')
-  assert.equal(typeof service.createServiceModel, 'function')
+  // AND THE CLOSURE NO LONGER HAS A SECOND EXIT. `model/service.js` and `model/service-answers.js` were imported here
+  // because they were part of it; the service route is gone, and an import of a removed module would fail this test
+  // loudly rather than let a stale reference survive in the map of what has to keep loading.
 })
 
 // The support modules the five public ones drag in. Named separately so a move that breaks only, say,
@@ -69,14 +70,12 @@ test('the runtime modules behind them load too', async () => {
   const wire = await import('../lib/model/wire.js')
   const narrow = await import('../lib/model/narrow.js')
   const escalation = await import('../lib/model/escalation.js')
-  const answers = await import('../lib/model/service-answers.js')
   const record = await import('../lib/is-record.js')
 
   assert.equal(typeof questions.noul, 'function')
   assert.equal(typeof wire.postSystemone, 'function')
   assert.equal(typeof narrow.narrowAnswers, 'function')
   assert.equal(typeof escalation.worstCase, 'function')
-  assert.equal(typeof answers.serviceAnswers, 'function')
   assert.equal(record.isRecord({}), true)
 })
 
