@@ -134,7 +134,7 @@ test('a name and an inline list together are REFUSED -- they can disagree and no
   await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE] }, {})
   await assert.rejects(
     () => decider(dir, []).execute({ state: 'x', set: 'staged@1', questions: [{ id: 'other', type: 'noul', instructions: 'y' }] }, {}),
-    /not both/,
+    /not several/,   // ONE refusal now, from the shared module, whatever pair of routes was given
   )
 })
 
@@ -148,7 +148,7 @@ test('a stored set that does not exist, and a scope it does not declare, are nam
 test('neither route given says WHICH route to take, and mentions storing first', async () => {
   await assert.rejects(
     () => decider(stores(), []).execute({ state: 'x' }, {}),
-    /give `set`.*or `questions`.*survives the tool-call boundary/s,
+    /give `set`.*, `question`.*or `specs`.*survives the tool-call boundary/s,
   )
 })
 
@@ -170,4 +170,40 @@ test('`lint` reads the same DSL, so a set is checked in the form it was written'
   assert.ok((atSeam.findings ?? []).some((f) => f.rule === 'scope_state'))
   const atSession = await composer.execute({ action: 'lint', scope: 'session', question: [bad] }, {})
   assert.equal(atSession.ok, true, 'the same question is fine at the scope that emits that section')
+})
+
+// ── ONE IMPLEMENTATION, TWO CALLERS ───────────────────────────────────────────────────────────────────
+
+test('the tool and the script resolve questions through the SAME module, and say so', async () => {
+  const { readFileSync } = await import('node:fs')
+  const tool = readFileSync(new URL('../lib/decide-tool.js', import.meta.url), 'utf8')
+  const script = readFileSync(new URL('../scripts/ask.mjs', import.meta.url), 'utf8')
+  // THE TEST THAT PREVENTS THE DRIFT, rather than describing it after the fact. Both files agreed by eye once and
+  // disagreed twice -- the tool took `questions` while the script took a set, and the DSL reached only one of them.
+  assert.match(tool, /from '\.\/question-request\.js'/, 'the tool must resolve through the shared module')
+  assert.match(script, /from '\.\.\/lib\/question-request\.js'/, 'and the script must too')
+  assert.match(tool, /renderAnswerLines|resolveQuestions/, 'the tool shares the resolution')
+  assert.match(script, /resolveQuestions, renderAnswerLines/, 'and the script shares the resolution AND the rendering')
+  // NEITHER MAY GO TO THE MODEL ITS OWN WAY: both reach `lib/model/client.js`, which is where the request is built.
+  assert.match(script, /from '\.\.\/lib\/model\/client\.js'/, 'the standalone builds its client from the same module the row does')
+})
+
+test('one question means the same thing whichever route carried it', async () => {
+  const dir = stores()
+  const asked = []
+  const composer = createQuestionsTool({ dir })
+  // STORED, then INLINE, from the same text -- and the questions that reach the model must be identical.
+  await composer.execute({ action: 'write', set: 'same@1', scope: 'admit', question: [CHOICE] }, {})
+  await decider(dir, asked).execute({ state: 'text', set: 'same@1' }, {})
+  const viaName = JSON.stringify(asked[0].questions)
+  await decider(dir, asked).execute({ state: 'text', question: [CHOICE] }, {})
+  assert.equal(JSON.stringify(asked[1].questions), viaName, 'a stored set and the same question inline must build the same question')
+})
+
+test('both routes given is one refusal, and it names them', async () => {
+  await assert.rejects(
+    () => decider(stores(), []).execute({ state: 'x', set: 'staged@1', question: [CHOICE], questions: [{ id: 'y', type: 'noul', instructions: 'z' }] }, {}),
+    /not several/,
+  )
+  await assert.rejects(() => decider(stores(), []).execute({ state: 'x' }, {}), /give `set`.*or `specs`.*survives the tool-call boundary/s)
 })

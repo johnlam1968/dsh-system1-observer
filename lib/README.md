@@ -132,6 +132,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `question-dsl.js` — one question as ONE STRING (`key=value` fields separated by ` ;; `), which is the form
   that survives a tool-call argument: the nested arrays inside a JSON question spec do not, and four attempts to
   send one proved it. Its inverse is exact, because a format that cannot be written back cannot be edited
+* `question-request.js` — the ONE path from a question set to answers, shared by `system1_decide` and `scripts/ask.mjs`:
+  which of the three routes carried the questions (a stored set by name, DSL strings, inline JSON), and how the
+  answers read. They agreed by eye once and disagreed twice, which is the arrangement this module exists to end
 * `question-lint.js` — the authoring rules a machine can check, behind `system1_question_sets { action: 'lint' }`:
   chiefly the rule that a question may only name state its scope actually emits, which `buildQuestions` cannot see
   because such a spec is perfectly well-formed and perfectly unanswerable

@@ -67,7 +67,7 @@ test('a state is required, and `--scope` is required when a set declares several
 
   const ambiguous = await ask(['--set', 'agent-helpfulness-seams@1', '--state', 'text'])
   assert.notEqual(ambiguous.code, 0)
-  assert.match(ambiguous.stderr, /`--scope` is required/, 'a set with several scopes must not be guessed at')
+  assert.match(ambiguous.stderr, /`scope` is required/, 'a set with several scopes must not be guessed at')
 })
 
 test('a set that does not exist, and a scope it does not declare, are refused by name', async () => {

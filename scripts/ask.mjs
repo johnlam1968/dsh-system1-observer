@@ -29,9 +29,8 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readSelectedSet } from '../lib/question-sets.js'
-import { buildQuestions } from '../lib/questions.js'
 import { lintSelection } from '../lib/question-lint.js'
+import { resolveQuestions, renderAnswerLines } from '../lib/question-request.js'
 import { createModel } from '../lib/model/client.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -48,8 +47,10 @@ const has = (name) => argv.includes(name)
 const USAGE = `ask.mjs -- a question set and a state, answered by a System One model, with no harness
 
   --list                     the sets this repository declares
-  --set NAME                 the composition, e.g. news-claim-check@2
-  --scope SCOPE              its scope, e.g. admit, turn, session
+  --set NAME                 the composition, e.g. news-claim-check@2 (or skip it and use --question)
+  --scope SCOPE              which scope of the set, e.g. admit, turn, session
+  --question TEXT            ONE question inline, as key=value fields separated by ' ;; ' -- the same
+                             format system1_question_sets writes and system1_decide accepts
   --state TEXT               the state, as text
   --file PATH                the state, from a file ("-" reads stdin)
   --url HTTPS://...          the state, fetched and stripped of markup
@@ -66,18 +67,14 @@ function die(message, code = 1) {
   process.exit(code)
 }
 
-/** One reading from a set, by name, with no row to read this repository's config. */
-function readOne(scopeWanted, name) {
-  const selected = readSelectedSet(SETS, name)
-  if (selected.problem !== null) die(selected.problem)
-  const scopes = Object.keys(selected.questions ?? {})
-  if (scopes.length === 0) die(`\`${name}\` declares no scope`)
-  const scope = scopeWanted ?? (scopes.length === 1 ? scopes[0] : '')
-  if (scope === '') die(`\`--scope\` is required: \`${name}\` declares ${scopes.join(', ')}`)
-  if (!scopes.includes(scope)) die(`\`${scope}\` is not a scope \`${name}\` declares (${scopes.join(', ')})`)
-  const built = buildQuestions({ questions: selected.questions }, scope)
-  if (built.problems.length > 0) die(`the loader refuses these questions: ${built.problems.join('; ')}`)
-  return { selected, scope, built }
+/** The questions, resolved by the SAME module `system1_decide` resolves them with. */
+function questionsFor(scopeWanted, name, questionArg) {
+  return resolveQuestions({
+    set: name,
+    scope: scopeWanted,
+    question: questionArg === null ? undefined : [questionArg],
+    setsDir: () => SETS,
+  })
 }
 
 /** The state, however it arrived. A URL is fetched; markup is stripped naively and that is disclosed. */
@@ -110,13 +107,6 @@ async function readState() {
   return null
 }
 
-function render(value) {
-  if (value.type === 'choice') return `${value.label}  (p=${Number(value.probabilities?.[value.label] ?? 0).toFixed(3)})`
-  if (value.type === 'score') return `${value.level}  (confidence ${value.confidence ?? 'n/a'})`
-  if (value.type === 'noul') return `${value.probability}  (p=true)`
-  return JSON.stringify(value)
-}
-
 if (has('--help') || has('-h')) { process.stdout.write(USAGE); process.exit(0) }
 
 if (has('--list')) {
@@ -127,14 +117,28 @@ if (has('--list')) {
   process.exit(0)
 }
 
+// `--set` is OPTIONAL here, which it is not in the tool's own gating: `--question` is an equally good route and the
+// resolver is the thing that decides. Forcing a set would mean this script could only ever ask questions somebody had
+// already stored, which is not the same capability the tool has.
 const name = flag('--set')
-if (name === null) die('`--set` is required (or `--list` to see what there is)')
 
-const { selected, scope, built } = readOne(flag('--scope'), name)
+// ONE CALL, THREE ROUTES: a stored set by name, questions inline as DSL strings, or nothing at all. The module that
+// answers it is the same one `system1_decide` answers with, so a question means the same thing in both -- which is the
+// point of this script existing beside the tool rather than beside a copy of it.
+const resolved = questionsFor(flag('--scope'), name, flag('--question'))
+if (!resolved.ok) die(resolved.reason)
+const questionArg = flag('--question')
+if (resolved.source === 'set') {
+  const { readSelectedSet } = await import('../lib/question-sets.js')
+  var selected = readSelectedSet(SETS, name)
+} else {
+  var selected = { hash: null }
+}
 
 // `--lint` COSTS NOTHING AND ANSWERS A DIFFERENT QUESTION from `--state`: whether the questions are well formed, not
 // whether they separate. It reports the rules no machine can check too, because a clean report must not read as a pass.
 if (has('--lint')) {
+  if (resolved.source !== 'set') die('`--lint` reads a SET on disk; without `--set` there is nothing on disk to read')
   const lint = lintSelection(selected.questions)
   process.stdout.write(`${name}  ${lint.checked} spec(s) across ${lint.scopes.length} scope(s)\n`)
   for (const item of lint.findings) process.stdout.write(`  ${item.level.toUpperCase()} [${item.rule}]${item.id ? ' ' + item.id : ''}: ${item.message}\n`)
@@ -157,17 +161,17 @@ if (has('--raw')) {
 }
 
 const model = createModel({ baseUrl: wireUrl, model: flag('--model', 'jev-latest'), apiKey, timeoutMs: Number(flag('--timeout', 20000)) })
-const result = await model.decide({ state: state.text, questions: built.questions })
+const result = await model.decide({ state: state.text, questions: resolved.questions })
 
 if (result.kind === 'error') die(result.reason)
 if (result.kind !== 'answers') die(`the model answered in a shape this script does not read: ${JSON.stringify(result).slice(0, 200)}`)
 
 const envelope = result.envelope ?? {}
 if (has('--json')) {
-  process.stdout.write(JSON.stringify({ set: name, scope, hash: selected.hash, answers: result.answers, envelope }, null, 2) + '\n')
+  process.stdout.write(JSON.stringify({ set: resolved.setLabel, hash: resolved.setHash, answers: result.answers, envelope }, null, 2) + '\n')
   process.exit(0)
 }
 
-process.stdout.write(`${name}  scope ${scope}  [${selected.hash}]\n`)
-process.stdout.write(`  ${Object.keys(built.questions).length} question(s), answered by ${JSON.stringify(envelope.executed ?? null)}\n\n`)
-for (const [id, value] of Object.entries(result.answers)) process.stdout.write(`  ${id.padEnd(34)} ${render(value)}\n`)
+process.stdout.write(`${resolved.setLabel ?? '(inline)'}  [${resolved.setHash ?? '-'} from ${resolved.source}]\n`)
+process.stdout.write(`  ${resolved.ids.length} question(s), answered by ${JSON.stringify(envelope.executed ?? null)}\n\n`)
+for (const line of renderAnswerLines(result.answers)) process.stdout.write(`  ${line}\n`)
