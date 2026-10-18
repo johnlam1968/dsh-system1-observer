@@ -42,6 +42,23 @@ So the answer to "will it still work in dsh" is yes, and it was measured rather 
 - **Provider indirection.** `provider` is now recorded and reported, not used to select a route. Other decision models are reachable by pointing `wireUrl` at them, but only models that serve `/v1/systemone` — which is the actual compatibility boundary, and it is now visible instead of hidden behind a service name.
 - **The trace's mount line** says `transport: wire` from the first mount, and is never rewritten. Previously it could be rewritten when a service arrived, which meant a reader comparing a mount line with a later call had to work out which transport was live at which moment.
 
+## The one thing the cut actually BROKE, and what it cost
+
+**The trace recorded answers with no provenance.** Measured on the live wire after the cut:
+`https://openrouter.ai/api/v1/systemone` answers `{model, answers, usage, id, provider}` — no `executed`, no
+`routing`, no `requested`. The vendor's shape carries `executed`; the gateway does not; and the service was quietly
+supplying it. Every consumer reads `envelope.executed`, so a reading could be recorded without the revision behind it.
+
+Fixed in `lib/model/envelope.js` by normalising a top-level `model`/`provider` into `executed`, which is the right place
+because that file exists so "the one place that knows where a transport puts its envelope" is a real place. A reply
+that already carries `executed` is passed through untouched, and a reply naming a provider and no model synthesises
+nothing.
+
+**`routing` is a genuine loss and is NOT papered over.** The gateway does not send it, so the language-detection guard
+(`using-system1`: never trust a noul from a model you have not identified) cannot run on this route. It is stated here
+rather than approximated with a guess, because a plausible-looking `routing` that is really an inference is the exact
+kind of record this repository refuses to keep.
+
 ## Two things the cut made visible that are worth keeping
 
 - **The wire's answer shapes are not the service's**, and the difference is subtle enough to cost four wrong guesses in `test/evaluate-live.test.js` once the adapter was gone: a noul carries `noul`, a score carries `score` as an index, and `probabilities` is a **record keyed by level text**, not an array. Every wrong guess came back `unreadable`, which is the correct answer — the shape really was wrong.
