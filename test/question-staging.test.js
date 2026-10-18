@@ -1,0 +1,173 @@
+// THE STAGED PATH, WHICH IS WHAT SURVIVES THE TOOL-CALL BOUNDARY.
+//
+//   compose as STRINGS  ->  store  ->  ask by NAME
+//
+// The boundary cannot carry a nested array: a flat `options` array arrives as `[{items:[{item:[...the real
+// objects...]}]}]`, of length one, four times out of four (`lib/decide-tool.js` records the measurement and the
+// refuted hypothesis). So none of these three stages nests. A question is ONE string; a stored set is a NAME; and
+// the questions that cross to the model were built once, on the way in, by the same loader the row uses at a seam.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { parseQuestion, parseQuestions, formatQuestion, SEPARATOR } from '../lib/question-dsl.js'
+import { buildQuestions } from '../lib/questions.js'
+import { createDecideTool } from '../lib/decide-tool.js'
+import { createQuestionsTool } from '../lib/questions-tool.js'
+
+const CHOICE = [
+  'id=admit_relation',
+  'type=choice',
+  'instructions=Which relation do the excerpts bear to the claim?',
+  'option=supported=the excerpt supports the exact claim',
+  'option=contradicted=the excerpt contradicts the exact claim',
+  'option=unknown=cannot be decided [abstain]',
+].join(SEPARATOR)
+
+const LADDER = ['id=draft_directness', 'type=score', 'instructions=How direct is it?', 'level=not at all', 'level=partly', 'level=directly'].join(SEPARATOR)
+
+// ── the format ───────────────────────────────────────────────────────────────────────────────────────
+
+test('one string composes a choice the loader accepts, with its abstain intact', () => {
+  const built = buildQuestions({ questions: { admit: parseQuestions([CHOICE]) } }, 'admit')
+  assert.deepEqual(built.problems, [], 'a choice the authoring guide would refuse must not get past the DSL')
+  const criteria = built.questions.admit_relation.criteria
+  assert.deepEqual(Object.keys(criteria).sort(), ['contradicted', 'supported', 'unknown'])
+  assert.equal(criteria.unknown, 'cannot be decided', 'the [abstain] marker is a flag, and it must not leak into the criterion')
+})
+
+test('a score keeps its ORDER, because the order is what the ladder means', () => {
+  const built = buildQuestions({ questions: { draft: parseQuestions([LADDER]) } }, 'draft')
+  assert.deepEqual(built.problems, [])
+  assert.deepEqual(built.questions.draft_directness.criteria, ['not at all', 'partly', 'directly'])
+})
+
+test('a noul takes no array at all, and still carries both readings', () => {
+  const built = buildQuestions({ questions: { admit: parseQuestions(['id=admit_x ;; type=noul ;; instructions=Is it so? ;; true=it holds ;; false=it does not']) } }, 'admit')
+  assert.deepEqual(built.problems, [])
+  assert.deepEqual(built.questions.admit_x.criteria, { true: 'it holds', false: 'it does not' })
+})
+
+test('the format WRITES ITSELF BACK, exactly, or it cannot be edited by the next person', () => {
+  for (const text of [CHOICE, LADDER]) assert.equal(formatQuestion(parseQuestion(text)), text)
+})
+
+test('a malformed question is refused by FIELD, not guessed at', () => {
+  const cases = [
+    ['id=a ;; type=choice ;; instructions=x ;; option=nolabel', /an option is `label=criterion`/],
+    ['id=a ;; type=noul', /no `instructions`/],
+    ['type=noul ;; instructions=x', /no `id`/],
+    ['id=a ;; instructions=x', /no `type`/],
+    ['id=a ;; type=noul ;; instructions=x ;; colour=blue', /unknown field `colour`/],
+    ['id=a ;; instructions', /not `key=value`/],
+  ]
+  for (const [text, pattern] of cases) assert.throws(() => parseQuestion(text), pattern, text)
+})
+
+test('the failing question is NAMED BY ITS POSITION, so a set of five says which one', () => {
+  assert.throws(() => parseQuestions([CHOICE, 'id=b ;; type=noul']), /question 2:/)
+})
+
+// ── the three stages ────────────────────────────────────────────────────────────────────────────────
+
+/** A criteria directory and a batteries directory, for the storing stage. */
+function stores() {
+  const root = mkdtempSync(join(tmpdir(), 'staged-'))
+  mkdirSync(join(root, 'criteria'), { recursive: true })
+  return join(root, 'criteria')
+}
+
+/** A decide tool whose model answers without spending anything. */
+function decider(dir, asked) {
+  return createDecideTool({
+    setsDir: () => dir,
+    record: () => {},
+    decide: async (request) => {
+      asked.push(request)
+      return { kind: 'answers', answers: { admit_relation: { type: 'choice', label: 'supported' } }, executed: { provider: 'p', model: 'm' } }
+    },
+  })
+}
+
+test('COMPOSE AS STRINGS, then STORE, then ASK BY NAME -- nothing in the chain nests', async () => {
+  const dir = stores()
+  const asked = []
+
+  // 1. COMPOSE + STORE. One question per flag, each a single string.
+  const composer = createQuestionsTool({ dir })
+  const written = await composer.execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE, LADDER.replace('draft_', 'admit_')] }, {})
+  assert.deepEqual(written.problems ?? [], [])
+  assert.ok(written.hash, 'and the composition hash comes back from disk')
+
+  // 2. ASK BY NAME. A name and a scope; the questions never pass through a tool argument again.
+  const value = await decider(dir, asked).execute({ state: 'a claim and an excerpt', set: 'staged@1', scope: 'admit' }, {})
+  assert.deepEqual(Object.keys(value.answers), ['admit_relation'])
+  assert.equal(asked[0].questions.admit_relation.criteria.supported, 'the excerpt supports the exact claim', 'the stored criterion is what reached the model')
+
+  // 3. THE FILE IS ORDINARY JSON, because it was written by the tool rather than by a caller.
+  const stored = JSON.parse(readFileSync(written.written, 'utf8'))
+  assert.equal(stored.length, 2)
+  assert.equal(stored[0].options[2].abstain, true)
+})
+
+test('a set may declare one scope, and then the caller need not name it', async () => {
+  const dir = stores()
+  const asked = []
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'single@1', scope: 'admit', question: [CHOICE] }, {})
+  await decider(dir, asked).execute({ state: 'text', set: 'single@1' }, {})
+  assert.equal(asked.length, 1, 'one declared scope is not ambiguous, so asking for it would be ceremony')
+})
+
+test('a set that declares several scopes still has to be narrowed', async () => {
+  const dir = stores()
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'admit', question: [CHOICE] }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'draft', question: [LADDER], replace: true }, {})
+  await assert.rejects(
+    () => decider(dir, []).execute({ state: 'text', set: 'two@1' }, {}),
+    /`scope` is required/,
+  )
+})
+
+test('a name and an inline list together are REFUSED -- they can disagree and nothing would show it', async () => {
+  const dir = stores()
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE] }, {})
+  await assert.rejects(
+    () => decider(dir, []).execute({ state: 'x', set: 'staged@1', questions: [{ id: 'other', type: 'noul', instructions: 'y' }] }, {}),
+    /not both/,
+  )
+})
+
+test('a stored set that does not exist, and a scope it does not declare, are named', async () => {
+  const dir = stores()
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE] }, {})
+  await assert.rejects(() => decider(dir, []).execute({ state: 'x', set: 'nope@9' }, {}))
+  await assert.rejects(() => decider(dir, []).execute({ state: 'x', set: 'staged@1', scope: 'result' }, {}), /is not a scope/)
+})
+
+test('neither route given says WHICH route to take, and mentions storing first', async () => {
+  await assert.rejects(
+    () => decider(stores(), []).execute({ state: 'x' }, {}),
+    /give `set`.*or `questions`.*survives the tool-call boundary/s,
+  )
+})
+
+test('composing and storing is REFUSED when both forms are given, rather than merged', async () => {
+  const composer = createQuestionsTool({ dir: stores() })
+  // The refusal lands in `problem`, the single-reason field, rather than `problems` the list -- and saying which one
+  // a caller reads is the difference between a test that pins a behaviour and one that passes beside it.
+  const value = await composer.execute({ action: 'write', set: 'both@1', scope: 'admit', question: [CHOICE], specs: [{ id: 'x', type: 'noul', instructions: 'y' }] }, {})
+  assert.match(String(value.problem), /not both/)
+})
+
+test('`lint` reads the same DSL, so a set is checked in the form it was written', async () => {
+  const composer = createQuestionsTool({ dir: stores() })
+  // A `draft` question naming SESSION TRANSCRIPT is legal at `session` and unanswerable at a seam. The DSL carries
+  // the same text, so the same rule must fire.
+  const bad = 'id=session_x ;; type=noul ;; instructions=Does the SESSION TRANSCRIPT show it?'
+  const atSeam = await composer.execute({ action: 'lint', scope: 'draft', question: [bad] }, {})
+  assert.equal(atSeam.ok, false)
+  assert.ok((atSeam.findings ?? []).some((f) => f.rule === 'scope_state'))
+  const atSession = await composer.execute({ action: 'lint', scope: 'session', question: [bad] }, {})
+  assert.equal(atSession.ok, true, 'the same question is fine at the scope that emits that section')
+})

@@ -129,6 +129,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `evaluate-tool.js` — `system1_evaluate_session`
 * `results-tool.js` — `system1_measurements`
 * `questions-tool.js` — `system1_question_sets`
+* `question-dsl.js` — one question as ONE STRING (`key=value` fields separated by ` ;; `), which is the form
+  that survives a tool-call argument: the nested arrays inside a JSON question spec do not, and four attempts to
+  send one proved it. Its inverse is exact, because a format that cannot be written back cannot be edited
 * `question-lint.js` — the authoring rules a machine can check, behind `system1_question_sets { action: 'lint' }`:
   chiefly the rule that a question may only name state its scope actually emits, which `buildQuestions` cannot see
   because such a spec is perfectly well-formed and perfectly unanswerable

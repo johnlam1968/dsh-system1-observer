@@ -694,6 +694,11 @@ async function apply(ctx, config) {
       decide: (request, options) => decide(request, options),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
+      // THE SAME RESOLVER every other set-taking tool uses, and deliberately the same one: `setSettings(...).sets.dir`
+      // falls back to the `criteria/` this package SHIPS, which is how `system1_battery` finds
+      // `news-claim-check@2` with nothing configured. Reading `questionSetsDir` directly here would have made `set`
+      // mean a DIFFERENT directory from the same-named argument two tools away, and the two would drift apart quietly.
+      setsDir: () => setSettings(questionGroup(liveConfig())).sets.dir,
       // The line goes to the same sink as every other one, so a reader finds it where it already looks.
       record: (line) => {
         const { event, ...fields } = line

@@ -16,7 +16,12 @@ test('the definition is the shape the registry requires', () => {
   const tool = createDecideTool({ decide: async () => ({ kind: 'answers', answers: {} }) })
   assert.equal(tool.name, DECIDE_TOOL_NAME)
   assert.equal(tool.parameters.type, 'object')
-  assert.deepEqual(tool.parameters.required, ['state', 'questions'])
+  // `state` AND NOT `questions`, because `questions` is no longer the only way in: a stored `set` is the alternative,
+  // and the inline form is the one that cannot carry a `choice`. The pair is enforced at runtime rather than in the
+  // schema because JSON Schema's subset here has no `oneOf` over REQUIRED, and a refusal that names both routes is
+  // better than a schema that can only forbid one of them.
+  assert.deepEqual(tool.parameters.required, ['state'])
+  assert.ok(Object.hasOwn(tool.parameters.properties, 'set') && Object.hasOwn(tool.parameters.properties, 'scope'), 'and both alternatives are declared, so the model is shown them')
   assert.equal(tool.parameters.additionalProperties, false)
   assert.equal(typeof tool.output.render, 'function')
   assert.equal(typeof tool.execute, 'function')
