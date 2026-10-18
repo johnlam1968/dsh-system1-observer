@@ -1,0 +1,65 @@
+{
+  "appliesTo": "news-claim-check@1 -- the three `admit` questions, checked against a claim and its cited excerpts. Cases are CONSTRUCTED, so every label is true BY CONSTRUCTION rather than sampled from a real article: the relation is decided by the wording of the excerpt, not by a fact anyone had to look up. Six cases because the battery floor is five and the six are the six ways the production relation goes -- exact support, contradicted figure, no evidence, adjacent subject, right subject with the figure missing, and the figure right but the date wrong.",
+  "cases": [
+    {
+      "id": "exact_match",
+      "note": "The excerpt states the figure, the year and the subject in so many words. `supported`, `true`, `directly` are entailed.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS:\n- https://example.org/survey-results-2024: \"The 2024 national survey found that 62% of adults support the proposed policy, the results published on 3 March.\"",
+      "expected": {
+        "admit_claim_relation": "supported",
+        "admit_excerpts_address_the_claim": true,
+        "admit_evidence_directness": "directly: an excerpt that states the claim's figure or date in so many words"
+      }
+    },
+    {
+      "id": "figure_mismatch",
+      "note": "Same survey, same year, same subject, and the figure is different. The relation is `contradicted`, and the excerpt is still about the exact claim, so `true` and `directly` hold.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS:\n- https://example.org/survey-results-2024: \"The 2024 national survey found that 41% of adults support the proposed policy, the results published on 3 March.\"",
+      "expected": {
+        "admit_claim_relation": "contradicted",
+        "admit_excerpts_address_the_claim": true,
+        "admit_evidence_directness": "directly: an excerpt that states the claim's figure or date in so many words"
+      }
+    },
+    {
+      "id": "no_excerpts",
+      "note": "Nothing was retrieved. The relation cannot be decided, and there is no evidence to be direct or partial about.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS: (none -- retrieval returned nothing)",
+      "expected": {
+        "admit_claim_relation": "unknown",
+        "admit_excerpts_address_the_claim": false,
+        "admit_evidence_directness": "not at all: there is no excerpt, or the excerpt is about a different subject"
+      }
+    },
+    {
+      "id": "off_topic_excerpt",
+      "note": "A real excerpt from a real page, about transport rather than the survey. It cannot bear on the claim, so the relation is undecidable rather than supported.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS:\n- https://example.org/council-minutes: \"The city council approved a new bus route on the north side; operators report ridership up 9% since March.\"",
+      "expected": {
+        "admit_claim_relation": "unknown",
+        "admit_excerpts_address_the_claim": false,
+        "admit_evidence_directness": "not at all: there is no excerpt, or the excerpt is about a different subject"
+      }
+    },
+    {
+      "id": "right_subject_no_figure",
+      "note": "The excerpt is about the right survey and never states the figure. It is on-topic (`true`) but only partly direct, and it cannot settle the relation.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS:\n- https://example.org/survey-methodology: \"The national survey is carried out by the national statistics office between May and June each year, using a representative sample of 12,000 households.\"",
+      "expected": {
+        "admit_claim_relation": "unknown",
+        "admit_excerpts_address_the_claim": true,
+        "admit_evidence_directness": "partly: an excerpt on the right subject that never states the claim's figure or date"
+      }
+    },
+    {
+      "id": "date_mismatch",
+      "note": "The figure is exactly right and the year is wrong. The question says the relation covers dates, so this is `contradicted` -- the case that separates a set which reads the number from one that reads the claim.",
+      "state": "CLAIM: The 2024 national survey found that 62% of adults support the proposed policy.\n\nCITED EXCERPTS:\n- https://example.org/archive-2023: \"The 2023 national survey found that 62% of adults support the proposed policy, the results published on 4 April.\"",
+      "expected": {
+        "admit_claim_relation": "contradicted",
+        "admit_excerpts_address_the_claim": true,
+        "admit_evidence_directness": "directly: an excerpt that states the claim's figure or date in so many words"
+      }
+    }
+  ]
+}

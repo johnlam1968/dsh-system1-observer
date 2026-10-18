@@ -1,0 +1,8 @@
+{
+  "description": "Checks a factual claim in an operator-supplied news item against the excerpts cited beside it, one claim at a time. Ported from the production question in DansiDanutz/fake-real-jev (lib/claim-check.js), reshaped to this repository's spec schema: its `criteria` map becomes an `options` list, and its `unknown` relation becomes the abstain option.",
+  "appliesTo": {
+    "useCase": "evidence-checking a factual claim",
+    "origin": "port of a production question, not a validated instrument of this repository",
+    "state": "the operator's own message carries the claim and the cited excerpts"
+  }
+}

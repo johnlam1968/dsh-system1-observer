@@ -131,6 +131,9 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `evaluate-tool.js` — `system1_evaluate_session`
 * `results-tool.js` — `system1_measurements`
 * `questions-tool.js` — `system1_question_sets`
+* `question-lint.js` — the authoring rules a machine can check, behind `system1_question_sets { action: 'lint' }`:
+  chiefly the rule that a question may only name state its scope actually emits, which `buildQuestions` cannot see
+  because such a spec is perfectly well-formed and perfectly unanswerable
 * `battery-tool.js` — `system1_battery`
 * `config-tool.js` — `system1_settings`
 
