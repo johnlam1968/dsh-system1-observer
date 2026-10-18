@@ -154,6 +154,26 @@ function scaffoldFixture() {
   return { sets, batteries }
 }
 
+test('`write` accepts a REAL spec through its own gate -- a choice, a score and their nested arrays', async () => {
+  // THE THIRD DEFECT IN THIS FAMILY, and the one that disabled the tool's whole purpose. `specs` was declared
+  // `items: {type: 'object', additionalProperties: false}` with no `properties`, so EVERY key of every spec was
+  // forbidden and a live `write` came back with fourteen "not a declared property" errors. A test that wrote a set
+  // through the tool would have caught it; the existing tests all drove `write` with a spec the gate never saw.
+  const dir = mkdtempSync(join(tmpdir(), 'write-spec-'))
+  const tool = createQuestionsTool({ dir })
+  const specs = [
+    { id: 'session_pick', type: 'choice', instructions: 'Which relation?', options: [{ label: 'yes', criterion: 'it holds' }, { label: 'unsure', criterion: 'cannot tell', abstain: true }] },
+    { id: 'session_how_much', type: 'score', instructions: 'How directly?', levels: ['not at all', 'partly', 'directly'] },
+    { id: 'session_holds', type: 'noul', instructions: 'Does the SESSION TRANSCRIPT show it holding?' },
+  ]
+  const value = await tool.execute({ action: 'write', set: 'written@1', scope: 'session', specs }, {})
+  assert.deepEqual(value.problems ?? [], [])
+  assert.ok(value.written, 'the file lands')
+  assert.ok(value.hash, 'and the hash comes back from disk')
+  const back = JSON.parse(readFileSync(value.written, 'utf8'))
+  assert.deepEqual(back.map((s) => s.id), ['session_pick', 'session_how_much', 'session_holds'], 'the nested options and levels survive the round trip')
+})
+
 test('scaffold writes one case per question at the floor, and labels NOTHING', async () => {
   const { sets, batteries } = scaffoldFixture()
   const tool = createBatteryTool({ dir: () => batteries, setsDir: () => sets })
