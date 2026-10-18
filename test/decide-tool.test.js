@@ -34,22 +34,15 @@ test('a set file is passed as it is written, with no conversion', async () => {
   assert.deepEqual(out.executed, { provider: 'typesafe' })
 })
 
-test('the map form is REFUSED at the tool boundary, and `readSpecs` still normalises one', async () => {
+test('the map form is ACCEPTED again, and its ids survive', async () => {
   const { calls, decide } = stub({ kind: 'answers', answers: {} })
   const tool = createDecideTool({ decide })
-  // THE DELIBERATE NARROWING, and why it is recorded here rather than fixed silently: declaring `questions` as a
-  // `oneOf` cost every NESTED array in transit -- a choice's `options` and a score's `levels` never reached
-  // `execute`, and each such call failed downstream as though the question had been written wrong. See the
-  // declaration in `lib/decide-tool.js` for the measurement.
-  await assert.rejects(
-    () => tool.execute({ state: 'x', questions: { asked: { type: 'noul', instructions: 'Is this true?' } } }),
-    /must be array/,
-    'the gate says what it wants rather than reading a shape the declaration does not describe',
-  )
-  assert.equal(calls.length, 0, 'a refused shape never reaches the model')
-  // THE READER STAYS TOLERANT, because it is the seam path's gate too, and a tolerant reader behind a strict one
-  // costs nothing. What changed is the boundary, not the normaliser.
-  assert.deepEqual(readSpecs({ asked: { type: 'noul', instructions: 'Is this true?' } })[0].id, 'asked')
+  // A NARROWING THAT WAS WITHDRAWN. This test read "the map form is REFUSED" for one commit, because `questions` had
+  // briefly been declared as a plain array on the belief that the `oneOf` caused the nested-array rewriting. It did
+  // not -- the rewriting survived the change -- so the narrowing bought nothing and was reverted, because a behaviour
+  // change at the tool boundary must rest on a cause that holds.
+  await tool.execute({ state: 'x', questions: { asked: { type: 'noul', instructions: 'Is this true?' } } })
+  assert.deepEqual(Object.keys(calls[0].questions), ['asked'])
 })
 
 test('a malformed question is REFUSED, and the message names it', async () => {

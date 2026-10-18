@@ -46,12 +46,31 @@ test('both new actions return a value their own declaration accepts', async () =
 
 // ── 1. the declaration ────────────────────────────────────────────────────────────────────────────────
 
-test('`questions` is declared as a plain array, because a `oneOf` lost the nested arrays', () => {
+test('`questions` is declared with a `oneOf`, and the narrowing that replaced it is WITHDRAWN', () => {
+  // A FALSE CAUSE, WITHDRAWN. This assertion used to demand a plain array, on the belief that the `oneOf` cost every
+  // nested array in transit. A live call after that change showed the belief was wrong: the array is REWRITTEN, not
+  // lost, and arrives wrapped as `[{items:[{item:[...]}]}]`. So the oneOf is neither the cause nor a fix, and a
+  // narrowing justified by a cause that does not hold is a behaviour change nobody asked for.
   const tool = createDecideTool({ decide: async () => ({}) })
   const node = tool.parameters.properties.questions
-  assert.equal(node.type, 'array', 'the parameter must declare `type`, not `oneOf`')
-  assert.equal(node.oneOf, undefined, 'a `oneOf` here is what dropped every nested array in transit')
-  assert.equal(node.items?.type, 'object')
+  assert.equal(node.oneOf !== undefined, true, 'the map form is accepted again')
+  assert.equal(node.oneOf.length, 2, 'array of specs, or map from id to spec')
+})
+
+test('a choice question sent through the tool builds its criteria map, which is what reaches the model', async () => {
+  const seen = []
+  const tool = createDecideTool({
+    decide: async (request) => { seen.push(request); return { answers: { pick: { type: 'choice', label: 'a' } }, executed: { provider: 'p', model: 'm' } } },
+    record: () => {},
+  })
+  await tool.execute({
+    state: 'a claim and its evidence',
+    questions: [{ id: 'pick', type: 'choice', instructions: 'Which?', options: [{ label: 'a', criterion: 'first' }, { label: 'none', criterion: 'cannot tell', abstain: true }] }],
+  }, {})
+  assert.equal(seen.length, 1)
+  // The options reach the model as a CRITERIA MAP, which is the wire shape: the conversion is the tool's job, and it
+  // is the last step before the transport, so nothing after it can lose the array.
+  assert.deepEqual(Object.keys(seen[0].questions.pick.criteria).sort(), ['a', 'none'])
 })
 
 test('a choice question sent through the tool keeps its options and reaches the model', async () => {
