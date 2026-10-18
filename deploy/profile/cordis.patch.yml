@@ -539,112 +539,24 @@
 #    path: !!js dshHomePath('session-query.db')
 #    openAt: first-search
 
-# ── dsh-telegram (DEVELOPMENT WIRING) ───────────────────────────────────────────────────────────
+# ── dsh-telegram UNLINKED 2026-10-18 ─────────────────────────────────────────────────────────────
 #
-# The Telegram transport adapter, linked from /home/john/CodingProjects/dsh-telegram (see the
-# `dsh-telegram` symlink in this profile's node_modules). Mounted as a PROFILE-layer row rather
-# than a bundle, for two reasons:
+# This profile NO LONGER mounts dsh-telegram. The plugin row that stood here (a profile-layer
+# `insert` of id `dsh-telegram`, plus its `- id: dsh-telegram / disabled: false` override) has been
+# removed, so this profile has no bot token, no poll loop and no share of the Telegram chat mapping.
 #
-#   1. It is under development, and this layer is WATCHED: `dsh-hmr` reconciles
-#      `profile.patchPath` live (`reconcileProfilePatches`, dsh-app-boot), so a row added or
-#      changed here mounts WITHOUT a restart. Adding the package to `dsh.profile.bundles`
-#      instead changes the profile manifest, which is restart-scoped.
-#   2. It keeps `dsh.profile.bundles` untouched. `dsh plugin add/remove` rewrites that list and
-#      drops bundles it did not write, which is how this plugin disappeared from the `web`
-#      profile once already.
+# WHY: the bot was linked to two profiles at once. Two processes on one bot token is not a shared
+# bot — Telegram serves one and answers the other with `409 Conflict`, so inbound messages land in
+# whichever poller won the race and both contend for the same `telegram_chats` storage under
+# $DSH_HOME. The `web` profile is now the single owner.
 #
-# The durable, distributable form is a bundle: list the package in `dsh.profile.bundles` and let
-# its own `dsh.bundle.patch` carry the config, so nothing is duplicated. This row is deliberately
-# MINIMAL — only the two values that cannot come from the package's own defaults are restated,
-# because the profile layer does not read a package's bundle patch. Everything else (sttBaseUrl,
-# sttLang, ttsProvider, ttsVoice, pollTimeoutSeconds, …) falls back to the schema defaults in
-# src/config.ts, and the STT/TTS keys fall back to OPENAI_API_KEY / MINIMAX_CN_API_KEY from the
-# launch environment (src/voice/stt.ts, src/voice/tts.ts).
+# The token that used to authorize this profile was also removed from `~/.config/dsh-docdrift.env`
+# on the same date, so re-adding the row alone cannot silently revive the bot here.
 #
-# Mounted disabled when DSH_TELEGRAM_BOT_TOKEN is empty: `apply` warns and returns before it
-# installs anything.
-- insert:
-    - id: dsh-telegram
-      name: dsh-telegram
-      config:
-        botToken: !!js process.env.DSH_TELEGRAM_BOT_TOKEN ?? ''
-        allowedUserIds: !!js (process.env.DSH_TELEGRAM_ALLOWED_USER_IDS ??
-          '').split(',').map(s => Number(s.trim())).filter(n =>
-          Number.isFinite(n))
-        # Who may run a /command, as distinct from who may chat. Empty refuses EVERY command,
-        # including /help — fail-closed by design, and the reason a chat bound to an unrecoverable
-        # session had no in-chat way out (`/new` was refused). Same env var as the chat allow-list.
-        commandUserIds: !!js (process.env.DSH_TELEGRAM_ALLOWED_USER_IDS ??
-          '').split(',').map(s => Number(s.trim())).filter(n =>
-          Number.isFinite(n))
-        # The model route, restated from THIS profile's own `agent-default-model` row below.
-        #
-        # Why it is pinned here at all: the persona prefix interpolates `{{model}}`, and
-        # dsh-agent-loop resolves that variable as `agent.options.model` — it does NOT consult
-        # `agent-default-model`. Only entry points (dsh-api-session-controller, dsh-headless,
-        # dsh-webhook) call currentSelection() before creating; `ctx.agents.create` does not.
-        # So a row that names no route makes every turn die with
-        #   prompt variable "{{model}}" has no value for this assembly
-        # while the row still reads `active` and the poll loop keeps running.
-        #
-        # The plugin can now resolve this itself (ctx.get('agentDefaultModel')), which is the
-        # profile-independent path and the reason the package's own patch names no provider.
-        # These two lines are belt-and-braces for the module the RUNNING process currently
-        # holds: HMR reloads a changed plugin module, but that is not observable from here and
-        # the failure it would cause is silent. Drop them once a restart has been confirmed to
-        # load the current lib/index.js.
-        provider: deepseek-official
-        model: deepseek-flash
-        # ── THIS DEPLOYMENT'S VOICE VALUES ──────────────────────────────────────────────────────
-        #
-        # The plugin's own defaults for these are deliberately neutral (OpenAI's endpoint, no
-        # language hint, the provider's built-in voice), because a shipped default must not be one
-        # operator's machine — `docs/PUBLISHING.md` B5. These lines are where this deployment says
-        # what it actually is, and they are the ONLY reason the voice pipeline keeps working after
-        # that change.
-        #
-        #   whisper  STT provider label — the wire shape is OpenAI-compat `/v1/audio/transcriptions`.
-        #            The SenseVoice server at :18765 speaks that shape, so the existing `whisper`
-        #            dispatch in src/voice/stt.ts works with no plugin source changes. (We previously
-        #            ran the local voice_proxy on :8081 here, and MiniMax on api.minimaxi.com
-        #            before that; all three share the same multipart upload contract.)
-        #   sensevoice  The actual STT backend — a local FunASR SenseVoiceSmall process owned by
-        #            ~/.config/systemd/user/sensevoice-server.service (project at
-        #            ~/CodingProjects/sensevoice-server/). First-start download is ~1 GB; warm
-        #            starts ~30s. Service restart, not dsh restart, after a model upgrade.
-        #   asr-1.0  STT model. Empty here so `callWhisper` sends `whisper-1` — the SenseVoice
-        #            server ignores the field and uses `FUNASR_MODEL` env to pick the real model.
-        #            Naming an explicit id here would also be a no-op for SenseVoice; keep empty.
-        #   yue      the spoken language here, so the endpoint is told rather than asked to detect.
-        #            SenseVoice accepts `yue` (Cantonese) directly; the FunASR env sets the same
-        #            default so an absent multipart field still routes to Cantonese.
-        #   Cantonese_CuteGirl   the MiniMax system voice this deployment uses for outbound TTS
-        #
-        # All four STT knobs and ttsVoice are `.volatile()`, so a change here is read on the next
-        # message. The host has to be able to reach :18765 — the sensevoice-server unit is what
-        # owns that port; it does not need to be running before dsh@docdrift, only before the
-        # first inbound voice note that targets it.
-        sttProvider: whisper
-        sttBaseUrl: http://127.0.0.1:18765/v1
-        sttLang: yue
-        ttsVoice: Cantonese_CuteGirl
-        # The four shaping knobs below were CODE CONSTANTS in the plugin until 2026-10-08 — the
-        # shipped `MINIMAX_BODY` carried speed 0.95, emotion 'happy', language_boost 'Chinese,Yue'
-        # and modify_timbre 10. That made this deployment's ear the plugin's default, so they are
-        # row config now and the plugin ships neutral values instead. These four lines are what
-        # keeps the voice EXACTLY as it sounded; `tests/unit/tts.golden.test.ts` pins the body they
-        # reproduce. All four are `.volatile()`, so a change is heard on the next spoken reply.
-        ttsSpeed: 0.95
-        ttsEmotion: happy
-        ttsLanguageBoost: Chinese,Yue
-        ttsModifyTimbre: 10
-        # The command `/restart` runs, detached, to restart THIS profile. The plugin names no profile
-        # of its own, so the deployment supplies it; the unit is dsh@.service (see the repo's deploy/).
-        # The restart kills the process that answers, so the reply is sent first and the command is
-        # delayed by two seconds.
-        restartCommand: systemctl --user restart dsh@docdrift
-- id: dsh-telegram
-  disabled: false
+# ROLLBACK: restore both from the backups taken alongside this edit — `cordis.patch.yml.bak-unlink-*`
+# in this directory and `~/.config/dsh-docdrift.env.bak-unlink-*` — then restart `dsh@docdrift`.
+# Stop `dsh-web.service` FIRST: restoring this row while `web` is still polling re-creates the
+# 409 Conflict this removal exists to end.
 
 # ── telemetry DISABLE (override of base bundle) ─────────────────────────────────────────────────
 # The base bundle (@deepseek-ai/dsh-base) ships @deepseek-ai/dsh-session-telemetry-otel
@@ -752,8 +664,9 @@
 #       name: ../../../CodingProjects/harness_RSI/restart/index.js
 #       # MOUNTS INERT, DELIBERATELY — `restartEnabled` defaults to false, so mounting is NOT consent to
 #       # restart: `request_restart` refuses and names what to configure. Arming it is a SECOND flip.
-#       # `restartCommand` is left at its empty default too; the profile's own value lives at the
-#       # dsh-telegram row above and is NOT copied here.
+#       # `restartCommand` is left at its empty default too; this profile's own value used to live at
+#       # the dsh-telegram row, which was UNLINKED on 2026-10-18 (see the note where it stood), so
+#       # there is currently no such value to copy here.
 #     # MOUNTED 2026-10-09, one row at a time. NO `config:` block, so the defaults apply: `enabled: true`
 #     # (the row IS active — `apply` returns early only when `enabled !== true`), and `recordPath: ''`,
 #     # which makes the recorder a legible NO-OP rather than an error (`{written:false, why:'no record path

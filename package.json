@@ -44,7 +44,8 @@
     "check:compat": "node scripts/check-compat.mjs",
     "check:composition": "node scripts/check-composition.mjs",
     "check:deploy": "node scripts/check-deploy.mjs",
-    "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:composition && npm run check:deploy"
+    "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:composition && npm run check:deploy",
+    "ask": "node scripts/ask.mjs"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
@@ -66,6 +67,7 @@
     "client.js",
     "skills/**",
     "lib/**/*.js",
+    "scripts/ask.mjs",
     "scripts/trace.mjs",
     "scripts/session-index.mjs",
     "cordis.patch.yml",
