@@ -180,12 +180,18 @@ test('the tool and the script resolve questions through the SAME module, and say
   const script = readFileSync(new URL('../scripts/ask.mjs', import.meta.url), 'utf8')
   // THE TEST THAT PREVENTS THE DRIFT, rather than describing it after the fact. Both files agreed by eye once and
   // disagreed twice -- the tool took `questions` while the script took a set, and the DSL reached only one of them.
-  assert.match(tool, /from '\.\/question-request\.js'/, 'the tool must resolve through the shared module')
-  assert.match(script, /from '\.\.\/lib\/question-request\.js'/, 'and the script must too')
-  assert.match(tool, /renderAnswerLines|resolveQuestions/, 'the tool shares the resolution')
-  assert.match(script, /resolveQuestions, renderAnswerLines/, 'and the script shares the resolution AND the rendering')
-  // NEITHER MAY GO TO THE MODEL ITS OWN WAY: both reach `lib/model/client.js`, which is where the request is built.
-  assert.match(script, /from '\.\.\/lib\/model\/client\.js'/, 'the standalone builds its client from the same module the row does')
+  assert.match(tool, /from '\.\/system1\.js'/, 'the tool must go through the facade')
+  assert.match(script, /from '\.\.\/lib\/system1\.js'/, 'and the script must too')
+  // AND NEITHER MAY REACH PAST IT for anything about questions: `question-request` is the facade's own primitive.
+  assert.equal(/question-request\.js'/.test(tool.replace(/sharedReadSpecs/g, '')), true, 'the tool keeps only the re-export')
+  // THE CODE, NOT THE PROSE. The script's header names these modules to explain WHY it needs no dependency, and a
+  // substring test over the whole file would read that explanation as a violation of it.
+  const scriptCode = script.split('\n').filter((line) => !line.trimStart().startsWith('//')).join('\n')
+  assert.equal(/question-lint|question-dsl|question-sets|question-request/.test(scriptCode), false, 'the standalone has no question code of its own')
+  // NEITHER MAY GO TO THE MODEL ITS OWN WAY. The standalone used to build its client from `lib/model/client.js`
+  // directly; it now asks the facade for one, so the credential and the endpoint are decided in the same place for
+  // every surface -- which is the thing a second call site would quietly get wrong.
+  assert.match(script, /wireTransport/, 'the standalone gets its transport from the facade too')
 })
 
 test('one question means the same thing whichever route carried it', async () => {
@@ -206,4 +212,37 @@ test('both routes given is one refusal, and it names them', async () => {
     /not several/,
   )
   await assert.rejects(() => decider(stores(), []).execute({ state: 'x' }, {}), /give `set`.*or `specs`.*survives the tool-call boundary/s)
+})
+
+// ── THE FIVE SURFACES, AND A SIXTH THAT WOULD BYPASS IT ──────────────────────────────────────────────
+
+test('every surface that resolves questions goes through the facade, and a new one cannot join without it', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs')
+  // THE SURFACES THE OPERATOR NAMED, and the rule each one breaks by reimplementing.
+  const surfaces = {
+    'system1_decide (the agent tool)': 'lib/decide-tool.js',
+    'system1_battery': 'lib/battery-tool.js',
+    'the row, for session measurement': 'index.js',
+    'the standalone script': 'scripts/ask.mjs',
+  }
+  for (const [name, file] of Object.entries(surfaces)) {
+    const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8')
+    assert.match(source, /system1\.js'/, `${name} must reach questions through lib/system1.js`)
+  }
+
+  // AND THE SEAL: a module that builds, loads or lints questions WITHOUT importing the facade is not a surface
+  // this rule can see. So the check is over every file in `lib/`, not a list that a sixth file can join between
+  // reviews -- the failure mode it prevents is a copy that is correct until it is not.
+  const libFiles = readdirSync(new URL('../lib/', import.meta.url)).filter((name) => name.endsWith('.js'))
+  const façade = new Set(['system1.js', 'question-request.js', 'questions.js', 'question-dsl.js', 'question-lint.js', 'question-sets.js'])
+  // THE CODE, NOT THE COMMENTS. `instrument-input.js` names `buildQuestions` only to explain that the SET LOCATION
+  // travels with the questions because the builder reads it -- and a substring test over prose reports an honest
+  // explanation as a violation, which is how a seal like this gets switched off.
+  const code = (source) => source.split('\n').filter((line) => !line.trimStart().startsWith('//') && !line.trimStart().startsWith('*') && !line.trimStart().startsWith('/*')).join('\n')
+  const bypasses = libFiles.filter((name) => !façade.has(name)).filter((name) => {
+    const source = readFileSync(new URL('../lib/' + name, import.meta.url), 'utf8')
+    const reaches = /buildQuestions|resolveQuestions|readSelectedSet|lintScope|lintSelection|parseQuestions/.test(code(source))
+    return reaches && !/from '\.\/system1\.js'/.test(source)
+  })
+  assert.deepEqual(bypasses, [], `these modules reach questions without the facade: ${bypasses.join(', ')}`)
 })

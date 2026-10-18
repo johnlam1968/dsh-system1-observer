@@ -19,6 +19,7 @@ import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
 import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
 import { probeFingerprint } from './lib/probe-score.js'
 import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
+import { composeQuestions } from './lib/system1.js'
 import { SUBJECT_KINDS, listStoredSessions, readStoredSubject } from 'dsh-session-adapter/reader'
 import { subjectSettings } from './lib/subject-settings.js'
 import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
@@ -761,11 +762,15 @@ async function apply(ctx, config) {
         // ever ask whatever set the row happened to name, and `questions()` took no arguments (register row F65).
         const named = typeof asked.set === 'string' && asked.set.trim() !== '' ? asked.set.trim() : null
         if (named !== null) {
+          // THROUGH THE FACADE, like every other surface. This branch reached the loader through
+          // `questionGroup({...liveConfig(), questionSet: named})`, which is a THIRD way of saying "use this set" --
+          // the other two being `question-request.js` and, until this branch moved, a hand-rolled copy in
+          // `battery-tool.js`. Three were each correct. `questionSet` remains the right knob for the row's OWN
+          // questions; a set named IN THE CALL goes through the module that both the tool and the script use.
           const scope = typeof asked.scope === 'string' && asked.scope.trim() !== '' ? asked.scope.trim() : SESSION_HOOK
-          const built = buildQuestions(questionGroup(Object.assign({}, liveConfig(), { questionSet: named })), scope)
-          if ((built.problems ?? []).length > 0) return built
-          if (Object.keys(built.questions ?? {}).length > 0) return built
-          return { questions: {}, problems: ['the set "' + named + '" declares no "' + scope + '" scope, so a judgement at it would have nothing to answer -- it declares: ' + 'none' ] }
+          const composed = composeQuestions({ set: named, scope, setsDir: () => String(setSettings(questionGroup(liveConfig())).sets.dir) })
+          if (!composed.ok) return { questions: {}, problems: [composed.reason] }
+          return { questions: composed.questions, problems: [] }
         }
         // THE ROW'S OWN CONFIG, NOT A HAND-BUILT ONE. `buildQuestions` is where a selected set REPLACES the row's
         // questions (lib/questions.js:152-157), and it can only do that if it is handed the config that NAMES the

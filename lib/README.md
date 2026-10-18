@@ -132,6 +132,10 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `question-dsl.js` — one question as ONE STRING (`key=value` fields separated by ` ;; `), which is the form
   that survives a tool-call argument: the nested arrays inside a JSON question spec do not, and four attempts to
   send one proved it. Its inverse is exact, because a format that cannot be written back cannot be edited
+* `system1.js` — THE ONE SURFACE: `composeQuestions` (compose and lint), `listQuestionSets` (list, in
+  one shape every caller renders the same way) and `askQuestions` (load a set and call the model), plus
+  `wireTransport` for a caller that has no row to inherit a transport from. Five surfaces once answered those three
+  questions for themselves and disagreed; the facade is what stops a sixth
 * `question-request.js` — the ONE path from a question set to answers, shared by `system1_decide` and `scripts/ask.mjs`:
   which of the three routes carried the questions (a stored set by name, DSL strings, inline JSON), and how the
   answers read. They agreed by eye once and disagreed twice, which is the arrangement this module exists to end

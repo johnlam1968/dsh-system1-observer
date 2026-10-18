@@ -29,9 +29,10 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { lintSelection } from '../lib/question-lint.js'
-import { resolveQuestions, renderAnswerLines } from '../lib/question-request.js'
-import { createModel } from '../lib/model/client.js'
+// THE THREE OPERATIONS, from the one module every surface uses. `scripts/ask.mjs` has no question code of its own:
+// what it adds is a STATE (a file, a URL, stdin), a credential, and a place to print -- and none of that is a rule
+// about questions, so none of it is written here.
+import { composeQuestions, listQuestionSets, askQuestions, wireTransport, renderAnswerLines, MACHINE_UNCOVERED } from '../lib/system1.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -67,16 +68,6 @@ function die(message, code = 1) {
   process.exit(code)
 }
 
-/** The questions, resolved by the SAME module `system1_decide` resolves them with. */
-function questionsFor(scopeWanted, name, questionArg) {
-  return resolveQuestions({
-    set: name,
-    scope: scopeWanted,
-    question: questionArg === null ? undefined : [questionArg],
-    setsDir: () => SETS,
-  })
-}
-
 /** The state, however it arrived. A URL is fetched; markup is stripped naively and that is disclosed. */
 async function readState() {
   const inline = flag('--state')
@@ -110,8 +101,8 @@ async function readState() {
 if (has('--help') || has('-h')) { process.stdout.write(USAGE); process.exit(0) }
 
 if (has('--list')) {
-  const { listSets } = await import('../lib/question-sets.js')
-  const listed = listSets(SETS)
+  const listed = listQuestionSets(SETS)
+  if (!listed.ok) die(listed.reason)
   process.stdout.write(`${listed.sets.length} set(s) in ${SETS}\n`)
   for (const row of listed.sets) process.stdout.write(`  ${row.name.padEnd(36)} [${row.hash}]  ${(row.seams ?? []).join(', ') || '(none)'}\n`)
   process.exit(0)
@@ -125,22 +116,21 @@ const name = flag('--set')
 // ONE CALL, THREE ROUTES: a stored set by name, questions inline as DSL strings, or nothing at all. The module that
 // answers it is the same one `system1_decide` answers with, so a question means the same thing in both -- which is the
 // point of this script existing beside the tool rather than beside a copy of it.
-const resolved = questionsFor(flag('--scope'), name, flag('--question'))
-if (!resolved.ok) die(resolved.reason)
 const questionArg = flag('--question')
-if (resolved.source === 'set') {
-  const { readSelectedSet } = await import('../lib/question-sets.js')
-  var selected = readSelectedSet(SETS, name)
-} else {
-  var selected = { hash: null }
-}
+const composed = composeQuestions({
+  set: name,
+  scope: flag('--scope'),
+  question: questionArg === null ? undefined : [questionArg],
+  setsDir: () => SETS,
+})
+if (!composed.ok) die(composed.reason)
 
 // `--lint` COSTS NOTHING AND ANSWERS A DIFFERENT QUESTION from `--state`: whether the questions are well formed, not
 // whether they separate. It reports the rules no machine can check too, because a clean report must not read as a pass.
 if (has('--lint')) {
-  if (resolved.source !== 'set') die('`--lint` reads a SET on disk; without `--set` there is nothing on disk to read')
-  const lint = lintSelection(selected.questions)
-  process.stdout.write(`${name}  ${lint.checked} spec(s) across ${lint.scopes.length} scope(s)\n`)
+  if (composed.source !== 'set') die('`--lint` reads a SET on disk; without `--set` there is nothing on disk to read')
+  const lint = composed.lint
+  process.stdout.write(`${composed.setLabel}  ${lint.checked} spec(s) across ${lint.scopes.length} scope(s)\n`)
   for (const item of lint.findings) process.stdout.write(`  ${item.level.toUpperCase()} [${item.rule}]${item.id ? ' ' + item.id : ''}: ${item.message}\n`)
   for (const gap of lint.machineUncovered) process.stdout.write(`  NOT CHECKED: ${gap}\n`)
   process.exit(lint.ok ? 0 : 1)
@@ -149,29 +139,33 @@ if (has('--lint')) {
 const state = await readState()
 if (state === null) die('one of `--state`, `--file` or `--url` is required')
 
-const keyEnv = flag('--key-env', 'OPENROUTER_API_KEY')
-const apiKey = process.env[keyEnv]
-if (typeof apiKey !== 'string' || apiKey.trim() === '') {
-  die(`\`${keyEnv}\` is not set. Export it, or pass \`--key-env NAME\` for a different variable. A key is never an argument here: it would land in the shell history and in every ps on this host.`)
-}
+// THE CREDENTIAL, read by NAME through the module that owns that decision.
 const wireUrl = flag('--wire-url', 'https://openrouter.ai/api')
+let transport
+try {
+  transport = wireTransport({ baseUrl: wireUrl, model: flag('--model', 'jev-latest'), keyEnv: flag('--key-env', 'OPENROUTER_API_KEY'), timeoutMs: Number(flag('--timeout', 20000)) })
+} catch (error) {
+  die((error instanceof Error ? error.message : String(error)).replace('pass a different variable name', 'pass `--key-env NAME`'))
+}
 
 if (has('--raw')) {
   process.stdout.write(`--- state, exactly as it will be judged (from ${state.from}) ---\n${state.text}\n\n`)
 }
 
-const model = createModel({ baseUrl: wireUrl, model: flag('--model', 'jev-latest'), apiKey, timeoutMs: Number(flag('--timeout', 20000)) })
-const result = await model.decide({ state: state.text, questions: resolved.questions })
+// OPERATION THREE, whole: load the set and call the model with it.
+const asked = await askQuestions({ set: name, scope: flag('--scope'), question: questionArg === null ? undefined : [questionArg], setsDir: () => SETS, state: state.text }, transport)
+if (!asked.ok) die(asked.reason)
+const result = asked.result
 
 if (result.kind === 'error') die(result.reason)
 if (result.kind !== 'answers') die(`the model answered in a shape this script does not read: ${JSON.stringify(result).slice(0, 200)}`)
 
-const envelope = result.envelope ?? {}
+const envelope = asked.envelope
 if (has('--json')) {
-  process.stdout.write(JSON.stringify({ set: resolved.setLabel, hash: resolved.setHash, answers: result.answers, envelope }, null, 2) + '\n')
+  process.stdout.write(JSON.stringify({ set: asked.setLabel, hash: asked.setHash, source: asked.source, answers: result.answers, envelope }, null, 2) + '\n')
   process.exit(0)
 }
 
-process.stdout.write(`${resolved.setLabel ?? '(inline)'}  [${resolved.setHash ?? '-'} from ${resolved.source}]\n`)
-process.stdout.write(`  ${resolved.ids.length} question(s), answered by ${JSON.stringify(envelope.executed ?? null)}\n\n`)
+process.stdout.write(`${asked.setLabel ?? '(inline)'}  [${asked.setHash ?? '-'} from ${asked.source}]\n`)
+process.stdout.write(`  ${asked.ids.length} question(s), answered by ${JSON.stringify(envelope.executed ?? null)}\n\n`)
 for (const line of renderAnswerLines(result.answers)) process.stdout.write(`  ${line}\n`)

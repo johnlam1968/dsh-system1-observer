@@ -118,7 +118,7 @@ test('it REFUSES BEFORE SPENDING, and says which of the two is wrong', async () 
 
   // A SCOPE THE SET DOES NOT DECLARE, and a battery that is not there at all.
   const wrongScope = await tool.execute({ action: 'run', battery: 'trial', set: 'trial-set', scope: 'turn' })
-  assert.match(wrongScope.problems.join(' '), /`turn` is not a scope this set declares \(session\)/)
+  assert.match(wrongScope.problems.join(' '), /`turn` is not a scope `trial-set` declares \(session\)/)
   const missing = await tool.execute({ action: 'run', battery: 'nope', set: 'trial-set' })
   assert.match(missing.problems.join(' '), /cannot read/)
   assert.equal(calls, 0, 'still nothing spent')
