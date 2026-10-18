@@ -89,3 +89,26 @@ test('a WIRE reply that carries `requested` puts it in the envelope -- the list 
   assert.deepEqual(result.envelope.executed, { provider: 'typesafe', model: 'typesafe/jev-1.13-20260917' })
   assert.equal(result.envelope.leaked, undefined, 'and the whitelist still gates what crosses')
 })
+
+// MEASURED ON THE LIVE WIRE, 2026-10-18, after the service route was cut: `https://openrouter.ai/api/v1/systemone`
+// answers `{model, answers, usage, id, provider}` -- no `executed`, no `routing`, no `requested`. The first call over
+// the wire therefore recorded ANSWERS WITH NO PROVENANCE, because every consumer reads `envelope.executed` and the
+// gateway never sends one. A trace that says a question was answered but not by what is the failure this repository
+// treats as unrecordable, so the normalisation is pinned here against the shape the gateway really returns.
+test('a gateway that names the revision at the top level still yields an `executed` to record', () => {
+  const gateway = projectEnvelope({ model: 'typesafe/jev-1.14-20261014', answers: {}, usage: { total_tokens: 1 }, id: 'gen-1', provider: 'openrouter' })
+  assert.deepEqual(gateway.executed, { model: 'typesafe/jev-1.14-20261014', provider: 'openrouter' })
+
+  // AND A REPLY THAT ALREADY CARRIES ONE IS PASSED THROUGH UNTOUCHED -- the vendor's shape is not the one being
+  // normalised into, and a synthesis that overwrote a real `executed` would be a worse lie than a missing one.
+  const vendor = projectEnvelope({ executed: { provider: 'typesafe', model: 'jev-1.13' }, usage: {} })
+  assert.deepEqual(vendor.executed, { provider: 'typesafe', model: 'jev-1.13' })
+
+  // AND A GATEWAY THAT NAMES NO MODEL STILL INVENTS NOBODY. The envelope keeps the `provider` it was given --
+  // recording what the reply said is the point -- but `executed` stays absent, because a revision cannot be read out
+  // of a provider name. Inventing one would be worse than leaving it out.
+  const bare = projectEnvelope({ answers: {}, provider: 'openrouter' })
+  assert.equal(bare.provider, 'openrouter', 'what the reply said is still recorded')
+  assert.equal(bare.executed, undefined, 'and no revision is invented from it')
+  assert.equal(projectEnvelope({ answers: {} }), undefined)
+})
