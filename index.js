@@ -695,11 +695,15 @@ async function apply(ctx, config) {
       decide: (request, options) => decide(request, options),
       provider: mount.provider ?? null,
       model: mount.model ?? null,
-      // THE SAME RESOLVER every other set-taking tool uses, and deliberately the same one: `setSettings(...).sets.dir`
-      // falls back to the `criteria/` this package SHIPS, which is how `system1_battery` finds
-      // `news-claim-check@2` with nothing configured. Reading `questionSetsDir` directly here would have made `set`
-      // mean a DIFFERENT directory from the same-named argument two tools away, and the two would drift apart quietly.
-      setsDir: () => setSettings(questionGroup(liveConfig())).sets.dir,
+      // THE SAME RESOLVER every other set-taking tool uses, and deliberately the same one:
+      // `setSettings(questionGroup(cfg).sets).dir` falls back to the `criteria/` this package SHIPS, which is how
+      // `system1_battery` finds `news-claim-check@2` with nothing configured. Reading `questionSetsDir` directly here
+      // would have made `set` mean a DIFFERENT directory from the same-named argument two tools away.
+      //
+      // `setSettings` TAKES THE SETS and RETURNS `{dir, name}` -- so `.sets` belongs INSIDE its parentheses, as an
+      // argument, and never after them. Written the other way it reads a property that is not there and throws on the
+      // first named-set call; `test/question-staging.test.js` guards the shape, because no tool test covers this one.
+      setsDir: () => setSettings(questionGroup(liveConfig()).sets).dir,   // `setSettings` takes the SETS, and returns `{dir, name}`
       // The line goes to the same sink as every other one, so a reader finds it where it already looks.
       record: (line) => {
         const { event, ...fields } = line
@@ -768,7 +772,7 @@ async function apply(ctx, config) {
           // `battery-tool.js`. Three were each correct. `questionSet` remains the right knob for the row's OWN
           // questions; a set named IN THE CALL goes through the module that both the tool and the script use.
           const scope = typeof asked.scope === 'string' && asked.scope.trim() !== '' ? asked.scope.trim() : SESSION_HOOK
-          const composed = composeQuestions({ set: named, scope, setsDir: () => String(setSettings(questionGroup(liveConfig())).sets.dir) })
+          const composed = composeQuestions({ set: named, scope, setsDir: () => String(setSettings(questionGroup(liveConfig()).sets).dir) })
           if (!composed.ok) return { questions: {}, problems: [composed.reason] }
           return { questions: composed.questions, problems: [] }
         }
@@ -884,7 +888,11 @@ async function apply(ctx, config) {
     /** The stored sessions a row may choose from, from the harness's own service. Named problems, never throws. */
     storedSessions: () => listStoredSessions(sessionQuery),
     /** The sets this row can see, for a plugin that wants to list or offer them. */
-    questionSets: () => listSets(setSettings(liveConfig()).dir),
+    // `questionGroup(cfg).sets`, like every other call site. Passing `liveConfig()` gave `setSettings` an object with
+    // no `sets` on it, so it silently fell back to the BUNDLED directory -- and a row that configured its own
+    // `questionSetsDir` had its sets listed from somewhere else entirely, which is the quietest kind of drift: the
+    // list was non-empty, plausible, and wrong.
+    questionSets: () => listSets(setSettings(questionGroup(liveConfig()).sets).dir),
     config: () => ({
       // ALL LIVE, INCLUDING THE THREE THAT WERE NOT. `hooks` came from `readHooks(mount)` and `provider`/`model`
       // straight off the snapshot, while every sibling field in this same object read the running config -- so the

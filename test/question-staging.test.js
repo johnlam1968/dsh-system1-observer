@@ -246,3 +246,42 @@ test('every surface that resolves questions goes through the facade, and a new o
   })
   assert.deepEqual(bypasses, [], `these modules reach questions without the facade: ${bypasses.join(', ')}`)
 })
+
+test('the row hands every tool a sets directory that RESOLVES -- the wiring is the part nothing else covered', async () => {
+  const { readFileSync } = await import('node:fs')
+  const row = readFileSync(new URL('../index.js', import.meta.url), 'utf8')
+  // THE DEFECT, and why it needed this test. `setSettings(sets)` takes the SETS and returns `{dir, name}`; passing
+  // the whole question group instead reads `.sets` off `undefined` and throws on the first call that asks a set by
+  // name. Every tool test injects `setsDir` directly, so 853 passing tests agreed with a row that could not answer a
+  // single named-set call -- and it did, on the first live one. The failure is in the WIRING, so the guard reads the
+  // wiring.
+  // The negative form of this guard -- "no `setSettings(...)` may be followed by `.sets`" -- CANNOT be written, and
+  // that is worth recording: the correct call reads `setSettings(questionGroup(cfg).sets).dir`, so it contains `.sets`
+  // inside the parentheses too, and any regex for the buggy shape matches the good one. What distinguishes them is
+  // whether the argument's own tail is `.sets`, which is not a substring question. So the guard below compares the
+  // call SITES against each other instead, and uniformity is what catches the bug.
+
+  // THE GUARD THAT ACTUALLY WORKS, which took three tries to find. The two SUBSTRINGS below differ by one pair of
+  // parentheses, and that is the whole defect: `setSettings(questionGroup(cfg).sets)` passes the sets,
+  // `setSettings(questionGroup(cfg)).sets` passes the group and then reads a property that is not there. Both forms
+  // CONTAIN `.sets`, so a regex for the bad one matches the good one -- which is how the first two attempts at this
+  // guard passed with the bug injected, and why it is written as two substring claims and nothing cleverer.
+  // THE DISCRIMINATOR IS ONE CHARACTER. `.sets)` is the ARGUMENT -- questionGroup's sets, inside setSettings'
+  // parentheses, which is what belongs there. `.sets.dir` or `.sets,` is a property of the RETURN VALUE, and
+  // `setSettings` returns `{dir, name}`.
+  //
+  // This took three attempts, and the first two were WRONG IN A WORTH RECORDING WAY: a balanced-parenthesis regex and
+  // then a `)).sets` substring, each of which either matched the good shape as well as the bad one or -- worse --
+  // PASSED WITH THE BUG INJECTED, which is the failure mode that makes a guard worse than none, because it is
+  // believed. So this was checked the only way that counts: the exact bug was written into `index.js` and the test
+  // was watched to go red, then the file was restored and the test watched to go green again.
+  const sites = row.split('\n').filter((line) => line.includes('setSettings('))
+  assert.ok(sites.length >= 4, `every place the row resolves a sets directory is checked, and ${sites.length} were found`)
+  for (const site of sites) {
+    assert.ok(site.includes('.sets)'),
+      `every setSettings call in the row takes the group's sets as its argument, not a property of its result: ${site.trim()}`)
+  }
+})
+
+
+
