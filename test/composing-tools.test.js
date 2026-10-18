@@ -16,8 +16,33 @@ import { createDecideTool } from '../lib/decide-tool.js'
 import { createQuestionsTool } from '../lib/questions-tool.js'
 import { createBatteryTool } from '../lib/battery-tool.js'
 import { lintScope, lintSelection, MACHINE_UNCOVERED } from '../lib/question-lint.js'
+import { assertValidOutput } from './tool-output-validated.js'
 
 const rules = (result) => (result.findings ?? []).map((f) => f.rule)
+
+// EVERY VALUE GOES THROUGH THE HARNESS'S OWN OUTPUT VALIDATION, on both new tools. The scaffold's first version
+// returned `questions` as an array of id STRINGS while the declaration promises a row object per question, and the
+// LIVE call was refused outright -- `value.questions[0] must be an object`. A unit test that only asserted the file's
+// contents would have passed: the defect was in the tool's own answer, and only the value catches it.
+test('both new actions return a value their own declaration accepts', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'output-'))
+  mkdirSync(join(dir, 'criteria', 'trial-set'), { recursive: true })
+  writeFileSync(join(dir, 'criteria', 'trial-set', 'session.json'), JSON.stringify([
+    { id: 'went_well', type: 'noul', instructions: 'Did it go well?' },
+  ]))
+  mkdirSync(join(dir, 'batteries'), { recursive: true })
+
+  const questions = createQuestionsTool({ dir: join(dir, 'criteria') })
+  assertValidOutput(questions, await questions.execute({ action: 'lint', set: 'trial-set' }, {}), 'lint whole set')
+  assertValidOutput(questions, await questions.execute({ action: 'lint', scope: 'session', specs: [{ id: 'session_ok', type: 'noul', instructions: 'Does the SESSION TRANSCRIPT show it?' }] }, {}), 'lint inline')
+  assertValidOutput(questions, await questions.execute({ action: 'lint', set: 'no-such-set' }, {}), 'lint missing set')
+
+  const battery = createBatteryTool({ dir: () => join(dir, 'batteries'), setsDir: () => join(dir, 'criteria') })
+  assertValidOutput(battery, await battery.execute({ action: 'scaffold', battery: 'trial', set: 'trial-set' }, {}), 'scaffold')
+  assertValidOutput(battery, await battery.execute({ action: 'scaffold', battery: 'trial', set: 'trial-set' }, {}), 'scaffold refused overwrite')
+  assertValidOutput(battery, await battery.execute({ action: 'validate', battery: 'trial', set: 'trial-set' }, {}), 'validate an unfilled scaffold')
+  assertValidOutput(battery, await battery.execute({ action: 'list' }, {}), 'list')
+})
 
 // ── 1. the declaration ────────────────────────────────────────────────────────────────────────────────
 
@@ -134,7 +159,7 @@ test('scaffold writes one case per question at the floor, and labels NOTHING', a
   const tool = createBatteryTool({ dir: () => batteries, setsDir: () => sets })
   const value = await tool.execute({ action: 'scaffold', battery: 'trial', set: 'trial-set' }, {})
   assert.equal(value.labelled, false)
-  assert.deepEqual(value.questions.sort(), ['served', 'went_well'])
+  assert.deepEqual(value.questions.map((q) => q.id).sort(), ['served', 'went_well'])
   const written = JSON.parse(readFileSync(join(batteries, 'trial.battery.json'), 'utf8'))
   assert.equal(written.cases.length, 5, 'the floor is the fewest cases a rate can be published over')
   for (const entry of written.cases) {

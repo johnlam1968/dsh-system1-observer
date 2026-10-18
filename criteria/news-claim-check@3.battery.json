@@ -1,0 +1,55 @@
+{
+  "appliesTo": "news-claim-check@1 scope admit -- SCAFFOLDED, UNLABELLED. Every `expected` is null on purpose: fill each one from the CASE, never from the answer. `system1_battery { action: 'validate' }` refuses this file until it is filled, and that refusal is the point.",
+  "cases": [
+    {
+      "id": "case_1",
+      "note": "TODO: why this case has the label you are about to give it -- a label true by construction, not a judgement you will make after seeing the answer",
+      "state": "TODO: the state this case judges",
+      "expected": {
+        "admit_claim_relation": null,
+        "admit_excerpts_address_the_claim": null,
+        "admit_evidence_directness": null
+      }
+    },
+    {
+      "id": "case_2",
+      "note": "TODO: why this case has the label you are about to give it -- a label true by construction, not a judgement you will make after seeing the answer",
+      "state": "TODO: the state this case judges",
+      "expected": {
+        "admit_claim_relation": null,
+        "admit_excerpts_address_the_claim": null,
+        "admit_evidence_directness": null
+      }
+    },
+    {
+      "id": "case_3",
+      "note": "TODO: why this case has the label you are about to give it -- a label true by construction, not a judgement you will make after seeing the answer",
+      "state": "TODO: the state this case judges",
+      "expected": {
+        "admit_claim_relation": null,
+        "admit_excerpts_address_the_claim": null,
+        "admit_evidence_directness": null
+      }
+    },
+    {
+      "id": "case_4",
+      "note": "TODO: why this case has the label you are about to give it -- a label true by construction, not a judgement you will make after seeing the answer",
+      "state": "TODO: the state this case judges",
+      "expected": {
+        "admit_claim_relation": null,
+        "admit_excerpts_address_the_claim": null,
+        "admit_evidence_directness": null
+      }
+    },
+    {
+      "id": "case_5",
+      "note": "TODO: why this case has the label you are about to give it -- a label true by construction, not a judgement you will make after seeing the answer",
+      "state": "TODO: the state this case judges",
+      "expected": {
+        "admit_claim_relation": null,
+        "admit_excerpts_address_the_claim": null,
+        "admit_evidence_directness": null
+      }
+    }
+  ]
+}
