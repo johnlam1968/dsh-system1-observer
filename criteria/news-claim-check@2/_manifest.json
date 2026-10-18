@@ -1,0 +1,9 @@
+{
+  "description": "Checks a factual claim against the excerpts cited beside it, one claim at a time. @2 differs from @1 by ONE reworded question: `admit_excerpts_address_the_claim` now asks whether the excerpt's SUBJECT matches the claim's, instead of asking about 'the exact claim' and being read as asking whether the excerpt STATES it. Two batteries found that defect three times before the rewrite.",
+  "appliesTo": {
+    "useCase": "evidence-checking a factual claim",
+    "origin": "port of a production question (DansiDanutz/fake-real-jev), then revised by its own battery results",
+    "state": "the operator's own message carries the claim and the cited excerpts",
+    "knownLimitations": "cannot see an article cited as its own evidence, and cannot see that an excerpt covering part of a population does not settle a claim about all of it; both are carried in news-claim-check@3 as known-weak cases"
+  }
+}
