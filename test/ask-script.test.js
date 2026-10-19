@@ -188,3 +188,71 @@ test('a session is MEASURED from an index, and the answers reach the output', as
     server.close()
   }
 })
+
+// ---------------------------------------------------------------------------------------------------------------
+// THE ENDPOINT, AND WHERE IT IS BOUND.
+//
+// The session route used to build its own transport, from a shape with NO ENDPOINT IN IT, while the `--state` route
+// built a different one with an endpoint literal in it. So the wire built its URL from `undefined`, posted to
+// `undefined/v1/systemone`, and every question came back `Failed to parse URL from undefined/v1/systemone` -- a
+// per-question error that read like the model had declined. The fix is a binding, and these are the tests that hold it.
+// ---------------------------------------------------------------------------------------------------------------
+
+test('the endpoint is resolved ONCE, and the standalone has one when nobody names it', async () => {
+  const { wireTransport } = await import('../core/system1.js')
+  const { DEFAULT_STANDALONE_WIRE_URL, DEFAULT_WIRE_URL } = await import('../core/model/wire.js')
+  const key = { OPENROUTER_API_KEY: 'not-a-credential' }
+  assert.equal(wireTransport({ baseUrl: 'http://127.0.0.1:9', env: key }).baseUrl, 'http://127.0.0.1:9',
+    'a named endpoint is used as it stands')
+  assert.equal(wireTransport({ env: key }).baseUrl, DEFAULT_STANDALONE_WIRE_URL,
+    'an unnamed endpoint falls back to the ONE default, in the door every caller goes through')
+  assert.equal(wireTransport({ baseUrl: '   ', env: key }).baseUrl, DEFAULT_STANDALONE_WIRE_URL,
+    'and a blank one is the same as no name -- the hole that was `undefined/v1/systemone`')
+  // THE TWO DEFAULTS ARE DIFFERENT DEPLOYMENTS, NOT TWO GUESSES AT ONE THING: the row's default is the gateway beside
+  // the harness, and the standalone's is the provider its default key belongs to. They must not be made the same.
+  assert.notEqual(DEFAULT_STANDALONE_WIRE_URL, DEFAULT_WIRE_URL)
+  assert.match(DEFAULT_STANDALONE_WIRE_URL, /^https:\/\//, 'the standalone default is a public root, and says so')
+})
+
+test('the script builds its transport in ONE place, so the two routes cannot disagree about the endpoint', async () => {
+  const { readFileSync } = await import('node:fs')
+  const source = readFileSync(SCRIPT, 'utf8')
+  const constructions = (source.match(/wireTransport\(/g) ?? []).length
+  assert.equal(constructions, 1, `the script builds ${constructions} transports; one route with no endpoint in it is how "undefined/v1/systemone" was posted`)
+  // AND THE SCRIPT NAMES NO ENDPOINT OF ITS OWN: the default is bound in `core/model/wire.js`, and a second literal
+  // here would be a second binding -- which is the drift this test exists to stop.
+  assert.equal((source.match(/openrouter\.ai/g) ?? []).length, 0, 'the script names no endpoint of its own')
+})
+
+test('an endpoint that answers nothing is REFUSED BY NAME, and no package is written', async () => {
+  const { mkdtempSync, readdirSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'ask-script-nowhere-'))
+  const dbPath = await indexWith()
+  // PORT 9 IS THE DISCARD PORT: nothing answers there, so the call fails without a network and without money. The
+  // point is not that the endpoint is down -- it is that a run which measured NOTHING says so.
+  const value = await ask(
+    ['session', '--from-sqlite', dbPath, '--session-id', 's1', '--set', 'session@1', '--package', '--dir', dir,
+      '--wire-url', 'http://127.0.0.1:9', '--key-env', 'ASK_SCRIPT_TEST_KEY'],
+    { ASK_SCRIPT_TEST_KEY: 'test-key-not-a-credential' },
+  )
+  assert.notEqual(value.code, 0, 'a run that measured nothing does not exit zero')
+  assert.match(value.stderr, /NO reading/, 'and it says that it produced no reading')
+  assert.match(value.stderr, /no package was written/, 'and that no package was written')
+  assert.match(value.stderr, /http:\/\/127\.0\.0\.1:9/, 'naming the endpoint it tried, so the reader knows where to look')
+  // THE PACKAGE IS THE POINT: a directory under --dir would hold a measurement whose every reading is a failure, and
+  // that reads like a session that was measured and found nothing.
+  assert.deepEqual(readdirSync(dir), [], 'no package was written')
+})
+
+test('the session route refuses a missing credential BY NAME, and spends nothing', async () => {
+  const dbPath = await indexWith()
+  const value = await ask(
+    ['session', '--from-sqlite', dbPath, '--session-id', 's1', '--set', 'session@1',
+      '--wire-url', 'http://127.0.0.1:9', '--key-env', 'ASK_SCRIPT_TEST_KEY'],
+  )
+  assert.notEqual(value.code, 0)
+  assert.match(value.stderr, /ASK_SCRIPT_TEST_KEY` is not set/, 'the credential is named')
+  assert.match(value.stderr, /pass `--key-env NAME`/, 'and the script says how to supply it')
+})

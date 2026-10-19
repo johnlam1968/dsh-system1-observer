@@ -89,6 +89,9 @@ const USAGE = `ask.mjs -- a question set and a state, answered by a System One m
   --json                     machine-readable answers
   --raw                      print exactly what was sent, beside the answers
   --wire-url URL             the endpoint's root; /v1/systemone is appended
+                             (default: the provider the default key belongs to;
+                             the route prints the endpoint it used)
+  --model NAME               the model to ask (default: jev-latest)
   --key-env NAME             the variable holding the key (default OPENROUTER_API_KEY)
   --timeout MS               per-call bound (default 20000)
 `
@@ -96,6 +99,30 @@ const USAGE = `ask.mjs -- a question set and a state, answered by a System One m
 function die(message, code = 1) {
   process.stderr.write(`ask.mjs: ${message}\n\n${USAGE}`)
   process.exit(code)
+}
+
+/**
+ * THE TRANSPORT, FOR EVERY ROUTE. The header of this file claims "one credential path", and it did not have one: the
+ * two routes built their transports separately, with different argument shapes, and the session route's shape had no
+ * endpoint in it at all -- so the wire built its URL from `undefined` and every question came back a refusal that read
+ * like the model had declined. One construction means the two routes cannot disagree about the endpoint, the model, the
+ * credential or the timeout, and `core/system1.js` owns what each of those means when nobody names it.
+ *
+ * The refusals this door makes are said in THIS SCRIPT'S WORDS, because the instrument cannot name a flag that belongs
+ * to this script: it says what is missing, and the script says how to supply it.
+ */
+function transportOf() {
+  try {
+    return wireTransport({
+      baseUrl: flag('--wire-url') ?? undefined,
+      model: flag('--model') ?? undefined,
+      keyEnv: flag('--key-env') ?? undefined,
+      timeoutMs: Number(flag('--timeout')) || undefined,
+    })
+  }
+  catch (error) {
+    die((error instanceof Error ? error.message : String(error)).replace('pass a different variable name', 'pass `--key-env NAME`'))
+  }
 }
 
 /** The state, however it arrived. A URL is fetched; markup is stripped naively and that is disclosed. */
@@ -196,7 +223,10 @@ if (argv[0] === 'session') {
     // The chain is the SAME one `system1_evaluate_session` judges with. A measurement is only comparable with a
     // measurement, so this does not re-implement judging; it supplies a row-native cut and a row-native composer.
     const { judgeSegments, segmentBudgetFor, measurementSummary } = await import('../dsh/measure.js')
-    const { composeQuestions, askQuestions, wireTransport, validateSpecs, renderAnswerLines } = await import('../core/system1.js')
+    // `core/system1.js` IS ALREADY IMPORTED above, statically, and `composeQuestions` and `wireTransport` come from
+    // there. This line used to import the same module a second time, dynamically, and to shadow the two names it
+    // wanted -- so the session route had its own copy of the transport builder, built from a different argument shape,
+    // and the shape had no endpoint in it. One import, one transport, one path to the endpoint.
 
     // WHERE THE ROWS COME FROM, and the two routes answer different questions. `--file` reads a session somebody already
     // normalized; `--from-sqlite` reads one out of an INDEX, which is how you find one among hundreds without walking
@@ -283,7 +313,7 @@ if (argv[0] === 'session') {
     const { segmentChars: chosen, autoSegmented } = segmentBudgetFor({
         windowChars: sessionSummary.visibleChars, askedChars: flag('--segment-chars'), stateBudgetChars: segmentChars, defaultSegmentChars: segmentChars,
     })
-    const transport = wireTransport({ baseUrl: flag('--wire-url') ?? undefined, keyEnv: flag('--key-env') ?? undefined, timeoutMs: Number(flag('--timeout')) || undefined })
+    const transport = transportOf()
     // THE JUDGE IS THE TRANSPORT'S `decide`, and it used to be `askQuestions(transport)` -- which CALLS `askQuestions`
     // with the transport where the INPUT goes and nothing where the transport goes, so it returned a REJECTED PROMISE
     // (an async function does not throw at the call site). Every segment then failed, the failure was written into the
@@ -310,6 +340,27 @@ if (argv[0] === 'session') {
         decide: (request) => judge(request),
     })
 
+    // A MEASUREMENT WITH NO READING IS NOT A MEASUREMENT, and the package must not be written. Every segment failed --
+    // the endpoint was not reached, or it answered something the wire cannot read -- and the failure was about to be
+    // written into the package as a refusal, so the package would carry `n: 0` and `failed: 1` for every question and
+    // READ like a measurement that had found nothing. It is the same masquerade F175 recorded, one level up: the run has
+    // to say that it failed, and a package of failures is not a measurement.
+    const read = judged.rows.filter((row) => row.failure === undefined)
+    const failed = judged.rows.filter((row) => row.failure !== undefined)
+    const reasons = [...new Set(failed.map((row) => row.failure?.reason).filter((reason) => typeof reason === 'string' && reason !== ''))]
+    const nothingRead = judged.rows.length === 0 || read.length === 0
+    if (nothingRead) {
+        if (judged.rows.length === 0) {
+            process.stderr.write('ask.mjs: the session held nothing to measure: no segment was cut, so there is no reading to report\n')
+        }
+        else {
+            process.stderr.write(`ask.mjs: the measurement produced NO reading: ${failed.length} of ${judged.rows.length} segment(s) failed${reasons.length > 0 ? ` -- ${reasons.join('; ')}` : ''}\n`)
+            process.stderr.write(`ask.mjs: the endpoint ${transport.baseUrl} answered nothing\n`)
+        }
+        process.stderr.write('ask.mjs: no package was written, because a package of failures is not a measurement\n')
+        process.stderr.write('ask.mjs: check the endpoint (--wire-url <root>) and the credential (--key-env NAME)\n')
+    }
+
     const summary = measurementSummary({
         receipt, session: { ...sessionSummary, exchanges: exchanges.length },
         judged: { rows: judged.rows, aggregate: judged.aggregate },
@@ -328,7 +379,10 @@ if (argv[0] === 'session') {
     const report = buildSkeleton({ summary, tables, at })
 
     let written = null
-    if (has('--package')) {
+    // NO PACKAGE WITHOUT A READING. The package is the artifact a reader re-derives, and one whose every reading is a
+    // failure is a document about a broken run rather than a measurement of a session -- so it is not written, and the
+    // run says why.
+    if (has('--package') && !nothingRead) {
         const id = packageId({ at, run: null })
         const pkg = buildPackage({ id, at, report, summary, lines: [], meta: { plugin: 'ask.mjs', version: null, dsh: null } })
         const root = flag('--dir') ?? defaultPackageDir()
@@ -344,6 +398,10 @@ if (argv[0] === 'session') {
         // high-water mark were dropped from the output of a measurement. A duplicate key in an object literal is a
         // no-op with no warning, which is why nothing said so.
         session: { ...sessionSummary, harness: receipt.harness, id: receipt.id, sourceSha256: receipt.sourceSha256, highWater: receipt.highWater },
+        // THE ENDPOINT, because a measurement that does not say where it went cannot be reproduced, and two runs of
+        // the same session against two endpoints are two measurements. It is printed rather than assumed, so a reader
+        // sees which one it was.
+        endpoint: transport.baseUrl,
         measurement: summary, autoSegmented, segmentChars: chosen,
         segments: judged.rows.map((row) => ({ index: row.index, messages: row.messages, chars: row.chars, stateHash: row.stateHash, ...(row.failure === undefined ? {} : { failure: row.failure }) })),
         answers: judged.aggregate,
@@ -352,7 +410,13 @@ if (argv[0] === 'session') {
     else {
         if (written !== null) process.stdout.write(`package: ${written.dir}  (${written.files.length} file(s))\n`)
         process.stdout.write(`${receipt.harness} session ${receipt.id} [${String(receipt.sourceSha256).slice(0, 12)}]\n`)
-        process.stdout.write(`${sessionSummary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n\n`)
+        process.stdout.write(`endpoint ${transport.baseUrl}\n`)
+        process.stdout.write(`${sessionSummary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n`)
+        // THE SEGMENTS THAT FAILED, IN THE TERMINAL TOO. A partial measurement is a real measurement, and the package
+        // carries the refusals -- but the terminal is what a person reads, and a terminal that showed only the numbers
+        // would hide the fact that some of them are missing.
+        if (failed.length > 0) process.stdout.write(`${failed.length} of ${judged.rows.length} segment(s) failed${reasons.length > 0 ? `: ${reasons.join('; ')}` : ''}\n`)
+        process.stdout.write('\n')
         // THE NUMBERS, IN THE SHAPE THE REPORT READS, RENDERED BY THE REPORT'S OWN RENDERER. `renderAnswerLines` was
         // used here, and it renders ANSWERS -- `{type, probability}` -- while this is an AGGREGATE over segments, so every
         // line read "undefined (p=true)". `cellOf` is the renderer `buildSkeleton` uses for the same cells, and using it
@@ -361,7 +425,10 @@ if (argv[0] === 'session') {
             process.stdout.write(`  ${question.id}  ${cellOf(question)}\n`)
         }
     }
-    process.exit(0)
+    // AND THE EXIT CODE SAYS SO. A run that measured nothing exits non-zero, so a script that gates on this one does
+    // not read a failed run as a quiet one -- while the output above is still printed, because the record of what failed
+    // is worth more than a bare exit code.
+    process.exit(nothingRead ? 1 : 0)
 }
 
 if (has('--list')) {
@@ -424,14 +491,10 @@ if (has('--lint')) {
 const state = await readState()
 if (state === null) die('one of `--state`, `--file` or `--url` is required')
 
-// THE CREDENTIAL, read by NAME through the module that owns that decision.
-const wireUrl = flag('--wire-url', 'https://openrouter.ai/api')
-let transport
-try {
-  transport = wireTransport({ baseUrl: wireUrl, model: flag('--model', 'jev-latest'), keyEnv: flag('--key-env', 'OPENROUTER_API_KEY'), timeoutMs: Number(flag('--timeout', 20000)) })
-} catch (error) {
-  die((error instanceof Error ? error.message : String(error)).replace('pass a different variable name', 'pass `--key-env NAME`'))
-}
+// THE CREDENTIAL AND THE ENDPOINT, read by NAME through the module that owns those decisions -- and through the ONE
+// construction, so this route and the `session` route above cannot disagree about either. The endpoint default used to
+// be a literal in this line and `undefined` in the other, which is how `undefined/v1/systemone` was ever posted.
+const transport = transportOf()
 
 if (has('--raw')) {
   process.stdout.write(`--- state, exactly as it will be judged (from ${state.from}) ---\n${state.text}\n\n`)

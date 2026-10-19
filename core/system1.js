@@ -38,6 +38,7 @@ import { lintScope, lintSelection, MACHINE_UNCOVERED, SEAM_SCOPES } from './ques
 import { listSets, readSelectedSet, SET_SUFFIX } from './question-sets.js'
 import { buildQuestions } from './questions.js'
 import { createModel } from './model/client.js'
+import { DEFAULT_STANDALONE_WIRE_URL } from './model/wire.js'
 
 /**
  * THE SCOPE OF A CALLER THAT IS NOT A SEAM. A pasted article, a URL, a file, stdin: none of them is a point in an
@@ -289,14 +290,22 @@ export async function askQuestions(input = {}, transport) {
  * The key is read from the environment by its NAME and never taken as an argument: a key on a command line is a key
  * in the shell history, in the process table, and in every `ps` on the host. This is the only place a credential
  * enters the instrument, which is what makes "the instrument holds no secret" checkable rather than aspirational.
+ *
+ * AND THE ENDPOINT IS RESOLVED HERE, NAMED OR THE DEFAULT. This is the one door every caller goes through, so it is the
+ * one place that can say what the endpoint is. It could not, because the standalone built its transport twice: the
+ * `--state` route passed `https://openrouter.ai/api` and the `session` route passed `undefined`, so the wire built the
+ * URL from `undefined` and every question failed with `Failed to parse URL from undefined/v1/systemone` -- a refusal
+ * that read like the model had declined, in a package that read like a measurement that had found nothing. A blank name
+ * is the same as no name, so `--wire-url ''` cannot reach the same hole.
  */
 export function wireTransport({ baseUrl, model = 'jev-latest', keyEnv = 'OPENROUTER_API_KEY', env = process.env, timeoutMs = 20000, fetch } = {}) {
   const apiKey = env[keyEnv]
   if (typeof apiKey !== 'string' || apiKey.trim() === '') {
     throw new Error(`\`${keyEnv}\` is not set. Export it, or pass a different variable name. A key is never an argument here: it would land in the shell history and in every ps on this host.`)
   }
-  const client = createModel({ baseUrl, model, apiKey, timeoutMs, ...(fetch ? { fetch } : {}) })
-  return { decide: (request) => client.decide(request), baseUrl, model }
+  const endpoint = typeof baseUrl === 'string' && baseUrl.trim() !== '' ? baseUrl.trim() : DEFAULT_STANDALONE_WIRE_URL
+  const client = createModel({ baseUrl: endpoint, model, apiKey, timeoutMs, ...(fetch ? { fetch } : {}) })
+  return { decide: (request) => client.decide(request), baseUrl: endpoint, model }
 }
 
 /** The scope a resolved set was read at, when the caller did not say. */

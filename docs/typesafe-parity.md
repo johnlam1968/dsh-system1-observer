@@ -63,7 +63,7 @@ cookbook, which is a different claim and a different priority.
 ## 2. Do we use the TypeSafe SDK? — yes, as a test-time oracle only, and it is not installed here
 
 **The transport is hand-written.** `core/model/wire.js` is one `fetch` to `{baseUrl}/v1/systemone` with a
-hand-assembled body (`core/model/wire.js:52-55`). No runtime path imports any vendor client.
+hand-assembled body (`core/model/wire.js:77-80`). No runtime path imports any vendor client.
 
 **The SDK is a `devDependency`, used by exactly one file:**
 
@@ -93,10 +93,10 @@ SDK cannot close §5 C3 or §5 A3–A5.** Those need the documentation, not the 
 | Capability | Status | Evidence |
 |---|---|---|
 | `noul` / `choice` / `score` construction with enforced shape | COVERED | `core/model/questions.js:34-60` |
-| Many questions per call (speculative fan-out) | COVERED | `core/questions.js:152`, `core/system1.js:264` |
+| Many questions per call (speculative fan-out) | COVERED | `core/questions.js:152`, `core/system1.js:265` |
 | `state` as text or JSON | COVERED | `core/observe.js:196-202`, `core/decide-tool.js:110-123` |
-| `model` on the request body | COVERED (restored 2026-10-18) | `core/model/wire.js:52-55`; `archived/architecture/2026-10-18-standalone-typesafe-auth.md` |
-| Bearer authentication | COVERED (restored 2026-10-18) | `core/model/wire.js:44` |
+| `model` on the request body | COVERED (restored 2026-10-18) | `core/model/wire.js:77-80`; `archived/architecture/2026-10-18-standalone-typesafe-auth.md` |
+| Bearer authentication | COVERED (restored 2026-10-18) | `core/model/wire.js:69` |
 | Reply invariants: Σp≈1 within 0.02, offered-label check, finite-number guards | COVERED | `core/model/narrow.js:21,73-133` |
 | `answer_confidence` distinguished from `confidence` | COVERED | `core/model/narrow.js:226-232` |
 | Revision provenance on every line | COVERED | `core/model/envelope.js:14,37-39` |
@@ -115,13 +115,13 @@ of the documentation, which is why the gaps below read as "we cannot yet *act*" 
 
 | # | Capability | Status | Evidence |
 |---|---|---|---|
-| **A1** | `assets` + images (`data_base64`/`part`, `format`, ref-string substitution, `TypeSafe-Danger-Zone-Images`) | ABSENT — the body is literally `{state, questions, model}`; no `assets` key exists anywhere in the repo | `core/model/wire.js:52-55`; grep for `assets`/`base64` in `core/` → 0 hits |
+| **A1** | `assets` + images (`data_base64`/`part`, `format`, ref-string substitution, `TypeSafe-Danger-Zone-Images`) | ABSENT — the body is literally `{state, questions, model}`; no `assets` key exists anywhere in the repo | `core/model/wire.js:77-80`; grep for `assets`/`base64` in `core/` → 0 hits |
 | **A2** | `box` question type | ABSENT — `buildOne` dispatches exactly three types, and `box` becomes `unknown type "box"` | `core/questions.js:93-99` |
 | **A3** | Structured `instructions` (`object`/`array`) — the documented way to put a database record beside a fixed question | NARROWER — `text()` requires a non-empty string | `core/model/questions.js:8-13` |
 | **A4** | Structured choice criteria / score levels | NARROWER — same gate | `core/model/questions.js:25,48` |
 | **A5** | `criteria` value = `null` ("use null when an option needs no extra detail" — used in the vendor's own examples) | NARROWER — refused as `option "x" needs a criterion`, and the string-only rule is now pinned by a test | `core/model/questions.js:25`; `test/vendor-conformance.test.js:79-81` |
-| **A6** | Long-context header — **262k against the 32k we hard-code around** | ABSENT/UNREACHABLE — `createModel` and `postSystemone` accept a `headers` escape hatch, but **no caller ever passes one**; the row's `wire()` and `scripts/ask.mjs` do not, and there is no `--header` flag | `core/model/wire.js:26,45`; `core/model/client.js:28`; `dsh/index.js:458-465`; grep `headers` → definitions only |
-| **A7** | Body compression (`zstd`/`gzip`) | ABSENT | `core/model/wire.js:42-46` |
+| **A6** | Long-context header — **262k against the 32k we hard-code around** | ABSENT/UNREACHABLE — `createModel` and `postSystemone` accept a `headers` escape hatch, but **no caller ever passes one**; the row's `wire()` and `scripts/ask.mjs` do not, and there is no `--header` flag | `core/model/wire.js:43,69`; `core/model/client.js:28`; `dsh/index.js:458-465`; grep `headers` → definitions only |
+| **A7** | Body compression (`zstd`/`gzip`) | ABSENT | `core/model/wire.js:67-71` |
 
 **A6 is the expensive one.** `core/model/limits.js:32-37` hard-codes 64k/32k "as the vendor states them",
 `stateBudgetChars` derives a ~96k-char cap from it, and `dsh/evaluate-tool.js:427` segments against that — so the
@@ -141,7 +141,7 @@ A3–A5 to `EntryType` is therefore a change to a decision someone already wrote
 | **B2** | **`worstCase` is advertised and never emitted.** `worstCase()` returns a **number**; the tool emits it only `if (isRecord(result.worstCase))`, and a number is never a record. The declared schema also says `type: 'object'`, so emitting it as produced would fail output validation — the guard prevents a live failure and silently drops the field instead | `core/model/escalation.js:16-18`; `core/model/client.js:45`; `core/decide-tool.js:206,337` |
 | **B3** | **`legend` is dropped.** It is the model's own mapping of level index → description, so a level index can never be resolved against what the model actually read | `core/model/narrow.js:186-206` |
 | **B4** | **`provider` / `model` on `system1_decide` are declared, described, and then ignored** — `execute` reads only `state`, `set`, `scope`, `questions`, `question` | `core/decide-tool.js:147-163` vs `:284-292` |
-| **B5** | **`health()` probes an endpoint the vendor does not have.** `GET {baseUrl}/health` is not in the API reference; the second real endpoint is `GET /v1/models`. Against the hosted API this can only report unhealthy. Nothing reads it today, which is why it survived | `core/model/client.js:50-58` |
+| **B5** | **`health()` probes an endpoint the vendor does not have.** `GET {baseUrl}/health` is not in the API reference; the second real endpoint is `GET /v1/models`. Against the hosted API this can only report unhealthy. Nothing reads it today, which is why it survived | `core/model/client.js:50-60` |
 | **B6** | **No model discovery.** `GET /v1/models` is the only documented answer to "which ids may this account send"; we instead hard-code `jev-1.13.0` as `FRONTIER_MODEL` | `core/model/limits.js:29` |
 | **B7** | **Alias direction.** `jev-latest` resolves to **1.13.0** while `jev-preview` is **1.14.0** — "latest" is currently the *older* model. The row ships `model: jev-latest`, so the plugin is on 1.13 and cannot reach 1.14 (which `box` requires) without a config edit nothing in-repo suggests | `cordis.patch.yml`, `docs/manual.md:533` |
 
@@ -149,7 +149,7 @@ A3–A5 to `EntryType` is therefore a change to a decision someone already wrote
 
 | # | Gap | Evidence |
 |---|---|---|
-| **C1** | **No retry, no backoff, no `retry-after`.** Any non-2xx becomes `{kind:'error'}` and is recorded as an `error` line. The vendor documents 429 **and** 529 as retryable, so a seam in the critical path loses a measurement to a transient blip one backoff would have recovered | `core/model/wire.js:58-60` |
+| **C1** | **No retry, no backoff, no `retry-after`.** Any non-2xx becomes `{kind:'error'}` and is recorded as an `error` line. The vendor documents 429 **and** 529 as retryable, so a seam in the critical path loses a measurement to a transient blip one backoff would have recovered | `core/model/wire.js:83-85` |
 | **C2** | **No rate-limit awareness or throttling.** See also §7 — the numbers we cite are no longer at the URL we cite | `core/model/limits.js:20-21` |
 | **C3** | **Request-side validation is only inbound.** `narrow.js` is a thorough reply checker; nothing validates the request against the vendor's own rules (≤64 nesting, finite numbers, ≤255 options, ≤10 levels, ≤32 MiB). A 12-level ladder is accepted by lint and rejected by the API with 422, and `JSON.stringify` writes `NaN` as `null` without a word | `core/model/questions.js:41-50`; per §2, an SDK pin cannot close this |
 | **C4** | **`state` is declared wider than the vendor accepts** — the tool's `oneOf` permits `number`/`boolean`/`null` and `readState` passes any non-null through; the vendor takes `string｜object｜array` only, so those become 422s that read as question defects | `core/decide-tool.js:110-123,51-59` |
@@ -200,7 +200,7 @@ Modes 1–8 are all *"the state we send is the wrong shape for the question"* �
 | # | Gap | Evidence |
 |---|---|---|
 | **N1** | **A battery score is one run per case, so a rewrite comparison measures jitter as much as quality.** The vendor's self-consistency cookbooks ask the *same* question 15 times per condition: mean per-question σ = **0.0102**, agreement **90.8%** — and it still flips on 2 of 8 questions; a 0.60 top-probability gate lifts agreement to 99.2%. Our battery asks once, so a 5–10 point delta between `set@1` and `set@2` is not yet distinguishable from noise — which is precisely the "better vs different" line `core/battery.js:1-25` was written to police | `core/battery-tool.js:64-68` |
-| **N2** | **No concurrency and no 429/529 recovery — mutually blocking.** Every vendor recipe that scales uses 8 workers. We cannot adopt that pattern, and would record errors rather than recover if we did | `core/battery-tool.js:64`; `core/model/wire.js:58-60` |
+| **N2** | **No concurrency and no 429/529 recovery — mutually blocking.** Every vendor recipe that scales uses 8 workers. We cannot adopt that pattern, and would record errors rather than recover if we did | `core/battery-tool.js:64`; `core/model/wire.js:83-85` |
 | **N3** | **No "if code can decide it, don't spend a call" rule.** The vendor's sharpest move is a deterministic pre-filter ahead of the model — a quote that does not substring-match the source is marked `fabricated` **with no model call at all**. We do this in exactly one place (the tool exit code, `core/seams.js:103-112`) and have no rule, lint or measurement asking which other questions code could have answered first | `core/seams.js:103-112`; no counterpart in `core/` |
 | **N4** | **No reviewable *threshold policy* surface.** The vendor repeats "put the constants — questions **and thresholds** — in a single place so they're easy to review" and ships named policy dicts and precedence constants. We have question sets, a lint and a battery — but the other half of confidence-gated routing has no home, and the one aggregate that would seed it is dead (B2) | `core/model/escalation.js:22-29` |
 

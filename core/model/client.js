@@ -48,8 +48,11 @@ export function createModel({ baseUrl, model, apiKey, headers, fetch, timeoutMs 
         };
     }
     async function health() {
+        // NO ENDPOINT IS NOT HEALTHY, and the endpoint is not `undefined` -- the string of it is what this used to ask
+        // about, which is a question no host can answer.
+        if (typeof baseUrl !== 'string' || baseUrl.trim() === '') return false;
         try {
-            const response = await (fetch ?? globalThis.fetch)(`${String(baseUrl).replace(/\/+$/, '')}/health`, { method: 'GET' });
+            const response = await (fetch ?? globalThis.fetch)(`${baseUrl.trim().replace(/\/+$/, '')}/health`, { method: 'GET' });
             return response.ok === true;
         }
         catch {

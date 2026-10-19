@@ -39,3 +39,32 @@ test('a timeout still reads as a timeout', async () => {
   assert.equal(result.kind, 'error')
   assert.match(String(result.reason), /timed out after 20 ms/, 'the timeout keeps its own message: ' + result.reason)
 })
+
+// THE ENDPOINT, OR A NAMED REFUSAL.
+//
+// `baseUrl` used to be stringified straight into the URL, so a caller that named none posted to `undefined/v1/systemone`
+// and the answer was `Failed to parse URL from undefined/v1/systemone` -- which arrived as a PER-QUESTION error and
+// read like the model had declined. A missing endpoint is a configuration fault, and it is named as one now, at the
+// layer that would otherwise have posted it. The string "undefined" must never reach `fetch`.
+test('a missing endpoint is refused BY NAME, and nothing is posted', async () => {
+  for (const baseUrl of [undefined, null, '', '   ']) {
+    let asked = null
+    const result = await postSystemone({
+      baseUrl, state: 'x', questions: [],
+      fetch: async (url) => { asked = url; return { ok: true, json: async () => ({ answers: {} }) } },
+    })
+    assert.equal(result.kind, 'error', `a blank endpoint is refused: ${JSON.stringify(baseUrl)}`)
+    assert.match(String(result.reason), /no endpoint was named/, 'the fault is named: ' + result.reason)
+    assert.equal(asked, null, `nothing was posted for ${JSON.stringify(baseUrl)}`)
+  }
+})
+
+test('the endpoint the wire posts to is the one the caller named, with the path appended', async () => {
+  let asked = null
+  const result = await postSystemone({
+    baseUrl: 'http://127.0.0.1:9/', state: 'x', questions: {},
+    fetch: async (url) => { asked = url; return { ok: true, json: async () => ({ answers: {} }) } },
+  })
+  assert.equal(result.kind, 'ok')
+  assert.equal(asked, 'http://127.0.0.1:9/v1/systemone', 'one trailing slash does not become two')
+})
