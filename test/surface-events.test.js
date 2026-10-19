@@ -13,9 +13,14 @@ import assert from 'node:assert/strict'
 import { surfaceEvents } from '../dsh/session-adapter/lib/surface.js'
 import { composeTurnState } from '../dsh/turn-state.js'
 
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
 const msg = (seq, type, text, surfaceOp = 'append') => ({
   seq, time: seq, type, surfaceOp,
-  data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] } },
+  data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type === 'user/message' ? { source: HUMAN } : {}) },
 })
 const toolResult = (seq, text, surfaceOp) => ({
   seq, time: seq, type: 'tool/result', surfaceOp,
@@ -100,7 +105,7 @@ test('surfaceSeqs, when given, is the RULE -- and the fold is the fallback', () 
 // suite used the latter, so the DECLARED shape had never been exercised; the composer rejected it and refused the
 // turn with "no operator message in the window". This feeds the declared shape and asserts the exchange composes.
 test('a HARNESS-DECLARED user/message event is read, where `data` is the message itself', () => {
-  const declaredUser = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const declaredUser = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }], source: HUMAN } })
   const declaredAssistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
   const events = [
     declaredUser(1, 'THE DECLARED OPERATOR REQUEST'),
@@ -114,7 +119,7 @@ test('a HARNESS-DECLARED user/message event is read, where `data` is the message
   assert.match(String(out.sections?.['OPERATOR NEXT MESSAGE']), /moved on/)
 
   // AND THE OTHER SHAPE STILL WORKS, so this widened the reader rather than replacing one assumption with another.
-  const wrapped = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { message: { role: 'user', content: [{ type: 'text', text }] } } })
+  const wrapped = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { message: { role: 'user', content: [{ type: 'text', text }] }, source: HUMAN } })
   const other = composeTurnState({ events: [wrapped(1, 'THE WRAPPED REQUEST'), declaredAssistant(2, 'an answer'), wrapped(3, 'moved on')] })
   assert.match(String(other.sections?.['OPERATOR REQUEST']), /THE WRAPPED REQUEST/, 'and the wrapped shape is still read')
 })
@@ -129,7 +134,7 @@ test('a HARNESS-DECLARED user/message event is read, where `data` is the message
 //
 // Both shapes are asserted, so this widened the reader rather than trading one assumption for another.
 test('the tool window reads the DECLARED shapes: tool-call blocks and tool/result events', () => {
-  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }], source: HUMAN } })
   const assistant = (seq, blocks) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: blocks }, stream: [] } })
   const declaredCall = (seq, name, args) => ({ seq, time: seq, type: 'tool/call', data: { turn: 1, step: 1, callId: 't1', name, arguments: args } })
   const declaredResult = (seq, text) => ({ seq, time: seq, type: 'tool/result', data: { turn: 1, step: 1, message: { role: 'tool', toolCallId: 't1', content: [{ type: 'text', text }] } } })
@@ -164,7 +169,7 @@ test('the tool window reads the DECLARED shapes: tool-call blocks and tool/resul
 // newest operator message AS the reaction -- so a NEW REQUEST is silently read as a reply to the previous turn, and
 // the wrong exchange is judged with no sign that it was. Announcing the second request is what separates them.
 test('the announced request pins the window, and its absence falls back to the inference', () => {
-  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }], source: HUMAN } })
   const assistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
   const events = [user(1, 'THE FIRST REQUEST'), assistant(2, 'the reply to it'), user(3, 'THE SECOND REQUEST'), assistant(4, 'the reply to that')]
 
@@ -193,7 +198,7 @@ test('the announced request pins the window, and its absence falls back to the i
 // carries the turn's own request under a heading that says NEXT, and `operator_next_message_kind` -- whose abstain
 // option is "OPERATOR NEXT MESSAGE is 'none yet' or absent" -- answers about a message that is not a reaction.
 test('a closing turn with an announced request reports NO next message, not its own request again', () => {
-  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+  const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }], source: HUMAN } })
   const assistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
   const events = [user(1, 'THE REQUEST THAT OPENED THE TURN'), assistant(2, 'the answer being judged')]
 

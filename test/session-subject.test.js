@@ -13,11 +13,16 @@ import { subjectSettings } from '../dsh/subject-settings.js'
 import { composeTurnState } from '../dsh/turn-state.js'
 
 /** One session event in the shape the harness writes and the composer reads. */
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
 const message = (seq, type, text) => ({
   seq,
   time: seq,
   type,
-  data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } },
+  data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type.startsWith('user') ? { source: HUMAN } : {}) },
 })
 /** An assistant turn that ALSO carries a tool call, which is where the real log puts every call (529 of them measured). */
 const assistantWithCall = (seq, text, id, name, args) => ({

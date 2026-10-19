@@ -10,7 +10,12 @@ import { join } from 'node:path'
 import { apply } from '../dsh/index.js'
 
 const accessor = (value) => ({ get: () => value })
-const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }] } })
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
+const user = (seq, text) => ({ seq, time: seq, type: 'user/message', surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text }], source: HUMAN } })
 const assistant = (seq, text) => ({ seq, time: seq, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text }] }, stream: [] } })
 const EVENTS = [user(1, 'THE FIRST REQUEST'), assistant(2, 'the reply to it'), user(3, 'THE SECOND REQUEST'), assistant(4, 'the reply to that')]
 const SPECS = [{ id: 'a_noul', type: 'noul', instructions: 'Is this true?' }]

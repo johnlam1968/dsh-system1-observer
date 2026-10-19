@@ -5,7 +5,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { composeTurnState } from '../dsh/turn-state.js'
 
-const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
+const env = (seq, type, content) => ({ seq, type, data: { message: { content }, ...(type === 'user/message' ? { source: HUMAN } : {}) } })
 const text = (t) => ({ type: 'text', text: t })
 
 const EXCHANGE = [
@@ -17,7 +22,7 @@ const EXCHANGE = [
 ]
 
 // THE SCOPE: a stored session has no reaction, so it is composed as a TRANSCRIPT rather than an exchange.
-const scoped = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
+const scoped = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type.startsWith('user') ? { source: HUMAN } : {}) } })
 const SESSION_FIXTURE = [
   scoped(1, 'user/message', 'please summarise the deployment logs'),
   scoped(2, 'assistant/message', 'here is the summary'),
@@ -30,6 +35,37 @@ test('scope: the default is the EXCHANGE, so the live path is opt-out rather tha
   assert.deepEqual(Object.keys(out.sections), ['OPERATOR REQUEST', 'AGENT RESPONSE', 'TOOL CALLS', 'OPERATOR NEXT MESSAGE'])
   assert.equal(out.sections['OPERATOR NEXT MESSAGE'], 'now shorten it', 'the newest operator message is the reaction')
   assert.doesNotMatch(out.state, /shorter/, 'and the turn after it is outside the exchange -- unchanged behaviour')
+})
+
+test('THE HARNESS IS NOT THE OPERATOR -- an injection is not a turn boundary and is not labelled OPERATOR', () => {
+  // THE HARNESS SPEAKS ON THE USER CHANNEL. A goal, a skill catalogue, a runtime context: the event type is identical
+  // to a person's prompt and only `data.source.kind` separates them. Measured on one real session of 39,098 events:
+  // 753 `user/message` events of which **403 were the human and 350 were the harness** -- a `goal` 233 times over.
+  // So the operator message the exchange is built around could be a skill catalogue, and the transcript labelled it
+  // `OPERATOR`, which is the substitution `dsh/exchange.js` warns about in its own header.
+  const injected = (seq, body, kind) => ({ seq, type: 'user/message', data: { message: { content: [text(body)] }, source: { kind } } })
+  const events = [
+    env(1, 'user/message', [text('the real question')]),
+    injected(2, 'GOAL: finish the migration', 'goal'),
+    env(3, 'assistant/message', [text('the answer')]),
+    injected(4, 'SKILL CATALOGUE: 42 skills', 'skill-catalog'),
+    env(5, 'user/message', [text('thanks, that works')]),
+  ]
+
+  // THE EXCHANGE: the OPERATOR REQUEST is the human's message, not the goal that arrived after it.
+  const exchange = composeTurnState({ events })
+  assert.equal(exchange.refused, false, String(exchange.reason))
+  assert.equal(exchange.sections['OPERATOR REQUEST'], 'the real question', 'the goal is not the operator request')
+  assert.equal(exchange.sections['AGENT RESPONSE'], 'the answer')
+
+  // THE TRANSCRIPT: the injection is KEPT -- the text was on the surface and the agent read it -- but it is labelled
+  // for what it is. The question sets name `OPERATOR` and `AGENT`, and neither is renamed here.
+  const session = composeTurnState({ events, scope: 'session' })
+  assert.match(session.sections['SESSION TRANSCRIPT'], /OPERATOR: the real question/)
+  assert.match(session.sections['SESSION TRANSCRIPT'], /HARNESS: GOAL: finish the migration/)
+  assert.match(session.sections['SESSION TRANSCRIPT'], /HARNESS: SKILL CATALOGUE: 42 skills/)
+  assert.doesNotMatch(session.sections['SESSION TRANSCRIPT'], /OPERATOR: GOAL/, 'a goal is never the operator speaking')
+  assert.doesNotMatch(session.sections['SESSION TRANSCRIPT'], /AGENT: GOAL/, 'and it is not the agent speaking either')
 })
 
 test('scope: a SESSION is a transcript with labels of its own, and it includes the newest turn', () => {
@@ -171,7 +207,7 @@ test('an operator request with no seq REFUSES rather than anchoring the window a
 // names for the operator's own channel, was never driven. An audit found the same asymmetry in the wire envelope:
 // two readings of one thing, one of them only ever exercised by accident.
 test('an operator message in the FLAT shape is read like the nested one', () => {
-  const flat = (seq, text) => ({ seq, type: 'user/message', data: { id: `m${seq}`, role: 'user', content: [text] } })
+  const flat = (seq, body) => ({ seq, type: 'user/message', data: { id: `m${seq}`, role: 'user', content: [body], source: HUMAN } })
   const out = composeTurnState({
     events: [
       flat(1, text('the flat request')),

@@ -14,7 +14,12 @@ import { join } from 'node:path'
 import { apply } from '../dsh/index.js'
 
 const accessor = (value) => ({ get: () => value })
-const msg = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
+const msg = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type === 'user/message' ? { source: HUMAN } : {}) } })
 // A replace carried by a TOOL RESULT: it drops seq 2 and puts nothing of that role back, which is the case where
 // "newest of a role" and "surviving in the surface" disagree.
 const replaced = (seq, text) => ({ seq, time: seq, type: 'tool/result', surfaceOp: { op: 'replace', startSeq: 2, endSeq: 2 }, data: { message: { role: 'tool', toolCallId: 't1', content: [{ type: 'text', text }] } } })

@@ -59,6 +59,32 @@ export function isUserMessage(event) {
     return event?.type === EVENT.USER_MESSAGE
 }
 
+/**
+ * Whether a `user/message` was written BY THE HUMAN.
+ *
+ * THE EVENT TYPE IS NOT ENOUGH, and this is the one distinction the whole measurement rests on. The harness speaks on
+ * the user channel: a skill catalogue, a goal, a runtime context and an agent instruction all arrive as
+ * `user/message`, and only `data.source.kind` separates them from a person typing. Measured on one real session of
+ * 39,098 events: **753 `user/message` events, of which 403 were the human and 350 were the harness** -- a `goal`
+ * injection 233 times over, plus `tool-jobs` 21, `skill-catalog` 23, `runtime-context` 19, `compact-checkpoint` 17.
+ *
+ * So a selector that took the event type naively would hand the judge a skill catalogue as though it were the
+ * question, and would open an ask-group for every injection: the ask count inflates by 86.8% and the groups stop
+ * meaning "a thing the human asked". The event type says which CHANNEL; this says who spoke on it.
+ *
+ * A MISSING SOURCE IS NOT THE HUMAN. Conservative on purpose: calling an injection the operator's input is a worse
+ * error than dropping one message, and `excludedOperators` reports exactly what was dropped and why.
+ *
+ * It lives HERE, beside the vocabulary it reads, because it was in two places at once -- correct in `dsh/exchange.js`
+ * and wrong in the producer and the composer, which asked the same question in a weaker form. One predicate, one
+ * answer.
+ */
+export function isHumanMessage(event) {
+    if (event === null || typeof event !== 'object') return false
+    if (!isUserMessage(event)) return false
+    return sourceKindOf(event) === HUMAN_SOURCE_KIND
+}
+
 /** Whether an event is an `assistant/message`. */
 export function isAssistantMessage(event) {
     return event?.type === EVENT.ASSISTANT_MESSAGE

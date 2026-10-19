@@ -16,7 +16,7 @@
 //
 //  2. THE ANSWER IS THE TURN'S LAST WORD, NOT ITS FIRST. An assistant turn is several messages: narration, tool-call
 //     messages, and finally the text the human reads. G0 keeps only that last one; the rest is G1's evidence.
-import { HUMAN_SOURCE_KIND, isAssistantMessage, isMessageEvent, isUserMessage, sourceKindOf, textOfEvent } from './session-adapter/lib/session-format.js'
+import { HUMAN_SOURCE_KIND, isAssistantMessage, isHumanMessage, isMessageEvent, isUserMessage, sourceKindOf, textOfEvent } from './session-adapter/lib/session-format.js'
 
 /** The groups named in `docs/measurement-depth.md`. G4 is provenance and is never selected off. */
 export const GROUP_NAMES = Object.freeze(['G0', 'G1', 'G2', 'G3', 'G4'])
@@ -30,15 +30,11 @@ export const BUILT_GROUPS = Object.freeze(['G0', 'G1'])
 
 // G0 TAKES THE HUMAN'S MESSAGES, and which of the three kinds of `user/message` is the human's is the harness's
 // declaration (`types.ts:309`), so the constant is re-exported from where that vocabulary lives rather than restated.
-export { HUMAN_SOURCE_KIND }
-
-export function isHumanMessage(event) {
-  if (event === null || typeof event !== 'object') return false
-  if (!isUserMessage(event)) return false
-  // A MISSING SOURCE IS NOT THE HUMAN. Conservative on purpose: calling an injection the operator's input is a worse
-  // error than dropping one message, and `excludedOperators` reports exactly what was dropped and why.
-  return sourceKindOf(event) === HUMAN_SOURCE_KIND
-}
+// `isHumanMessage` is re-exported for the same reason and for the same history: it used to live HERE, and the
+// producer and the composer each asked the same question in a weaker form -- by event type alone -- which is how
+// 350 harness injections in one session came to count as operator asks. The predicate now lives with the vocabulary
+// it reads (`session-format.js`), and this module's public API is unchanged.
+export { HUMAN_SOURCE_KIND, isHumanMessage }
 
 /** The `user/message` events that are NOT the human, by source -- what a G0 reading left out, and how much text. */
 export function excludedOperators(events = []) {

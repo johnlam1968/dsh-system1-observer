@@ -58,6 +58,30 @@ test('a session comes back out of the index as rows the SAME contract accepts', 
     assert.equal(summary.reasoningChars, 'because'.length)
 })
 
+test('THE INDEX NAMES THE HARNESS IN ITS OWN WORD, and the reader translates it', () => {
+    // `dsh-session-index` writes a role of `harness` for every event that is neither a human message nor an assistant
+    // message -- a goal, a skill catalogue, a runtime context. Those are real messages that were on the surface, but
+    // the rows contract has no `harness` role, and it is right not to: a role is a claim about who spoke, and the
+    // harness speaking IS the system. The reader translates, which is the same translation the log producer makes --
+    // so a measurement taken from the index is comparable with one taken from the file.
+    const { rows, problem } = rowsFromSqlite(index({
+        messages: [
+            { seq: 1, exchange: 0, role: 'user', kind: 'user', text: 'the ask' },
+            { seq: 2, exchange: 0, role: 'harness', kind: 'goal', text: 'GOAL: finish the migration' },
+            { seq: 3, exchange: 0, role: 'assistant', kind: 'assistant', text: 'the answer' },
+        ],
+    }), 's1')
+    assert.equal(problem, null)
+    const messages = rows.filter((r) => r.kind === 'message')
+    assert.deepEqual(messages.map((m) => m.role), ['user', 'system', 'assistant'], 'the index\'s `harness` is read as `system`')
+    // AND IT IS NOT AN ASK, which is the whole point: an injection does not open an ask-group and does not count as
+    // the operator having asked something.
+    const exchanges = exchangesOfRows(rows)
+    assert.equal(exchanges.length, 1)
+    assert.deepEqual(exchanges[0].asks.map((m) => m.text), ['the ask'], 'the harness row is not an ask')
+    assert.deepEqual(validateRows(rows), [], 'and the contract accepts the translated rows')
+})
+
 test('THE RECEIPT IS THE INDEX\'S, and it says the rows came from an index', () => {
     const { rows, receipt } = rowsFromSqlite(index({ messages: CONVERSATION }), 's1')
     assert.equal(receipt.sourceSha256, 'ab'.repeat(32), 'the sha256 describes what was INDEXED, unaltered')

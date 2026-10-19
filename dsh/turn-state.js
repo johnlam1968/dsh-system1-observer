@@ -22,13 +22,30 @@ import { surfaceEvents } from './session-adapter/lib/surface.js'
 // indistinguishable from an absent one once it reaches the model, which is the failure this repository catalogues as
 // presence-versus-absence.
 import { assembleToolCalls } from './tool-blocks.js'
-import { isMessageEvent, roleOf, textOfContent, textOfMessage } from './session-adapter/lib/session-format.js'
+import { isHumanMessage, isMessageEvent, roleOf, textOfContent, textOfMessage } from './session-adapter/lib/session-format.js'
 
 const isMessage = (event) => isMessageEvent(event)
     // EITHER SHAPE, AND IT MUST CARRY ONE. `SessionEventMap` declares `'user/message': UserMessage` -- `data` IS the
     // message -- while `assistant/message` and `tool/result` declare `data.message`. A message event that carries
     // NEITHER is not a message this composer can read, and saying so here is what makes the refusal below honest.
     && (event.data?.message !== undefined || event.data?.content !== undefined)
+
+/**
+ * THE LABEL A MESSAGE CARRIES IN THE TRANSCRIPT, and the third one is the point.
+ *
+ * `OPERATOR` is the human and `AGENT` is the model. The harness speaks on the user channel as well -- a goal, a
+ * skill catalogue, a runtime context -- and it used to be labelled `OPERATOR`, because the label was chosen by
+ * channel. So the judge was handed a skill catalogue as though the person had typed it, which is the substitution
+ * `dsh/exchange.js` warns about in its own header.
+ *
+ * `HARNESS` says what it is without inventing an author: the text is real, it was on the surface, the agent read it,
+ * and it is not a thing anybody said. The question sets name `OPERATOR` and `AGENT` and nothing here renames those --
+ * a third label is added, not a second meaning is given to an existing one.
+ */
+function labelOf(entry) {
+    if (entry.role === 'assistant') return 'AGENT'
+    return entry.human ? 'OPERATOR' : 'HARNESS'
+}
 
 /**
  * The labelled target, or the reason it cannot be built.
@@ -65,10 +82,18 @@ export function composeTurnState({ events = [], nextMessage, maxChars = 8000, to
     // request resolved to an empty tool-result message and the tool window then started AFTER the call it was
     // meant to contain. An operator message is one that carries text; a delivery that carries a result is not a
     // turn boundary and must never be read as one.
+    //
+    // AND NEITHER IS A HARNESS INJECTION, which is the harder half of the same mistake. The harness speaks on the
+    // user channel with its own `source.kind` -- a goal, a skill catalogue, a runtime context, an agent instruction --
+    // and it was a `user/message` like any other, so "role is user and it carries text" was true of it too. Measured
+    // on one real session: 753 `user/message` events, 403 of them the human, so **350 injections were competing with
+    // the operator for the turn boundary**, and the OPERATOR REQUEST section could quote a skill catalogue. The
+    // channel is not the speaker: `isHumanMessage` is the one predicate that says who wrote it.
     const messages = list.map((event) => {
         const role = roleOf(event)
         const text = textOfContent((event.data?.message?.content ?? event.data?.content) ?? [])
-        return { seq: event.seq, role, text, operator: role === 'user' && text !== '' }
+        const human = isHumanMessage(event)
+        return { seq: event.seq, role, text, human, operator: human && text !== '' }
     })
 
     // ---------------------------------------------------------------------------------------------
@@ -90,7 +115,7 @@ export function composeTurnState({ events = [], nextMessage, maxChars = 8000, to
             return { refused: true, reason: 'no messages in the window, so there is no conversation to judge' }
         }
         const transcript = messages
-            .map((entry) => `${entry.role === 'user' ? 'OPERATOR' : 'AGENT'}: ${entry.text === '' ? '(no text)' : entry.text}`)
+            .map((entry) => `${labelOf(entry)}: ${entry.text === '' ? '(no text)' : entry.text}`)
             .join('\n\n')
         const allTools = assembleToolCalls(surface, { includeText: false, maxChars: toolMaxChars, tailChars })
         const sessionSections = { 'SESSION TRANSCRIPT': transcript, 'TOOL CALLS': allTools.text }

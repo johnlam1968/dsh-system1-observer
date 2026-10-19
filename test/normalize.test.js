@@ -19,7 +19,14 @@ import { readRowsJsonl, validateRows, rowsSummary, exchangesOfRows } from '../co
 
 const receipt = { harness: 'dsh', id: 's1', source: '/logs/s1.jsonl', sourceBytes: 100, sourceSha256: 'ab'.repeat(32), highWater: 9 }
 
-const ask = (seq, text) => ({ type: EVENT.USER_MESSAGE, seq, data: { content: [{ type: 'text', text }] } })
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue, a runtime context -- and only `data.source.kind` separates those from
+// a person typing. Measured on this host: of 1,501 `user/message` events in 120 real session files, **180 were the
+// harness** and not the human. A fixture that omits the kind is therefore not a human message, and the producer
+// now treats it as one.
+const ask = (seq, text) => ({ type: EVENT.USER_MESSAGE, seq, data: { content: [{ type: 'text', text }], source: { kind: 'user' } } })
+// THE HARNESS ON THE USER CHANNEL: the same event type, a different declared author.
+const injected = (seq, text, kind = 'goal') => ({ type: EVENT.USER_MESSAGE, seq, data: { content: [{ type: 'text', text }], source: { kind } } })
 const answer = (seq, text, reasoning = null) => ({
     type: EVENT.ASSISTANT_MESSAGE, seq,
     data: { message: { content: [{ type: 'text', text }, ...(reasoning === null ? [] : [{ type: 'reasoning', text: reasoning }])] } },
@@ -31,6 +38,35 @@ test('a dsh log becomes rows that SATISFY THE CONTRACT the standalone reads', ()
     const parsed = readRowsJsonl(rowsToJsonl(rows))
     assert.equal(parsed.malformed.length, 0)
     assert.equal(parsed.rows.length, rows.length)
+})
+
+test('THE HUMAN IS NOT EVERY `user/message` -- an injection opens no group and is not an ask', () => {
+    // THE SHAPE THIS EXISTS FOR. The harness speaks on the user channel: a `goal`, a skill catalogue, a runtime
+    // context, an agent instruction. The event type is identical to a person's prompt and only `data.source.kind`
+    // separates them. Measured on one real session of 39,098 events: 753 `user/message` events of which **403 were
+    // the human and 350 were the harness** -- so counting the type opened an ask-group for every injection and
+    // inflated the ask count by 86.8%. The judge was handed skill catalogues as though they were the questions.
+    const rows = normalizeEvents([
+        ask(1, 'the real question'),
+        injected(2, 'GOAL: finish the migration', 'goal'),
+        injected(3, 'SKILL CATALOGUE: 42 skills', 'skill-catalog'),
+        answer(4, 'the answer'),
+    ], receipt)
+
+    const exchanges = exchangesOfRows(rows)
+    assert.equal(exchanges.length, 1, 'three user/messages, ONE ask-group: the injections do not open one')
+    assert.deepEqual(exchanges[0].asks.map((m) => m.text), ['the real question'], 'and the group holds the human ask, not the injections')
+    assert.deepEqual(exchanges[0].answers.map((m) => m.text), ['the answer'])
+
+    // AND THE INJECTION IS NOT AN ASK BY ROLE. It is `system` -- the harness speaking -- because the contract has no
+    // `harness` role and the harness speaking IS the system. The row is KEPT: the text was on the surface, the agent
+    // read it, and dropping it would lose evidence the group really had.
+    const messages = rows.filter((r) => r.kind === 'message')
+    assert.deepEqual(messages.map((m) => m.role), ['user', 'system', 'system', 'assistant'])
+    assert.deepEqual(messages.map((m) => m.exchange), [0, 0, 0, 0], 'and every one of them is in the group the ask opened')
+
+    // THE CONTRACT STILL HOLDS, because a row the contract refuses is a producer that drifted.
+    assert.deepEqual(validateRows(rows), [], 'a producer that drifts from its consumer must be red here')
 })
 
 test('the exchange is an ASK-GROUP: two asks make two exchanges, whatever the log calls them', () => {

@@ -21,6 +21,28 @@ import { DatabaseSync } from 'node:sqlite'
 const SESSION_COLUMNS = 'id, format, path, bytes, source_sha256, high_water, created_at, cwd'
 
 /**
+ * THE INDEX NAMES THE HARNESS IN ITS OWN WORD, and the contract has no such word.
+ *
+ * `dsh-session-index` writes a `role` of `harness` for every event that is not a human message and not an assistant
+ * message -- a goal, a skill catalogue, a runtime context, an agent instruction. Those are real messages: they were on
+ * the surface and the agent read them. But `core/session-rows.js` allows `user`, `assistant`, `system`, `developer`
+ * and `tool`, and it is right to: a role is a claim about who spoke, and the harness speaking IS the system.
+ *
+ * So the reader translates, and the translation is the same one the log producer makes -- a harness-sourced
+ * `user/message` is `system` there too, which is what makes a measurement taken from the index comparable with one
+ * taken from the file. An index built before the `exchange` column existed cannot be read at all; an index that
+ * carries a role this reader does not recognise is passed through unchanged, so the CONTRACT names it rather than
+ * this reader inventing a meaning for it.
+ */
+const ROLE_OF_INDEX = new Map([['harness', 'system']])
+
+/** The index's role, in the contract's vocabulary. */
+function roleOfIndex(role) {
+    if (role === null || role === undefined) return null
+    return ROLE_OF_INDEX.get(role) ?? role
+}
+
+/**
  * Read one session out of an index, as normalized rows.
  *
  * @param {string} path  the `.db` file
@@ -93,7 +115,7 @@ export function rowsFromSqlite(path, sessionId) {
                 seq: row.seq ?? null,
                 exchange: row.exchange ?? null,
                 ordinal: rows.length,
-                role: row.role ?? null,
+                role: roleOfIndex(row.role) ?? null,
                 type: 'text',
                 text: row.text ?? '',
                 // NULL, NOT ''. An empty string and an absent answer are different facts, and the rows contract

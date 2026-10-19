@@ -21,7 +21,7 @@
 // stored log go through the same producer.
 
 import { exchangesOf } from './exchange.js'
-import { EVENT, isMessageEvent, isUserMessage, textOfEvent } from './session-adapter/lib/session-format.js'
+import { EVENT, isHumanMessage, isMessageEvent, textOfEvent } from './session-adapter/lib/session-format.js'
 import { surfaceEvents } from './session-adapter/lib/surface.js'
 
 /** The dsh role -> the normalized role. A harness fact that has to be said once, in one place. */
@@ -32,6 +32,23 @@ const ROLE_OF_EVENT = new Map([
     [EVENT.DEVELOPER_MESSAGE, 'developer'],
     [EVENT.TOOL_CALL, 'tool'],
 ])
+
+/**
+ * THE ROLE OF ONE EVENT, and the one place the producer asks who spoke.
+ *
+ * A `user/message` is the HUMAN only when its `data.source.kind` says so. The harness speaks on the same channel --
+ * a skill catalogue, a goal, a runtime context -- and the event type cannot tell them apart. So an injection is
+ * `system` here: it is context the agent was given, it is not an ask, and `exchangesOfRows` counts a group's asks as
+ * the rows whose role is `user`. The contract has no `harness` role and does not need one: the harness speaking IS
+ * the system, and naming it that way keeps the row in the group instead of dropping the evidence.
+ *
+ * Measured on one real session: 753 `user/message` events, 403 of them the human. Counting the type instead of the
+ * speaker inflated the ask count by 86.8% and opened an ask-group for every injection.
+ */
+function roleOfEvent(event) {
+    if (event?.type === EVENT.USER_MESSAGE) return isHumanMessage(event) ? 'user' : 'system'
+    return ROLE_OF_EVENT.get(event?.type) ?? 'assistant'
+}
 
 /**
  * The ask-group index of every event, by IDENTITY.
@@ -45,6 +62,12 @@ const ROLE_OF_EVENT = new Map([
  * belongs to that group until the next ask. Nothing here reads `turn`, so a session that has none is grouped the same
  * way as a session that has thousands.
  *
+ * "A HUMAN MESSAGE" IS NOT "A `user/message`". The harness speaks on the user channel -- a goal, a skill catalogue, a
+ * runtime context -- and only `data.source.kind` separates those from a person typing. Counting the event type opened
+ * an ask-group for every injection: measured on one real session, 753 groups where there are 403, which is 350
+ * injections counted as operator asks. `isHumanMessage` is the predicate that says who spoke, and it is the SAME one
+ * `dsh/exchange.js` has always used, so the two producers cannot disagree about where a conversation turns.
+ *
  * The map is keyed by object identity, not by `seq`: a window handed back by the host may carry events whose `seq` is
  * absent, and a map keyed on a field that is sometimes missing silently drops half the conversation.
  */
@@ -52,7 +75,7 @@ function exchangeIndexOf(events) {
     const index = new Map()
     let ordinal = -1
     for (const event of events) {
-        if (isUserMessage(event)) ordinal += 1
+        if (isHumanMessage(event)) ordinal += 1
         // THE LEADING RUN before the first ask belongs to the first group rather than to a group of its own: a
         // session that opens with narration has not asked anything yet, and `exchange: -1` would be a key no query
         // knows how to select.
@@ -123,7 +146,7 @@ export function normalizeEvents(events, receipt = {}) {
             }
             continue
         }
-        const role = ROLE_OF_EVENT.get(event.type) ?? 'assistant'
+        const role = roleOfEvent(event)
         // REASONING IS ITS OWN ROW-TYPE, not a field of the text. The rule is that absence is `null`: a message with
         // no reasoning says so, and one cannot be confused with an answer that was genuinely empty.
         const reasoning = role === 'assistant' ? reasoningOf(event) : null

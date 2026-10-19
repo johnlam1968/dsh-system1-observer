@@ -6,7 +6,12 @@ import { createTurnObserver } from '../core/turn-observer.js'
 import { createTurnListener } from '../core/turn-listener.js'
 import { probeViolations } from '../core/turn-record.js'
 
-const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })
+// A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
+// channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.
+// Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
+// fixture that omits the kind is not a human message, and the composer now reads it as one.
+const HUMAN = { kind: 'user' }
+const env = (seq, type, content) => ({ seq, type, data: { message: { content }, ...(type === 'user/message' ? { source: HUMAN } : {}) } })
 const text = (t) => ({ type: 'text', text: t })
 const SPECS = [{ id: 'a_noul', type: 'noul', instructions: 'Is this true?' }]
 const config = { questions: { turn: SPECS } }
