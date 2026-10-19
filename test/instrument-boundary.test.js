@@ -17,6 +17,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
+import { normalize, join, dirname } from 'node:path'
 
 /**
  * The instrument, as files.
@@ -137,3 +138,56 @@ test('the instrument has NO host edge: it reaches a model over HTTP and nothing 
   const reaching = INSTRUMENT.filter((file) => /\bctx\.\w/.test(code(read(file))))
   assert.deepEqual(reaching, [], 'the instrument reaches the host again:\n  ' + reaching.join('\n  '))
 })
+
+// THE STANDALONE'S OWN BOUNDARY, DERIVED RATHER THAN DECLARED.
+//
+// `INSTRUMENT` above is a list somebody chose, and it is 22 files that predate the facade. Proved by injection: adding
+// `import { liveConfig } from './config-value.js'` to `lib/system1.js` -- the module `scripts/ask.mjs` composes every
+// question through -- left all five boundary tests GREEN, because that file is not on the list. Only the clean-room
+// run caught it, and it did, by dying on the import. A boundary enforced by a hand-kept list is a boundary that is
+// true until someone adds a module.
+//
+// So this derives the real one: walk the import graph from `scripts/ask.mjs` and assert that every file it reaches can
+// be loaded with no `node_modules` at all -- no bare specifier anywhere in the closure, and nothing under `lib/host/`.
+// That is the property the standalone actually has, and it is measured from the entry point rather than asserted
+// about a list.
+test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at all', () => {
+  const seen = new Set()
+  const bare = []
+  const queue = ['scripts/ask.mjs']
+  while (queue.length > 0) {
+    const file = queue.pop()
+    if (seen.has(file)) continue
+    seen.add(file)
+    const source = read(file)
+    for (const match of source.matchAll(/from\s+'([^']+)'/g)) {
+      const specifier = match[1]
+      if (specifier.startsWith('node:')) continue
+      if (!specifier.startsWith('.')) { bare.push(file + ' imports ' + specifier); continue }
+      const resolved = normalize(join(dirname(file), specifier))
+      if (existsSync(resolved)) queue.push(resolved)
+      else bare.push(file + ' imports ' + specifier + ' (which does not exist)')
+    }
+  }
+  assert.deepEqual(bare, [], 'the standalone cannot be loaded without installing something:\n  ' + bare.join('\n  '))
+
+  // AND THE CLOSURE IS CHECKED SEMANTICALLY, not just for bare specifiers. A FIRST attempt at this test only flagged
+  // NON-RELATIVE imports, and it stayed green with `import { liveConfig } from './config-value.js'` injected into
+  // `lib/system1.js` -- a relative path to a file that exists, so the walk simply followed it and called the closure
+  // portable. Syntax cannot tell harness glue from a helper; the RULES the declared boundary already uses can, and
+  // they are applied here to the DERIVED set rather than to a hand-kept list.
+  const glue = []
+  for (const file of seen) {
+    const source = code(read(file))
+    if (/from\s+'[^']*config-value\.js'/.test(source)) glue.push(file + ' imports config-value.js')
+    if (/\b(readConfigValue|plainConfig|liveConfig)\s*\(/.test(source)) glue.push(file + ' calls a config reader')
+    if (file.includes('lib/host/')) glue.push(file + ' is host glue')
+    if (/from\s+'[^']*host-events\.js'/.test(source)) glue.push(file + ' imports host-events.js')
+  }
+  assert.deepEqual(glue, [], 'the standalone reaches harness glue:\n  ' + glue.join('\n  '))
+
+  // AND THE CLOSURE IS NOT VACUOUS -- a graph that resolved to nothing would pass every assertion above.
+  assert.ok(seen.has('lib/system1.js'), 'the closure really does reach the facade')
+  assert.ok([...seen].filter((f) => f.startsWith('lib/')).length >= 10, `and it is a real graph, ${[...seen].filter((f) => f.startsWith('lib/')).length} lib files`)
+})
+
