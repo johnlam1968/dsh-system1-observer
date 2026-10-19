@@ -27,6 +27,7 @@
 // THE KEY IS READ FROM THE ENVIRONMENT and named by `--key-env`, never taken as an argument: a key on a command line
 // is a key in the shell history, in the process table, and in every `ps` on the host.
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { validateSpecs } from '../core/questions.js'
 import { dirname, resolve } from 'node:path'
@@ -60,6 +61,7 @@ const USAGE = `ask.mjs -- a question set and a state, answered by a System One m
 
   session                    MEASURE a normalized session (see below); the other routes just ask about a state
 
+    --log PATH                 a dsh session log -- what every importer's output lands on
     --from-sqlite DB           read the session out of an index instead of a file
     --session-id ID            which session, when reading from an index
     --package                  write a shareable package in the same call
@@ -218,8 +220,33 @@ if (argv[0] === 'session') {
                     return { rows: found.rows, malformed: [] }
                 })
         }
+        // --log IS THE ROUTE EVERY IMPORTER'S OUTPUT LANDS ON. `import-pi-sessions`, `import-deepseek-web` and
+        // `zeroclaw-to-interchange` (via dsh-chat-import) all end in a dsh session log, and `dsh/normalize.js` is the
+        // one producer that turns a dsh log into rows. So one flag here measures any of them, and the alternative --
+        // every importer growing its own row writer -- is the drift the normalized shape exists to prevent.
+        const log = flag('--log')
+        if (log !== null) {
+            const { normalizeEvents } = await import('../dsh/normalize.js')
+            const text = readFileSync(resolve(log), 'utf8')
+            // A MALFORMED LINE IN THE LOG IS COUNTED HERE TOO, and for the same reason as in a rows file: an importer
+            // that wrote a broken line would otherwise produce a shorter conversation that measures cleanly.
+            const events = []
+            const malformed = []
+            text.split('\n').forEach((line, index) => {
+                if (line.trim() === '') return
+                try { events.push(JSON.parse(line)) } catch (error) { malformed.push({ line: index + 1, reason: error.message }) }
+            })
+            const rows = normalizeEvents(events, {
+                harness: 'dsh', id: log.split('/').pop().replace(/\.jsonl$/, ''),
+                source: resolve(log), sourceBytes: Buffer.byteLength(text, 'utf8'),
+                // THE SHA256 OF WHAT WAS READ, not of what was indexed and not of what the receipt claims.
+                sourceSha256: createHash('sha256').update(text).digest('hex'),
+                highWater: events.at(-1)?.seq ?? null,
+            })
+            return { rows, malformed }
+        }
         const source = flag('--file')
-        if (source === null) die('`session` needs --file <rows.jsonl> or --from-sqlite <db> --session-id <id>')
+        if (source === null) die('`session` needs --log <dsh.jsonl>, --file <rows.jsonl>, or --from-sqlite <db> --session-id <id>')
         return readRowsJsonl(readFileSync(resolve(source), 'utf8'))
     })()
     // RULE 3, AT THE POINT IT COSTS SOMETHING. A malformed line is reported and the run STOPS: measuring a shorter
