@@ -23,6 +23,7 @@
 import { exchangesOf } from './exchange.js'
 import { EVENT, isHumanMessage, isMessageEvent, textOfEvent } from './session-adapter/lib/session-format.js'
 import { surfaceEvents } from './session-adapter/lib/surface.js'
+import { withoutNuls } from '../core/session-rows.js'
 
 /** The dsh role -> the normalized role. A harness fact that has to be said once, in one place. */
 const ROLE_OF_EVENT = new Map([
@@ -115,9 +116,17 @@ export function normalizeEvents(events, receipt = {}) {
     const onSurface = new Set(surfaceEvents(list))
     const exchangeOf = exchangeIndexOf(list)
 
+    // THE HARNESS NAMES ITS FORMAT TOO, and the two channels must agree on that. The reader that reads an index says
+    // `dsh:v4` -- the index's own `format` column -- while this used to say `dsh`, so the SAME session measured from
+    // the log and measured from the index carried two DIFFERENT RECEIPTS, and the receipt is the anchor a measurement
+    // is argued from. The version is the log's own header, read the way the store reads it.
+    const header = list.find((event) => event?.type === 'session' && Number.isInteger(event?.version))
+    const named = String(receipt.harness ?? 'dsh')
+    const harness = header !== undefined && !named.includes(':') ? `${named}:v${header.version}` : named
+
     const rows = [{
         kind: 'receipt',
-        harness: receipt.harness ?? 'dsh',
+        harness,
         id: receipt.id ?? null,
         source: receipt.source ?? null,
         sourceBytes: Number.isFinite(receipt.sourceBytes) ? receipt.sourceBytes : null,
@@ -138,8 +147,11 @@ export function normalizeEvents(events, receipt = {}) {
                     seq: event.seq ?? null,
                     exchange: exchangeOf.get(event) ?? null,
                     callId: event.data?.callId ?? event.data?.id ?? null,
-                    name: event.data?.name ?? null,
-                    args: event.data?.arguments ?? event.data?.args ?? null,
+                    // AND THE NAME AND THE ARGUMENTS CARRY NO NUL, because the index channel would store the bytes
+                    // before the first one and drop the rest -- a name became an EMPTY STRING in the index where the
+                    // log held one, and an empty name is not a name. Measured: 2 of 201 tool calls in one session.
+                    name: withoutNuls(event.data?.name ?? null),
+                    args: withoutNuls(event.data?.arguments ?? event.data?.args ?? null),
                     result: null,
                     outcome: null,
                 })
@@ -158,11 +170,23 @@ export function normalizeEvents(events, receipt = {}) {
             ordinal: (ordinal += 1),
             role,
             type: 'text',
-            text,
-            reasoning: reasoning === '' ? null : reasoning,
+            // THE TEXT AND THE REASONING CARRY NO NUL BYTE, and the reason is the index channel: `node:sqlite` binds a
+            // string with NUL-terminated semantics, so a message whose text held one was 100 characters in this file and
+            // ELEVEN in the index -- the 89 characters after the NUL were not shortened, they were gone, and the row read
+            // as though the model had said less. Measured on the live corpus: 67 messages in 1 of 946 sessions, and the
+            // two channels composed different sessions because of it. The rule is the contract's (RULE 7) and the fix is
+            // U+FFFD, so the text keeps its length and both channels produce the same characters.
+            text: withoutNuls(text),
+            reasoning: reasoning === '' ? null : withoutNuls(reasoning),
             // THE ONE FIELD A PROJECTION WOULD GET WRONG, because it looks like a default and is not one.
             shadowed: !onSurface.has(event),
-            interrupted: event.data?.interrupted === true,
+            // AND `interrupted` IS A FACT, OR IT IS ABSENCE. A dsh v4 `assistant/message` carries `interrupted` only
+            // when it was interrupted, so reading it as `=== true` answered `false` for every message that never said
+            // anything about it -- and `false` is a CLAIM ("this message was not interrupted") from a reader that never
+            // looked. Measured: 278 of 282 message rows in 120 live sessions carried no such field, and the index
+            // channel, which has no column for it, said `null` for all of them -- so the two channels disagreed on
+            // 100% of messages, on a field this contract had just made mandatory. Absence is `null`.
+            interrupted: typeof event.data?.interrupted === 'boolean' ? event.data.interrupted : null,
         })
     }
     return rows

@@ -1,4 +1,4 @@
-// THE NORMALIZED SESSION ROWS -- one shape, every harness, and the four rules it exists to enforce.
+// THE NORMALIZED SESSION ROWS -- one shape, every harness, and the rules it exists to enforce.
 //
 // WHY THIS EXISTS RATHER THAN A dsh EVENT LOG. A session is a conversation; dsh is one way of writing one down. The
 // measured reason this is not a dsh shape: pi has NO TURN AT ALL -- all 44 pi messages in the surveyed corpus carried a
@@ -9,13 +9,23 @@
 // WHAT A ROW IS. One JSON object per line. A session is a RECEIPT, then MESSAGES, TOOL CALLS and FACTS. The receipt
 // comes first because a measurement that cannot name the bytes it read cannot be reproduced or argued with.
 //
-// THE FOUR RULES, each enforced below rather than described:
+// THE RULES, each enforced below rather than described:
 //   1. `exchange` is the boundary, and it is an ASK-GROUP -- never a native turn. `validateRows` refuses a `turn`.
 //   2. `shadowed` is required. 3,417 messages in one dsh session sit inside a compaction `replace` range: the log holds
 //      what the surface no longer does, so an absent flag measures text the model cannot see while looking complete.
 //   3. A malformed line is COUNTED with its line number, never dropped. A reader that skips what it cannot parse returns
 //      a shorter session that answers every question correctly and about the wrong conversation.
 //   4. Absence is `null`, never `''` and never `0`. There is no reasoning is not zero-length reasoning.
+//   5. A message's text is TRIMMED. Measured, and it was not a theory: the observer's producer trimmed it and the
+//      store's did not, so one message had two texts -- 58 characters in one channel, 59 in the other, the difference
+//      being a trailing space -- and 53 of the 946 sessions in the live corpus differ that way. The consequence is
+//      not cosmetic: the `stateHash` of a measurement is made of the text, so a reading taken from the index and a
+//      reading taken from the file are DIFFERENT READINGS of one session, and neither can say so.
+//   6. `interrupted` is PRESENT, and `null` means nobody said -- not "it was not interrupted".
+//   7. A row carries NO NUL BYTE. Measured: a message's text held one, and `node:sqlite` binds a string with
+//      NUL-terminated semantics, so the index stored the 11 characters before the NUL and dropped the 89 after it.
+//      One session in 946 composed differently for that reason alone, and two tool-call names became empty strings
+//      where the log held a name. The fix is stated, not hoped for: `withoutNuls` below, applied by every producer.
 //
 // NO HARNESS APPEARS HERE. Nothing in this file imports a vocabulary, a `ctx`, or a session reader -- that is what lets
 // the same function serve a dsh log, a pi transcript and a web export, and it is checked rather than asserted by
@@ -29,6 +39,40 @@ export const MESSAGE_ROLES = Object.freeze(['user', 'assistant', 'system', 'deve
 
 /** The message body kinds. `text` and `reasoning` are separate, so a count of one is not a count of the other. */
 export const MESSAGE_TYPES = Object.freeze(['text', 'reasoning'])
+
+/**
+ * THE REPLACEMENT CHARACTER, and the one byte a row may not carry.
+ *
+ * WHY A NUL IS A PROBLEM, measured rather than supposed. `node:sqlite` binds a JavaScript string with
+ * NUL-terminated semantics: the value stored is the bytes before the first NUL and nothing after it. So a message whose
+ * text carried one NUL was 100 characters in the log and **11** characters in the index -- the 89 characters after the
+ * NUL were not shortened, they were GONE, and the row read as though the model had said less. Measured on the live
+ * corpus: 67 messages in 1 of 946 sessions, and 2 tool-call names that became empty strings where the log held one.
+ * The consequence is the one this contract exists to prevent -- the two channels composed DIFFERENT sessions, and the
+ * composed state is what a measurement's `stateHash` is made of.
+ *
+ * WHY U+FFFD AND NOT A DELETION. A NUL is not a character anybody reads, and every consumer downstream of here -- a
+ * JSONL file, an HTTP body, a model's context window -- either truncates at one or mangles it. U+FFFD is the standard
+ * marker for a byte that could not be represented, so the text KEEPS ITS LENGTH, the reader can see that something was
+ * there, and both channels produce the same characters. A silent deletion would make the two channels agree too, and
+ * would do it by throwing away evidence.
+ *
+ * This lives in `core/` and imports nothing, because the store needs the same rule and the contract is where a rule
+ * that two producers must obey belongs. The store carries its own copy of it until the shared half is extracted.
+ */
+export const REPLACEMENT_CHARACTER = '\uFFFD'
+
+/**
+ * The same string, with every NUL replaced by U+FFFD. A non-string is returned unchanged.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function withoutNuls(value) {
+    if (typeof value !== 'string') return value
+    if (!value.includes('\u0000')) return value
+    return value.split('\u0000').join(REPLACEMENT_CHARACTER)
+}
 
 /**
  * Read rows from JSONL text.
@@ -97,6 +141,17 @@ export function validateRows(rows) {
         // Reporting it here is what stops that from becoming a silent null in a measurement.
         if (row.exchange === null || row.exchange === undefined) problems.push(`${at}: no exchange -- every row belongs to an ask-group, and a null one means the producer could not supply it`)
         if ('turn' in row) problems.push(`${at}: carries a native \`turn\`; the boundary is the ask-group (\`exchange\`), because a harness with no turn would otherwise read as a dsh-only session`)
+        // RULE 7. A row carries NO NUL BYTE, and this is the rule the index channel cannot survive without. The
+        // producer applies `withoutNuls`; the contract refuses a row that still carries one, because a row that reaches
+        // one channel whole and the other cut short is TWO rows -- and the composed state, which is what a
+        // measurement's `stateHash` is made of, differs. Measured: 67 messages in 1 of 946 sessions.
+        if (row.kind === 'tool_call') {
+            for (const field of ['name', 'args']) {
+                if (typeof row[field] === 'string' && row[field].includes('\u0000')) {
+                    problems.push(`${at}: tool call ${field} carries a NUL byte; the index channel stores the bytes before the first NUL and drops the rest, so this row would be two rows`)
+                }
+            }
+        }
         if (row.kind !== 'message') return
         if (!MESSAGE_ROLES.includes(row.role)) problems.push(`${at}: role ${JSON.stringify(row.role)} is not one of ${MESSAGE_ROLES.join(', ')}`)
         if (!MESSAGE_TYPES.includes(row.type)) problems.push(`${at}: type ${JSON.stringify(row.type)} is not one of ${MESSAGE_TYPES.join(', ')}`)
@@ -105,6 +160,28 @@ export function validateRows(rows) {
         // RULE 4. `null` is how a row says "there was none". An empty string would be indistinguishable from an answer
         // that was genuinely empty, which is the difference between "no reasoning" and "some, of length zero".
         if (!('reasoning' in row)) problems.push(`${at}: no \`reasoning\` field; absence is null, never an absent key`)
+        // RULE 5. The text is trimmed, and the two channels that produce rows must produce the SAME text. A trailing
+        // space is invisible in a rendering and load-bearing in a hash: the `stateHash` of a measurement is made of this
+        // text, so a producer that keeps the whitespace and a producer that drops it do not measure the same session --
+        // they measure two, and both of them look right.
+        if (typeof row.text === 'string' && row.text !== row.text.trim()) {
+            problems.push(`${at}: text carries leading or trailing whitespace; the contract's text is trimmed, so every channel reads the same message as the same text`)
+        }
+        // AND THE REASONING IS TRIMMED TOO, because both producers trim it and the same hash is made of it.
+        if (typeof row.reasoning === 'string' && row.reasoning !== row.reasoning.trim()) {
+            problems.push(`${at}: reasoning carries leading or trailing whitespace; the contract's reasoning is trimmed, like the text`)
+        }
+        // RULE 6. `interrupted` is a FACT, and a reader that cannot supply it says so. The index has no column for it,
+        // so the reader that reads an index says `null`; the producer that read a log says `true` or `false`. `false`
+        // would be a claim -- "this message was not interrupted" -- from a reader that never looked.
+        if (!('interrupted' in row)) problems.push(`${at}: no \`interrupted\` field; absence is null, and null means nobody said`)
+        // RULE 7, ON THE MESSAGE BODY. A NUL in the text or the reasoning is a row the index channel would cut in half,
+        // and the cut is invisible: the row reads as a short answer rather than as a damaged one.
+        for (const field of ['text', 'reasoning']) {
+            if (typeof row[field] === 'string' && row[field].includes('\u0000')) {
+                problems.push(`${at}: ${field} carries a NUL byte; replace it with U+FFFD, because the index channel stores the bytes before the first NUL and drops the rest`)
+            }
+        }
     })
 
     if (receipt !== 1) problems.push(`a session needs exactly one receipt, and this has ${receipt}`)

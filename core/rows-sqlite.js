@@ -117,12 +117,25 @@ export function rowsFromSqlite(path, sessionId) {
                 ordinal: rows.length,
                 role: roleOfIndex(row.role) ?? null,
                 type: 'text',
-                text: row.text ?? '',
+                // THE TEXT IS TRIMMED HERE, and not because the index stores it that way. The rows contract says the
+                // text of a message is trimmed, and this reader PRODUCES rows -- so it obeys the contract itself, and an
+                // index built before the rule existed cannot hand it a row that breaks it. The store's own producer
+                // trims too, so the two agree; and a stale index is corrected at the boundary rather than refused at
+                // the door, which would take the whole `--from-sqlite` route down for a whitespace.
+                // AND THE TYPE IS CHECKED, because SQLite is dynamically typed and a value that is not text would make
+                // `.trim()` THROW -- and this reader has no catch, so the error would escape it rather than become the
+                // `problem` string every other failure here becomes. A reader that cannot read a column says so; it
+                // does not throw at the caller.
+                text: typeof row.text === 'string' ? row.text.trim() : '',
                 // NULL, NOT ''. An empty string and an absent answer are different facts, and the rows contract
                 // refuses the one that conflates them.
-                reasoning: row.reasoning === null || row.reasoning === undefined || row.reasoning === '' ? null : row.reasoning,
+                reasoning: typeof row.reasoning !== 'string' || row.reasoning === '' ? null : row.reasoning.trim(),
                 shadowed: row.shadowed === 1,
-                interrupted: false,
+                // THE INDEX DOES NOT CARRY THIS, so the reader does not know it -- and `null` is how a row says "nobody
+                // told me", where `false` would be a claim that the message was not interrupted. The producer knows; the
+                // index has no column for it; and the difference between "not interrupted" and "not known" is the one
+                // the contract calls absence.
+                interrupted: null,
             })
         }
         // A TOOL CALL BELONGS TO THE GROUP OF THE MESSAGE BEFORE IT, and the index does not store that: `tool_calls`

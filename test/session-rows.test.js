@@ -1,4 +1,4 @@
-// THE NORMALIZED SESSION ROWS, AND THE FOUR RULES THEY EXIST TO ENFORCE.
+// THE NORMALIZED SESSION ROWS, AND THE SEVEN RULES THEY EXIST TO ENFORCE.
 //
 // A session is not a dsh event log. It is a conversation that dsh happens to have written down, and pi and mcode and
 // a DeepSeek web export have each written their own version down. `docs/adapters-and-standards.md` measured seven
@@ -18,6 +18,11 @@
 //      shorter session that answers every question correctly and about the wrong conversation.
 //   4. ABSENCE IS NOT ZERO. No reasoning is `null`, not `''`. A count of tool calls is a count of tool calls and is
 //      never inferred from a row that failed to parse.
+//   5. A MESSAGE'S TEXT IS TRIMMED, and it is the SAME text in every channel. Measured: the observer's producer
+//      trimmed it and the store's did not, so one message had two texts -- 58 characters in the file channel and 59
+//      in the index, the difference being a trailing space -- and 53 of the 946 sessions in the live corpus differ
+//      that way. The `stateHash` of a measurement is made of the text, so the two channels were measuring two
+//      different sessions and neither could say so.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -30,6 +35,7 @@ import {
     segmentsOfRows,
     receiptOf,
     rowsSummary,
+    withoutNuls,
 } from '../core/session-rows.js'
 
 /** A well-formed three-exchange session, in the shape the importers produce. */
@@ -169,10 +175,78 @@ test('EVERY SEGMENT CARRIES ITS OWN ROWS, because the chain composes each one fr
     assert.deepEqual(one.events.map((r) => r.kind), ['message', 'tool_call', 'message'], 'the call between the messages is in the segment')
 })
 
+// RULE 5 — THE TEXT IS THE TEXT, AND IT IS THE SAME TEXT IN EVERY CHANNEL.
+//
+// MEASURED, AND IT WAS NOT A THEORY: the observer's producer trimmed a message's text and the store's did not, so
+// ONE message had TWO texts -- 58 characters in the file channel and 59 in the index, the difference being a trailing
+// space -- and 53 of the 946 sessions in the live corpus differ that way. The `stateHash` of a measurement is made of
+// the text, so a reading taken from the index and a reading taken from the file were DIFFERENT READINGS of one
+// session, and neither could say so.
+test('RULE 5: a message text is trimmed, and an untrimmed one is refused by name', () => {
+    const padded = good().map((r) => (r.kind === 'message' && r.seq === 1 ? { ...r, text: '  the ask  ' } : r))
+    const problems = validateRows(padded)
+    assert.equal(problems.length, 1, 'the untrimmed row is the only problem: ' + problems.join('; '))
+    assert.match(problems[0], /whitespace/, 'and it says what is wrong: ' + problems[0])
+    // AND THE WHITESPACE INSIDE IS KEPT, because it is the model's and a judge can be asked about it.
+    const inside = good().map((r) => (r.kind === 'message' && r.seq === 1 ? { ...r, text: 'the  ask' } : r))
+    assert.deepEqual(validateRows(inside), [], 'whitespace inside the text is not a problem')
+})
+
 test('the vocabulary is declared, so a producer cannot invent a role', () => {
     assert.deepEqual(ROW_KINDS, ['receipt', 'message', 'tool_call', 'fact'])
     assert.ok(MESSAGE_ROLES.includes('user') && MESSAGE_ROLES.includes('assistant'))
     const rows = good()
     rows[1].role = 'operator'
     assert.match(validateRows(rows).join(' '), /role/, 'an invented role is refused')
+})
+
+// RULE 6 — `interrupted` IS PRESENT, AND ITS ABSENCE IS `null`.
+//
+// The rule was added because a reader that cannot supply the fact must say so, and `false` is a claim. It had no test,
+// which meant it could have been deleted and the suite would have stayed green -- so here is the test.
+test('RULE 6: a message row without `interrupted` is refused by name, and `null` is allowed', () => {
+    const without = good().map((r) => {
+        if (r.kind !== 'message' || r.seq !== 1) return r
+        const copy = { ...r }
+        delete copy.interrupted
+        return copy
+    })
+    const problems = validateRows(without)
+    assert.equal(problems.length, 1, 'the absent field is the only problem: ' + problems.join('; '))
+    assert.match(problems[0], /interrupted/, 'and it says which field is missing: ' + problems[0])
+
+    // AND `null` IS ACCEPTED, because `null` is how a row says "nobody told me" -- that is the whole point of the rule.
+    const nulled = good().map((r) => (r.kind === 'message' && r.seq === 1 ? { ...r, interrupted: null } : r))
+    assert.deepEqual(validateRows(nulled), [], 'a null interruption is a fact the contract accepts')
+})
+
+// RULE 7 — A ROW CARRIES NO NUL BYTE.
+//
+// MEASURED, AND IT COST ONE SESSION OF THE CORPUS ITS TEXT. `node:sqlite` binds a JavaScript string with
+// NUL-terminated semantics: what lands in the column is the bytes BEFORE the first NUL, and everything after it is
+// gone. So a message whose text held one NUL was 100 characters in the file channel and ELEVEN in the index -- the 89
+// characters after the NUL were not shortened, they were DROPPED, and the row read as though the model had said less.
+// 67 messages in 1 of 946 sessions, and 2 tool-call names that became empty strings, so a call read as a call that
+// named no tool. The composed state is what a measurement's `stateHash` is made of, so the two channels measured two
+// different sessions and neither could say so.
+test('RULE 7: a row with a NUL byte is refused, and the fix keeps the text the same length', () => {
+    const nul = good().map((r) => (r.kind === 'message' && r.seq === 1 ? { ...r, text: 'the\u0000ask' } : r))
+    const problems = validateRows(nul)
+    assert.equal(problems.length, 1, 'the NUL is the only problem: ' + problems.join('; '))
+    assert.match(problems[0], /NUL/, 'and it says what is wrong: ' + problems[0])
+
+    // AND THE REASONING IS THE SAME WAY, because the same hash is made of it.
+    const inReasoning = good().map((r) => (r.kind === 'message' && r.seq === 2 ? { ...r, reasoning: 'think\u0000ing' } : r))
+    assert.match(validateRows(inReasoning).join(' '), /NUL/, 'a NUL in the reasoning is refused too')
+
+    // AND A TOOL CALL'S NAME AND ARGUMENTS, because a name that lost its bytes names nothing.
+    const inCall = good().map((r) => (r.kind === 'tool_call' ? { ...r, name: 'ba\u0000sh' } : r))
+    assert.match(validateRows(inCall).join(' '), /NUL/, 'a NUL in a tool call name is refused')
+
+    // AND THE FIX: U+FFFD, which keeps the LENGTH, so a marked text is the same measurement and not a shorter one.
+    assert.equal(withoutNuls('the\u0000ask'), 'the\uFFFDask')
+    assert.equal(withoutNuls('the\u0000ask').length, 'the\u0000ask'.length, 'the text does not shrink')
+    // AND A TEXT WITH NO NUL IS UNTOUCHED, because a rule that always changes the text cannot be trusted.
+    assert.equal(withoutNuls('the ask'), 'the ask')
+    assert.equal(withoutNuls(null), null, 'and a non-string is left alone')
 })

@@ -40,6 +40,41 @@ test('a dsh log becomes rows that SATISFY THE CONTRACT the standalone reads', ()
     assert.equal(parsed.rows.length, rows.length)
 })
 
+test('THE TEXT IS TRIMMED, so this producer and the index read the same message as the same text', () => {
+    // MEASURED, AND IT WAS NOT A THEORY: the observer's producer trimmed a message's text and the store's did not, so
+    // ONE message had TWO texts -- 58 characters in the file channel and 59 in the index, the difference being a
+    // trailing space -- and 53 of the 946 sessions in the live corpus differ that way. The `stateHash` of a
+    // measurement is made of the text, so the two channels were measuring two different sessions and neither could
+    // say so. The contract states the rule now; this is the producer following it.
+    const rows = normalizeEvents([ask(1, '  the ask  '), answer(2, 'the answer  ', 'thinking  ')], receipt)
+    const messages = rows.filter((row) => row.kind === 'message')
+    assert.equal(messages[0].text, 'the ask', 'the trailing whitespace is gone')
+    assert.equal(messages[1].reasoning, 'thinking', 'and so is the reasoning\'s')
+    assert.deepEqual(validateRows(rows), [], 'so the rows still satisfy the contract')
+})
+
+test('A NUL BYTE IS REPLACED, because the index channel would keep only the bytes before it', () => {
+    // MEASURED, AND IT COST ONE SESSION OF THE CORPUS ITS TEXT. `node:sqlite` binds a JavaScript string with
+    // NUL-terminated semantics: what lands in the column is the bytes BEFORE the first NUL, and everything after it is
+    // gone. So a message whose text held one NUL was 100 characters in this file channel and ELEVEN in the index -- the 89
+    // characters after the NUL were not shortened, they were DROPPED, and the row read as though the model had said
+    // less. 67 messages in 1 of 946 sessions, and 2 tool-call names that became empty strings the same way, so a call
+    // read as a call that named no tool. The contract states the rule (RULE 7) and the producer follows it.
+    const rows = normalizeEvents([
+        ask(1, 'the ask'),
+        answer(2, 'a\u0000b', 'think\u0000ing'),
+        { type: EVENT.TOOL_CALL, seq: 3, data: { callId: 'c1', name: '\u0000bash', arguments: 'echo \u0000 hi' } },
+    ], receipt)
+    const messages = rows.filter((row) => row.kind === 'message')
+    assert.equal(messages[1].text, 'a\uFFFDb', 'the NUL in the text is replaced')
+    assert.equal(messages[1].text.length, 'a\u0000b'.length, 'and the text does not shrink')
+    assert.equal(messages[1].reasoning, 'think\uFFFDing', 'and so is the reasoning')
+    const call = rows.find((row) => row.kind === 'tool_call')
+    assert.equal(call.name, '\uFFFDbash', 'the tool call keeps its name')
+    assert.equal(call.args, 'echo \uFFFD hi', 'and its arguments keep theirs')
+    assert.deepEqual(validateRows(rows), [], 'so the rows still satisfy the contract')
+})
+
 test('THE HUMAN IS NOT EVERY `user/message` -- an injection opens no group and is not an ask', () => {
     // THE SHAPE THIS EXISTS FOR. The harness speaks on the user channel: a `goal`, a skill catalogue, a runtime
     // context, an agent instruction. The event type is identical to a person's prompt and only `data.source.kind`
