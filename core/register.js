@@ -4,10 +4,10 @@
 // the decision about which of them this deployment calls, and the harness contract for each kind of listener.
 // Nothing here may return anything but what the loop produced.
 import { PROBE_SEAMS } from './seams.js'
-import { probeHook } from './host-events.js'
-import { probeText } from './host-payload.js'
+import { probeHook } from '../dsh/host-events.js'
+import { probeText } from '../dsh/host-payload.js'
 import { subjectOfRequest } from './subject.js'
-import { readConfigValue } from './config-value.js'
+import { readConfigValue } from '../dsh/config-value.js'
 import { textOf, tee } from './stream.js'
 
 /** The hooks called when a deployment names none: the user message, the reply, a tool call, a tool result. */

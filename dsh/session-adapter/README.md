@@ -21,7 +21,7 @@ ctx.inject(['sessionAdapter'], (child) => child.sessionAdapter.readSession(id, {
 ## The host arrives as a PARAMETER
 
 Every function that needs the harness takes the `sessionQuery` service as an **argument**; nothing in this package calls
-`ctx`. The consumer's `lib/host/index.js` (its inventory of host dependencies) therefore still checks that these files
+`ctx`. The consumer's `dsh/host/index.js` (its inventory of host dependencies) therefore still checks that these files
 contain no host call of their own, and the plugin edge — the one file that *does* call `ctx` — is declared as the host
 edge rather than smuggled in as a "pure module".
 
@@ -45,7 +45,7 @@ of the two a caller will get — so "no host" is never read as "no results", and
 ## Install
 
 ```json
-{ "dependencies": { "dsh-session-adapter": "link:../dsh-system1-observer/packages/session-adapter" },
+{ "dependencies": { "dsh-session-adapter": "link:../dsh-system1-observer/dsh/session-adapter" },
   "dsh": { "profile": { "bundles": ["...", "dsh-session-adapter"] } } }
 ```
 

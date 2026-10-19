@@ -43,7 +43,7 @@ npm install || die "npm install failed (the dependencies are the public @deepsee
 # whose fetch could fail silently and leave a dangling symlink the import only hit at run time: `lib/`
 # cannot dangle, but a copy missing a file or a specifier fails exactly the same way -- inside a listener,
 # on the first turn.
-node -e "import('./lib/seams.js').then(m => console.log('  runtime loads ·', m.PROBE_SEAMS.length, 'seams, probe question:', m.PROBE_QUESTION?.type)).catch(e => { console.error('  runtime import failed:', e.code || e.message); process.exit(1) })" \
+node -e "import('./core/seams.js').then(m => console.log('  runtime loads ·', m.PROBE_SEAMS.length, 'seams, probe question:', m.PROBE_QUESTION?.type)).catch(e => { console.error('  runtime import failed:', e.code || e.message); process.exit(1) })" \
   || die "the runtime source in lib/ does not import."
 
 step "adding the bundle to profile '${PROFILE}'"

@@ -35,5 +35,5 @@ Optionally, read the source code (if source code is not available, git clone it)
   right shape for a baseline: identical for every session of this repository, at the cost of one injection rather
   than one per request.
 * **Never in this plugin** — the observer must not alter the session it measures; a reminder injected by the
-  measuring row would change the thing being measured, and `lib/config-event.js` exists to record exactly that kind
+  measuring row would change the thing being measured, and `core/config-event.js` exists to record exactly that kind
   of boundary (readings either side of a prompt change are not comparable).

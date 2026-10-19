@@ -1,6 +1,6 @@
 // THE MAP IS CHECKED, NOT ASPIRATIONAL.
 //
-// `lib/README.md` is the one page that says what each file is FOR. A map nobody checks goes stale silently: a new
+// `core/README.md` is the one page that says what each file is FOR. A map nobody checks goes stale silently: a new
 // file is simply absent from it, a rename leaves a name pointing at nothing, and both failures LOOK like a complete
 // map. So the scan is mechanical and it is recursive, for the reason `host-inventory.test.js` records -- a flat
 // `lib/*.js` scan cannot see a nested file, and the nested files are where the layering already lives.
@@ -16,7 +16,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const LIB = join(ROOT, 'lib')
+// THE MAP NAMES BOTH FOLDERS NOW. `core/README.md` is the map of the instrument; the adaptation gets its own, because
+// a single list spanning both is a list nobody can hold -- the point of the split is that the two halves are read for
+// different reasons.
+const LIB = join(ROOT, 'core')
+const DSH = join(ROOT, 'dsh')
 
 /** Every `.js` file under `lib/`, recursively, as paths relative to `lib/`. */
 function libFiles(dir = LIB, prefix = '') {
@@ -40,14 +44,16 @@ function declaredIn(doc) {
 
 test('the map names every lib file, and every name in it exists', () => {
     const doc = readFileSync(join(LIB, 'README.md'), 'utf8')
-    const files = libFiles().sort()
+    // BOTH FOLDERS. `dsh/x.js` is declared as written -- the prefix is part of the name, not decoration -- so the scan
+    // prefixes the adaptation's files to match the map, and the map is what decides where a file belongs.
+    const files = [...libFiles(join(ROOT, 'core')), ...libFiles(join(ROOT, 'dsh')).map((f) => 'dsh/' + f)].sort()
     const declared = declaredIn(doc)
     const unique = [...new Set(declared)].sort()
 
     const missing = files.filter((f) => !unique.includes(f))
     const phantom = unique.filter((d) => !files.includes(d))
-    assert.deepEqual(missing, [], `undeclared in lib/README.md: ${missing.join(', ')}`)
-    assert.deepEqual(phantom, [], `named in lib/README.md but absent: ${phantom.join(', ')}`)
+    assert.deepEqual(missing, [], `undeclared in core/README.md: ${missing.join(', ')}`)
+    assert.deepEqual(phantom, [], `named in core/README.md but absent: ${phantom.join(', ')}`)
     assert.equal(declared.length, unique.length, 'a file named twice makes the map longer than the code it maps')
     assert.ok(files.length > 40, 'the scan found suspiciously few files, so it is probably not recursing')
 })

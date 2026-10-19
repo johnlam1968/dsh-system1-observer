@@ -10,7 +10,7 @@
 // an unknown one) and then looks up the event, so a point cannot be declared here and missing there, or the reverse:
 // one list of ids, one map of events, and a mismatch refuses by name.
 import { EVENT } from 'dsh-session-adapter/session-format'
-import { pointOf } from './seams.js'
+import { pointOf } from '../core/seams.js'
 
 /**
  * The event each point attaches to, in the order the points are declared.

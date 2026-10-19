@@ -2,9 +2,9 @@
 // "both happened" assertion and fail the requirement, so the order is what is asserted.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createConfigTool, CONFIG_TOOL_NAME } from '../lib/config-tool.js'
-import { replayConfig } from '../lib/config-event.js'
-import { Config } from '../index.js'
+import { createConfigTool, CONFIG_TOOL_NAME } from '../core/config-tool.js'
+import { replayConfig } from '../core/config-event.js'
+import { Config } from '../dsh/index.js'
 
 function harness({ knobs = ['provider', 'turn'], state = { provider: 'typesafe', turn: false }, schema } = {}) {
   const order = []

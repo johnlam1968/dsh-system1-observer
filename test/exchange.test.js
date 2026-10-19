@@ -3,7 +3,7 @@
 // the answer is the turn's LAST word rather than its first.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyGroups, exchangesOf, excludedOperators, isHumanMessage, messageEventsOf, selectedEvents, selectionNote, turnEvents } from '../lib/exchange.js'
+import { applyGroups, exchangesOf, excludedOperators, isHumanMessage, messageEventsOf, selectedEvents, selectionNote, turnEvents } from '../dsh/exchange.js'
 
 const human = (seq, text) => ({ seq, type: 'user/message', data: { content: [{ type: 'text', text }], source: { kind: 'user' } } })
 const injected = (seq, text, kind) => ({ seq, type: 'user/message', data: { content: [{ type: 'text', text }], source: { kind } } })

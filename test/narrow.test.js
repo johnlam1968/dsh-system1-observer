@@ -1,5 +1,5 @@
 // THE THREE UNCHECKED INVARIANTS, pinned here because this is "the module every gate's correctness rests on"
-// (`lib/model/service.js`) and it validated only one of the four things that can be wrong with a reply.
+// (`core/model/service.js`) and it validated only one of the four things that can be wrong with a reply.
 //
 // Every case below was executed against the previous version and ACCEPTED: a `NaN` probability, an answer whose
 // declared type contradicted the question, and a probability vector summing to 1.8. Each is now RECORDED rather
@@ -7,8 +7,8 @@
 // thing a judge can send back, which is exactly what a throwaway cannot show.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { narrowAnswers } from '../lib/model/narrow.js'
-import { choice, noul, score } from '../lib/model/questions.js'
+import { narrowAnswers } from '../core/model/narrow.js'
+import { choice, noul, score } from '../core/model/questions.js'
 
 const QUESTION = choice('what is it doing?', [
   { label: 'an_answer', criterion: 'a reply to the operator' },

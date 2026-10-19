@@ -6,13 +6,13 @@
 // silently never read is the failure mode; a measurement recorded and deliberately not scored is a decision).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EVALUATE_TOOL_NAME, REVIEW_HOOK, createEvaluateTool } from '../lib/evaluate-tool.js'
-import { composeTurnState } from '../lib/turn-state.js'
-import { probeFingerprint, probeScore } from '../lib/probe-score.js'
-import { PROBE_QUESTION } from '../lib/seams.js'
-import { noul } from '../lib/model/questions.js'
-import { stateBudgetChars } from '../lib/model/limits.js'
-import { checkAgainst } from '../lib/tool-args.js'
+import { EVALUATE_TOOL_NAME, REVIEW_HOOK, createEvaluateTool } from '../dsh/evaluate-tool.js'
+import { composeTurnState } from '../dsh/turn-state.js'
+import { probeFingerprint, probeScore } from '../core/probe-score.js'
+import { PROBE_QUESTION } from '../core/seams.js'
+import { noul } from '../core/model/questions.js'
+import { stateBudgetChars } from '../core/model/limits.js'
+import { checkAgainst } from '../core/tool-args.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const message = (seq, type, text) => ({
@@ -314,7 +314,7 @@ test('a model failure is REPORTED, not thrown: the subject was read and the call
 })
 
 test('it declares PRESENTATIONMETA, which is how the conversation card gets structured data', () => {
-  // `lib/tool.js:91` says it: the projection "leaves through `presentationMeta`, which the tool contract persists on
+  // `core/tool.js:91` says it: the projection "leaves through `presentationMeta`, which the tool contract persists on
   // `tool/result` as `meta`". The card reads that, so it never re-parses the model-facing text.
   const h = harness()
   assert.equal(typeof h.tool.output.presentationMeta, 'function')
@@ -344,7 +344,7 @@ test('it declares a RENDER, which the registry requires and whose absence was re
   const h = harness()
   assert.equal(typeof h.tool.output.render, 'function')
   // THE ARGUMENT ORDER IS THE HOST'S, AND THIS TEST USED TO GET IT WRONG IN THE SAME DIRECTION AS THE TOOL.
-  // `dsh-tools/lib/index.js:3548` invokes `tool.output.render(exec.arguments, value)`. The tool declared
+  // `dsh-tools/core/index.js:3548` invokes `tool.output.render(exec.arguments, value)`. The tool declared
   // `render: (value)` and every assertion here called `render(value)`, so both agreed on the wrong convention and a
   // live call rendered `? subject, 0 of 0 message(s)` for a trace line that said `messages: 611`. The assertions
   // below now pass BOTH arguments, which is what the host does.

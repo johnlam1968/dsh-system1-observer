@@ -21,30 +21,34 @@ import { dirname, join, relative } from 'node:path'
  * -- the one somebody adds today -- does fail.
  */
 export const KNOWN_SIBLING_CITATIONS = Object.freeze([
-    { file: 'lib/evidence.js', path: 'docs/RUNTIME_SEMANTICS.md' },
+    { file: 'core/evidence.js', path: 'docs/RUNTIME_SEMANTICS.md' },
     // ONE SIBLING POINTER, AT ITS NEW HOME. The per-seam argument shapes and their two citation sites were
     // `lib/seams.js`'s and are `lib/host-payload.js`'s now (`F110`); the old entry was removed with the code it named,
     // because the list is checked against the sites that EXIST and an entry outliving its site is a claim nobody
     // makes any more.
-    { file: 'lib/host-payload.js', path: 'docs/DSH_CORDIS_FIELD_GUIDE.md' },
+    { file: 'dsh/host-payload.js', path: 'docs/DSH_CORDIS_FIELD_GUIDE.md' },
 ])
 
 /** Every file this check reads: the source halves, and the library beside them. */
 export function defaultSources(root) {
     const found = []
-    for (const name of ['index.js', 'client.js']) {
+    // THE TWO HALVES OF THE ADAPTATION, AND THE TWO FOLDERS OF THE INSTRUMENT. `core/` and `dsh/` are read rather
+    // than one `lib/`, because a checker that walks a directory this repository no longer has reports an empty scan
+    // as a clean one -- which is the failure the next assertion in the test exists to catch.
+    for (const name of ['dsh/index.js', 'dsh/client.js']) {
         const path = join(root, name)
         if (existsSync(path)) found.push(path)
     }
-    const lib = join(root, 'lib')
+    const lib = join(root, 'core')
     const walk = (dir) => {
+        if (!existsSync(dir)) return
         for (const entry of readdirSync(dir, { withFileTypes: true })) {
             const path = join(dir, entry.name)
             if (entry.isDirectory()) walk(path)
             else if (entry.name.endsWith('.js')) found.push(path)
         }
     }
-    if (existsSync(lib)) walk(lib)
+    for (const dir of ['core', 'dsh']) walk(join(root, dir))
     return found
 }
 

@@ -48,10 +48,10 @@ test('package.json asks for no decision-runtime package', () => {
 // THE WHOLE CLOSURE, IMPORTED THROUGH ITS NEW PATHS. A relocation that missed one specifier fails at
 // the first `import` below, not on the first turn of a live session.
 test('every local runtime module loads from lib/', async () => {
-  const seams = await import('../lib/seams.js')
-  const payload = await import('../lib/host-payload.js')
-  const evidence = await import('../lib/evidence.js')
-  const client = await import('../lib/model/client.js')
+  const seams = await import('../core/seams.js')
+  const payload = await import('../dsh/host-payload.js')
+  const evidence = await import('../core/evidence.js')
+  const client = await import('../core/model/client.js')
 
   assert.equal(typeof payload.probeText, 'function')
   assert.equal(seams.PROBE_SEAMS.length, 9)
@@ -66,11 +66,11 @@ test('every local runtime module loads from lib/', async () => {
 // The support modules the five public ones drag in. Named separately so a move that breaks only, say,
 // the answer reader says which module it was.
 test('the runtime modules behind them load too', async () => {
-  const questions = await import('../lib/model/questions.js')
-  const wire = await import('../lib/model/wire.js')
-  const narrow = await import('../lib/model/narrow.js')
-  const escalation = await import('../lib/model/escalation.js')
-  const record = await import('../lib/is-record.js')
+  const questions = await import('../core/model/questions.js')
+  const wire = await import('../core/model/wire.js')
+  const narrow = await import('../core/model/narrow.js')
+  const escalation = await import('../core/model/escalation.js')
+  const record = await import('../core/is-record.js')
 
   assert.equal(typeof questions.noul, 'function')
   assert.equal(typeof wire.postSystemone, 'function')

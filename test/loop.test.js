@@ -13,10 +13,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createQuestionsTool } from '../lib/questions-tool.js'
-import { createResultsTool } from '../lib/results-tool.js'
-import { labelHash } from '../lib/label-hash.js'
-import { listSets } from '../lib/question-sets.js'
+import { createQuestionsTool } from '../core/questions-tool.js'
+import { createResultsTool } from '../core/results-tool.js'
+import { labelHash } from '../core/label-hash.js'
+import { listSets } from '../core/question-sets.js'
 
 const line = (record) => JSON.stringify(record)
 const noul = (id, instructions) => ({ id, type: 'noul', instructions })

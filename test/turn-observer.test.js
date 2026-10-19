@@ -2,9 +2,9 @@
 // acceptance check is applied to a line the chain actually wrote rather than to a fixture.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTurnObserver } from '../lib/turn-observer.js'
-import { createTurnListener } from '../lib/turn-listener.js'
-import { probeViolations } from '../lib/turn-record.js'
+import { createTurnObserver } from '../core/turn-observer.js'
+import { createTurnListener } from '../core/turn-listener.js'
+import { probeViolations } from '../core/turn-record.js'
 
 const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })
 const text = (t) => ({ type: 'text', text: t })

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
-import { PROBE_SEAMS } from '../lib/seams.js'
+import { apply } from '../dsh/index.js'
+import { PROBE_SEAMS } from '../core/seams.js'
 
 // WHY THIS EXISTS: the observer's first live mount wrote 209 `error` lines reading "decide is not a function"
 // and no `call` lines at all. Both model factories return a CLIENT object, and `apply` assigned it to `decide`
@@ -323,7 +323,7 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   assert.equal(new Set(names).size, names.length, 'no name registered twice')
 
   // EVERY RENDER TAKES (args, value), WHICH IS THE ORDER THE HOST CALLS IT IN -- and the one parameter is not a
-  // style question. `dsh-tools/lib/index.js:3548` is the invocation: `tool.output.render(exec.arguments, value)`.
+  // style question. `dsh-tools/core/index.js:3548` is the invocation: `tool.output.render(exec.arguments, value)`.
   // `system1_evaluate_session` declared `render: (value)`, so it was handed the ARGUMENTS and rendered
   // `? subject, 0 of 0 message(s), state 0 chars [?]` for a live call whose trace line recorded `messages: 611` --
   // the subject was read, the model answered, and the agent saw nothing. Its own test called `render(value)`, so
@@ -350,7 +350,7 @@ test('apply registers a trace tool, and its schema stays inside the registry sub
   // NOTHING OBSERVED YET: a report, not a throw, naming the path it looked at.
   //
   // This asserted the sentence "no trace at <path>", which described a file that did not exist yet. `apply` now
-  // PROVES the path at mount by creating it (lib/evidence.js `probe`), so a mounted row always has a trace file and
+  // PROVES the path at mount by creating it (core/evidence.js `probe`), so a mounted row always has a trace file and
   // the honest report is "no run matching ... runs present: (none)". The property is unchanged -- a report rather
   // than a throw -- so the assertion now checks the property instead of one of its two wordings.
   const empty = await tool.execute({})

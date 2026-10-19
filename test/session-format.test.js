@@ -1,7 +1,7 @@
 // THE HARNESS'S SESSION VOCABULARY, TESTED WHERE IT LIVES -- and prevented from spreading back out.
 //
 // The two halves belong together. The first says the vocabulary reads the shapes the harness actually writes; the
-// second says it is the ONLY place in `lib/` that names them. A vocabulary that is correct in one file and also
+// second says it is the ONLY place in the plugin that names them. A vocabulary that is correct in one file and also
 // restated in six others is not a vocabulary, it is a coincidence -- and each restatement is somewhere a format
 // change has to be found.
 
@@ -74,24 +74,46 @@ test('the predicates separate messages from traffic, and a tool result is NOT a 
     assert.equal(turnOf({ data: {} }), null)
 })
 
-test('the vocabulary is the ONLY place in lib/ that names a harness event, and it still names them all', () => {
+test('the vocabulary is the ONLY place in the plugin that names a session event, and it still names them all', () => {
     const NAMES = Object.values(EVENT)
     const pattern = new RegExp(`(['"])(${NAMES.map((n) => n.replace(/[/-]/g, '\\$&')).join('|')})\\1`)
+    // THE ONE FILE ALLOWED TO NAME THEM is the one that exports `EVENT`, RESOLVED rather than typed: a hand-written
+    // path would go stale the moment the vocabulary moved home again, and a scan that then flagged the vocabulary's own
+    // definition would be a test that cannot be satisfied without lying about where the names live.
+    const VOCABULARY = fileURLToPath(import.meta.resolve('dsh-session-adapter/session-format'))
     const offenders = []
     const walk = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
         const rel = `${dir}/${entry.name}`
         if (entry.isDirectory()) return entry.name === 'host' ? [] : walk(rel)
         if (!entry.isFile() || !entry.name.endsWith('.js')) return []
+        const abs = join(ROOT, rel)
+        if (abs === VOCABULARY) return []
         // COMMENTS ARE NOT CODE: a header may name an event to explain it, which is documentation rather than a
         // second home. Same rule, and the same reason, as the host-inventory scan.
-        const code = readFileSync(join(ROOT, rel), 'utf8')
+        let code = readFileSync(abs, 'utf8')
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n')
+        // AND A HOST-EVENT NAME IS NOT A RESTATEMENT. This vocabulary types what a session LOG CONTAINS
+        // (`user/message`, `tool/call`, `turn/start`). The names in `ctx.on('...')` and in a node descriptor's
+        // `event: '...'` are the OTHER vocabulary -- the events the host EMITS -- and they are literal on purpose:
+        // `test/host-inventory.test.js` reads those literals to check them against the `HOST_EVENTS` declaration, and
+        // `dsh/index.js` says so at the site where it does it. The two names overlap by accident, not by arrangement:
+        // the adapter observes `agent/turn-stopping` on the feed AND the row subscribes to it, which is one event with
+        // two callers and not a second spelling of it. Blanking both shapes is what lets the two guards be true at
+        // once instead of one silently cancelling the other.
+        code = code
+            .replace(/ctx\.on\(\s*'[^']*'/g, "ctx.on('EVENT'").replace(/ctx\.on\(\s*"[^"]*"/g, 'ctx.on("EVENT"')
+            .replace(/event:\s*'[^']*'/g, "event: 'EVENT'").replace(/event:\s*"[^"]*"/g, 'event: "EVENT"')
         for (const line of code.split('\n')) if (pattern.test(line)) offenders.push(`${rel}: ${line.trim().slice(0, 70)}`)
         return []
     })
-    walk('lib')
-    assert.deepEqual(offenders, [], `these name a harness event outside lib/host/: ${offenders.join(' | ')}`)
+    // BOTH FOLDERS, because the instrument and the adaptation are one plugin: scanning `core/` alone would leave the
+    // half that actually reads session events unchecked. `scripts/` is outside this guard and that is a stated
+    // boundary rather than an oversight -- the importers there CONSTRUCT events for a foreign transcript rather than
+    // consuming the harness's, so they are a producer of the vocabulary, not a second reader of it.
+    walk('core')
+    walk('dsh')
+    assert.deepEqual(offenders, [], `these name a session event outside the vocabulary: ${offenders.join(' | ')}`)
     // And the names themselves are the harness's, not a paraphrase -- read from `core/session/src/types.ts`.
     for (const name of ['user/message', 'assistant/message', 'tool/call', 'tool/result', 'turn/start', 'turn/end']) {
         assert.ok(NAMES.includes(name), `${name} is missing from EVENT`)

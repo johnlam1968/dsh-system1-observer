@@ -2,7 +2,7 @@
 // property most worth asserting is the THIRD VALUE: no next message is not "no nudge".
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deriveNudgeLabel, contentTokens, recurrence } from '../lib/nudge-label.js'
+import { deriveNudgeLabel, contentTokens, recurrence } from '../core/nudge-label.js'
 
 test('THE ABSENCE CASE: no next message is null, never false', () => {
   for (const next of [undefined, null, '', '   ']) {

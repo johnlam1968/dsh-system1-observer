@@ -2,11 +2,11 @@
 // The `prepublishOnly` guard for the hand-publish path. Reads the package the publish is happening IN, so the adapter
 // (whose `prepublishOnly` calls this file by relative path) is checked against its own manifest, not the root's.
 //
-// WHY A SCRIPT AND A PURE FUNCTION: the rule lives in `lib/publish-tag.js`, where it is tested, and this file only
+// WHY A SCRIPT AND A PURE FUNCTION: the rule lives in `core/publish-tag.js`, where it is tested, and this file only
 // reads npm's environment and turns the answer into an exit code.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { publishTagProblem } from '../lib/publish-tag.js'
+import { publishTagProblem } from '../core/publish-tag.js'
 
 const manifest = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
 // npm exposes the resolved tag to lifecycle scripts here; when the caller passed no `--tag`, it is absent and npm

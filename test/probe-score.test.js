@@ -5,10 +5,10 @@
 // implementation is silently wrong.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { probeFingerprint, ABSTAIN_LABEL, PROBE_LABELS, SEAM_OF_LABEL, isProbeQuestion, probeAnswerOf, probeScore } from '../lib/probe-score.js'
-import { PROBE_QUESTION } from '../lib/seams.js'
-import { noul } from '../lib/model/questions.js'
-import { probeOf } from '../lib/questions.js'
+import { probeFingerprint, ABSTAIN_LABEL, PROBE_LABELS, SEAM_OF_LABEL, isProbeQuestion, probeAnswerOf, probeScore } from '../core/probe-score.js'
+import { PROBE_QUESTION } from '../core/seams.js'
+import { noul } from '../core/model/questions.js'
+import { probeOf } from '../core/questions.js'
 
 /** One `call` line as the observer writes it, with the probe asked under whatever id is given. */
 function callEvent(hook, answer, { qid = 'probe', question = PROBE_QUESTION, at = '2026-01-02T00:00:00.000Z' } = {}) {
@@ -40,7 +40,7 @@ test('O15: a trace written under ANOTHER probe is scored by the hash ITS OWN RUN
 })
 
 test('a call from a NON-PROBE site is never scored, however it is worded', () => {
-  // `system1_decide` records `hook: 'tool'` (lib/decide-tool.js:212 -- "`hook: 'tool'` is not a seam") and a stored
+  // `system1_decide` records `hook: 'tool'` (core/decide-tool.js:212 -- "`hook: 'tool'` is not a seam") and a stored
   // session evaluation will record its own hook. Either can carry the probe question BY IDENTITY and is still not a
   // measurement of this row's probe. The filter is what makes that a rule rather than a coincidence.
   const mount = { event: 'mount', run: 'R1', probeHash: probeFingerprint() }
@@ -108,7 +108,7 @@ test('probeOf takes the question from the config, and an empty one is a NAMED pr
 
 test('the probe is identified structurally, so the operator’s question is not mistaken for it', () => {
   assert.equal(isProbeQuestion(PROBE_QUESTION), true)
-  // `lib/questions.js` builds a custom question under the SAME id as the probe, so an id check cannot work.
+  // `core/questions.js` builds a custom question under the SAME id as the probe, so an id check cannot work.
   assert.equal(isProbeQuestion(noul('is this call appropriate?')), false)
   // Reworded instructions are a different instrument even if the labels match.
   assert.equal(isProbeQuestion({ ...PROBE_QUESTION, instructions: 'Which bit made this?' }), false)

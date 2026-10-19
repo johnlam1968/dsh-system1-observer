@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MAX_CARD_ROWS, traceData } from '../lib/trace-data.js'
+import { MAX_CARD_ROWS, traceData } from '../core/trace-data.js'
 
 const mount = (run, at, extra = {}) => ({
   at, run, event: 'mount', hooks: ['admit', 'draft'], transport: 'service',

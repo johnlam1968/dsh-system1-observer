@@ -70,13 +70,13 @@ a test; "medium" = a new field shape; "design" = a decision before code.
 
 | # | gap | the code change | size |
 |---|---|---|---|
-| 1 | `idleGapMs` (`IDLE_GAP_MS = 60_000`) | `costOf(events, { idleGapMs })` → `mergeIntervalsTotal(…, idleGapMs ?? IDLE_GAP_MS)`; thread it exactly where `pricePerMTokInput` already goes: `index.js`'s tool/service wiring, `lib/tool.js`, `lib/trace-report.js`, `lib/trace-data.js` | small |
-| 2 | `tailChars` (`TAIL_CHARS = 1000`) | the truncation helper in `lib/redact.js` takes the tail size; its call site passes the live value | small |
+| 1 | `idleGapMs` (`IDLE_GAP_MS = 60_000`) | `costOf(events, { idleGapMs })` → `mergeIntervalsTotal(…, idleGapMs ?? IDLE_GAP_MS)`; thread it exactly where `pricePerMTokInput` already goes: `index.js`'s tool/service wiring, `core/tool.js`, `core/trace-report.js`, `core/trace-data.js` | small |
+| 2 | `tailChars` (`TAIL_CHARS = 1000`) | the truncation helper in `core/redact.js` takes the tail size; its call site passes the live value | small |
 | 3 | `calibrationBins` (`BINS = 10`) | `ece(samples, bins)` already accepts it; the calibration tool's call site passes the live value | small |
 | 4 | `maxCompareLanes` (`MAX_LANES = 5`) | `compareRuns` already takes `limit`; the report/trace-data call sites pass the live value | small |
-| 5 | the nudge vocabulary (`STOPWORDS`, `CORRECTION_MARKERS`) | `lib/nudge-label.js` reads a policy instead of module constants; schema gains two **volatile string arrays** — the same shape as `redactKeys`, which the card already knows how to edit | medium |
+| 5 | the nudge vocabulary (`STOPWORDS`, `CORRECTION_MARKERS`) | `core/nudge-label.js` reads a policy instead of module constants; schema gains two **volatile string arrays** — the same shape as `redactKeys`, which the card already knows how to edit | medium |
 | 6 | extra redaction **shapes** (`SHAPE_PATTERNS`, `ADDED_PATTERNS`) | `redactPolicy` gains `patterns: []`, **addition-only**; each compiled in a try/catch so one bad pattern cannot disable redaction; a `patternProblem` field on the mount line names any that failed | medium |
-| 7 | the probe question itself (`PROBE_QUESTION`) | a schema field holding a question object, validated by `lib/questions.js`'s existing spec reader — the fallback the `question` field already promises is configurable but is not | medium |
+| 7 | the probe question itself (`PROBE_QUESTION`) | a schema field holding a question object, validated by `core/questions.js`'s existing spec reader — the fallback the `question` field already promises is configurable but is not | medium |
 | 8 | **question sets as loadable artifacts** | the organizer/editor you described: a `questionSets` source (a path or an inline set), read and validated on change, with the set's **identity** written on every call line so a measurement is attributable to the set that produced it. This is ROADMAP P1–P2, and it is the largest item here | design |
 | 9 | `tracePath` | reopen-and-rotate on change, plus a decision: does one run's evidence span two files, and does the old one get a `rotate`-style line naming the move? | design |
 | 10 | the **act layer** | not built: `Roadmap §9 / P3`. The `system1Observer` service is the seam it will read from, but no act row exists in the code — its settings are a whole surface (what `X` to compose, which sets to run, what to do with the answer) | feature |
@@ -204,7 +204,7 @@ strongest evidence those rows are real rather than my own framing.
 ### What it added, and one citation it got wrong
 
 - **Item 7 is not an ordinary setting, because it changes RUN IDENTITY.** Making the probe question configurable
-  changes `instrument`, one of `KEY_PARTS = ['questions', 'hooks', 'switches', 'instrument']` (`lib/compare.js:30`),
+  changes `instrument`, one of `KEY_PARTS = ['questions', 'hooks', 'switches', 'instrument']` (`core/compare.js:30`),
   so runs before and after the change are different instruments and comparison between them is refused *by design*.
   **Correction to its citation:** it named `probeHash` as a `KEY_PARTS` member; it is not one. `probeHash` is an input
   to `instrument` -- see the fixture `taskKeyOf(mount({ provider, model, probeHash }))` in `test/compare.test.js`.
@@ -213,7 +213,7 @@ strongest evidence those rows are real rather than my own framing.
 - **Item 3 matters most after item 8.** Per-set calibration wants a bin count per experiment, so one global value
   will be too coarse once question sets are loadable (`calibrationBins` landed in `bcdb4e4` as a single value; this
   is the argument for revisiting it with item 8).
-- **`criteria` are inline, not resolvable by name** -- `lib/questions.js:87` passes them straight into `noul(...)`.
+- **`criteria` are inline, not resolvable by name** -- `core/questions.js:87` passes them straight into `noul(...)`.
   That is the P2 work `ROADMAP.md` §4.2 names, and it is the part of the act layer's evidence that cannot be
   reconstructed from a name.
 - **Two act-layer settings survived the truncation**: `actMinConfidence` and `actInjectionBudget`, with the
@@ -234,7 +234,7 @@ Its other correction stands exactly as recorded above: `probeHash` is not a `KEY
 ### From its list of what the code cannot do yet
 
 Of nine numbered items, only the ninth survived the truncation: **no criterion dictionary resolution by name**
-(`lib/questions.js` validates question shapes but does not resolve `criteria` by reference). It also noted, in the
+(`core/questions.js` validates question shapes but does not resolve `criteria` by reference). It also noted, in the
 part that survived, that the *already possible* pieces are the schema fields, the Act panel from §6, the live
 `system1Observer` reads, and the `config` event on the trace -- all of which exist today.
 
@@ -269,7 +269,7 @@ does need its own, that is an argument to record, not a field to add quietly.
 
 ## 9. Design: question sets as loadable artifacts (plan item 8)
 
-**The constraint, from the code rather than from taste.** A question spec is already a value: `lib/questions.js`
+**The constraint, from the code rather than from taste.** A question spec is already a value: `core/questions.js`
 reads `config.questions`, refuses a malformed spec into a `problem` string instead of throwing (`"NOTHING HERE
 THROWS"`, because this runs in the critical path of every turn), and builds `noul`/`choice`/`score` questions from
 it. What is missing is not expressiveness but **addressability**: a set cannot be named, reused across rows, or
@@ -286,7 +286,7 @@ same failure `probeHash` exists to prevent for the probe.
 `questionSet` empty means the inline `questions` object, exactly as today, so nothing existing changes.
 
 **The identity rule, borrowed from the probe because it already works.** A set's **content hash** belongs in
-`instrument`, beside `probeHash` (`lib/compare.js:65`). Editing a set file then makes the runs before and after
+`instrument`, beside `probeHash` (`core/compare.js:65`). Editing a set file then makes the runs before and after
 honestly incomparable, by the same mechanism rather than by a warning in a README.
 
 **The failure mode that must not exist.** A set file that is missing, unreadable or malformed becomes a **named
@@ -358,7 +358,7 @@ a slice of a live session. Both read the window the plugin holds, and both are g
 slice of it -- and the use case is the one the live modes cannot serve: *evaluate an existing human/LLM conversation
 to improve it*, at the scale of a whole session rather than a loop or a turn.
 
-**What makes this cheap, and it is the same composer.** `lib/turn-state.js`'s `composeTurnState({ events, nextMessage,
+**What makes this cheap, and it is the same composer.** `dsh/turn-state.js`'s `composeTurnState({ events, nextMessage,
 maxChars, toolMaxChars, ... })` already turns a list of session events into the text a judge is shown, and it is
 already the ONE place that decides what the judge sees. (B) does not need a second composer: it needs a second
 **source of events** for the same one. That is why the coding is small, and it is also why the two modes cannot drift
@@ -389,7 +389,7 @@ project is for.
 |---|---|
 | a LIVE agent's `agent.session.snapshotEvents(0)` | already used by the observation path (`index.js:278`) -- the live case, unchanged |
 | the `SessionQueryEngine` service | **the stored case**: the harness's own reader, filtered slices included |
-| `~/.dsh/storages/session_projcache/sessions/<uuid>.json` | **not** a source: `lib/nudge-label.js:29` records that "the projcache is a UI cache and truncates", so a measurement over it would agree with you about nothing |
+| `~/.dsh/storages/session_projcache/sessions/<uuid>.json` | **not** a source: `core/nudge-label.js:29` records that "the projcache is a UI cache and truncates", so a measurement over it would agree with you about nothing |
 
 **The genuinely new plumbing is therefore smaller than planned**: one module that turns the service's
 `SessionEventRecord`s into the event shape `composeTurnState` already consumes
@@ -448,7 +448,7 @@ today: `questionSet` empty means "the inline set", so nothing existing changes.
 resolves the directory once per read into `{ name, path, hash, problems }` for each file, and projects that list to
 the card and to the agent. The card picks a name and shows the hash and any problem; it never reads a file.
 
-**How a set is validated.** Through the reader that already exists (`lib/questions.js`), which never throws and
+**How a set is validated.** Through the reader that already exists (`core/questions.js`), which never throws and
 turns a malformed spec into a named `problem` -- the property that keeps this plugin from failing a turn. A set that
 does not parse, or whose specs are not specs, is reported by name and by reason, and the row falls back to the built-in
 probe with that problem recorded on the line.
@@ -484,7 +484,7 @@ argument that a set's content hash goes on the mount line and enters `instrument
 calls asked under one set and keyed under another.
 
 That argument is real but it proves too much, and the code already says so: **`hooks` and `seamEnabled` are volatile,
-and both are read into the comparability key from the MOUNT snapshot** (`lib/compare.js` takes them from the mount
+and both are read into the comparability key from the MOUNT snapshot** (`core/compare.js` takes them from the mount
 line). A live `hooks` change has exactly the property I objected to, and this repository has lived with it. The honest
 reading is that a mount line records what the run **started** with, not that the run never changed -- so making the set
 settings an exception was my error, not a stricter standard.
@@ -528,14 +528,14 @@ an ordinal ladder, never a wide question"* -- no question asks the model to summ
 prose. A wide question is several questions wearing one id, and it cannot be calibrated.
 
 **And a SET is the unit that saves the cost**, which is the reason to group questions rather than ask one at a time:
-the state is composed once per call and several questions ride on it. `lib/observe.js` builds a seam's questions and
+the state is composed once per call and several questions ride on it. `core/observe.js` builds a seam's questions and
 sends them in ONE call (`decide({ state, questions })`), and `system1_evaluate_session` does the same for a session. Asking
 five questions separately would compose -- and pay for -- the same state five times.
 
 **What this changed in the code**, because the taxonomy found a real gap rather than only naming a pattern:
 
 - `SESSION_HOOK = 'session'` and `QUESTION_SCOPES` (the nine seams, the aggregate, and the session scope) in
-  `lib/questions.js`. The session scope is deliberately NOT in `FIREABLE_HOOKS`: nothing fires at it.
+  `core/questions.js`. The session scope is deliberately NOT in `FIREABLE_HOOKS`: nothing fires at it.
 - The schema declares all three scopes, because an undeclared key is dropped by `projectForm` -- the failure the
   schema's own comment records for `turn`.
 - **`system1_evaluate_session` asked the TURN questions for a session judgement** before this. It now asks the session scope,
@@ -564,7 +564,7 @@ different questions**:
 
 ### What exists, and what the pair still needs
 
-**The model is already in the comparability key** (`lib/compare.js`: transport, provider, model, probeHash,
+**The model is already in the comparability key** (`core/compare.js`: transport, provider, model, probeHash,
 questionSetHash), so LLM A and LLM B are already distinguishable and their runs already refused comparison. What is
 missing is the person:
 

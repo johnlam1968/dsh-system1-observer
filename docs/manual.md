@@ -22,7 +22,7 @@ measurement attached to each; a CHANGELOG would be a second, hand-maintained cop
 There is no sandbox and no runtime gate. "It decides nothing" is enforced by the *shape* of the code — the
 return values are read by the record and by nothing else — and nobody has observed that holding. Flipping
 `verified` to `true` means deleting an assertion in `test/honesty.test.js` deliberately. The plugin's surface is
-also declared (`lib/honesty.js`): six named capabilities and five forbidden ones, with a source scan that fails
+also declared (`core/honesty.js`): six named capabilities and five forbidden ones, with a source scan that fails
 the moment someone reaches for an approval request, a tool guard, a resident prompt section, a context prune or
 a model route.
 
@@ -30,9 +30,9 @@ a model route.
 
 | claim | evidence |
 |---|---|
-| the probe separates the seams it is asked about | **88.99%** over 3,370 scored calls, against a **39.94%** majority-class floor, **κ 0.8374** — computed by `lib/probe-score.js`, reproducing the study's hand-computed figures exactly. **The figure is a function of the SEAM MIX, and a tool-heavy window measures its weakest pairs**: a live window of 62 probe calls over two agent runs scored **59.7%** (κ 0.525), with `assemble`/`pre_execute` at 1.000 and `execute`/`result` at 0.273/0.083 — the two tool-seam PAIRS are shown the same text (`name + arguments` for both call seams, one result envelope for both result seams) and asked four labels, so one member of each pair scores ~1 and the other ~0 by construction (`F121`) |
-| the confidence is worth something, and it errs the unusual way | top-1 **ECE 0.1253**, **bias −0.1242 (under-confident)**, Brier 0.0915; classwise ECE 0.0284; multi-class logLoss 0.4947 · `lib/calibrate.js` |
-| the trace's cost is knowable | **$0.256974** for 4,368 judged calls, `post_execute` alone **59.8%** of it, from `lib/cost.js` |
+| the probe separates the seams it is asked about | **88.99%** over 3,370 scored calls, against a **39.94%** majority-class floor, **κ 0.8374** — computed by `core/probe-score.js`, reproducing the study's hand-computed figures exactly. **The figure is a function of the SEAM MIX, and a tool-heavy window measures its weakest pairs**: a live window of 62 probe calls over two agent runs scored **59.7%** (κ 0.525), with `assemble`/`pre_execute` at 1.000 and `execute`/`result` at 0.273/0.083 — the two tool-seam PAIRS are shown the same text (`name + arguments` for both call seams, one result envelope for both result seams) and asked four labels, so one member of each pair scores ~1 and the other ~0 by construction (`F121`) |
+| the confidence is worth something, and it errs the unusual way | top-1 **ECE 0.1253**, **bias −0.1242 (under-confident)**, Brier 0.0915; classwise ECE 0.0284; multi-class logLoss 0.4947 · `core/calibrate.js` |
+| the trace's cost is knowable | **$0.256974** for 4,368 judged calls, `post_execute` alone **59.8%** of it, from `core/cost.js` |
 | truncation changes what is measured | full excerpts **90.16%** (n=3,212) versus truncated **65.19%** (n=158) — a 25-point gap a single blended figure hides |
 | the record is redacted and the model's input is not | `test/observe.test.js`: the request handed to `decide` contains the secret, the recorded line does not |
 | the trace is bounded and private | rotation with an auditable `rotate` line, mode 0600, both tested |
@@ -152,13 +152,13 @@ under `lib/`:
 
 | path | what it owns |
 |---|---|
-| `lib/seams.js` | the instrument's own vocabulary: the nine point ids, what is true of each, the switch rule, the exit-code reader and the probe question. It names **no** harness event and reads **no** config |
-| `lib/host-events.js` | which dsh event each point attaches to, and the point as the input object carries it |
-| `lib/host-payload.js` | which ARGUMENT of a harness seam carries the text, per seam — the two files above are the application's half of the point descriptor (`F110`, `F111`) |
-| `lib/instrument-input.js` | the ONE bridge from the row's settings to the instrument's input object, and the only place a `Volatile` is unwrapped for it |
-| `lib/evidence.js` | the evidence record — one JSON object per line, best-effort |
-| `lib/model/` | the two decision-model transports and the answer readers behind them |
-| `lib/is-record.js` | the property-check narrowing those modules share |
+| `core/seams.js` | the instrument's own vocabulary: the nine point ids, what is true of each, the switch rule, the exit-code reader and the probe question. It names **no** harness event and reads **no** config |
+| `dsh/host-events.js` | which dsh event each point attaches to, and the point as the input object carries it |
+| `dsh/host-payload.js` | which ARGUMENT of a harness seam carries the text, per seam — the two files above are the application's half of the point descriptor (`F110`, `F111`) |
+| `core/instrument-input.js` | the ONE bridge from the row's settings to the instrument's input object, and the only place a `Volatile` is unwrapped for it |
+| `core/evidence.js` | the evidence record — one JSON object per line, best-effort |
+| `core/model/` | the two decision-model transports and the answer readers behind them |
+| `core/is-record.js` | the property-check narrowing those modules share |
 
 This bundle supplies the row, the config and the listener wiring. A plain `npm install` fetches only public
 packages: no git credentials and no sibling checkout. There is deliberately no interface version to compare —
@@ -167,7 +167,7 @@ resolution before `apply` runs, and the argument shapes are held by the tests th
 
 ## Hooks
 
-The nine seams are `PROBE_SEAMS` from `lib/seams.js`, in loop order:
+The nine seams are `PROBE_SEAMS` from `core/seams.js`, in loop order:
 
 | seam | host event | text at the seam |
 |---|---|---|
@@ -233,7 +233,7 @@ comes from `.get()`. Read one as a plain value and you get the object — `=== t
 `typeof x === 'string'` is false — so the plugin runs on its defaults while the settings card, the save
 and the trace all look correct. A saved setting then reaches a **running** row with no restart, because
 the harness deliberately does not re-apply the plugin; that is also why a value captured once in `apply`
-never moves. Every read goes through `readConfigValue` (`lib/config-value.js`), which returns the value
+never moves. Every read goes through `readConfigValue` (`dsh/config-value.js`), which returns the value
 for an accessor and passes an ordinary field through untouched.
 
 `includeNonOperatorFacing` off keeps the `draft` seam to what an operator would read: the Harness's own
@@ -274,7 +274,7 @@ because a volatile field does not arrive as its value and the schema default is 
 a field nobody has set.
 
 `seamEnabled` is the per-seam switch, keyed by seam name and read through `seamCallsEnabled`
-(`lib/seams.js`), which is `!== false` for the same reason: a config written before the field existed has no
+(`core/seams.js`), which is `!== false` for the same reason: a config written before the field existed has no
 `seamEnabled` at all, and a switch that read `=== true` would turn the observer off everywhere on upgrade —
 silently, and only for the installs that did not ask for it. Off at a seam, that seam records a `skip` with
 reason `calls disabled at this seam`, and its questions are kept for when it comes back. The master wins:
@@ -408,7 +408,7 @@ in per-seam mode: only seams with a question are asked, and a seam with none rec
 `no question configured for this seam` instead of asking something nobody configured. Deleting the last
 question returns the row to the probe question everywhere — the card says which mode is in force.
 
-The rules a spec must satisfy are the runtime's own (`lib/model/questions.js`): a non-empty instruction,
+The rules a spec must satisfy are the runtime's own (`core/model/questions.js`): a non-empty instruction,
 at least two options with distinct non-empty labels and criteria, **exactly one abstain option** on a
 choice, at least two levels on a score. The card enforces them before a save and the host re-checks every
 spec at call time; a spec that fails at call time becomes a `skip` naming the reason (`no usable question:
@@ -553,7 +553,7 @@ trace file. A full model call there is **not yet verified** (`F141`).
 
 ### Measuring conversations from another product
 
-`packages/session-adapter` reads HARNESS sessions and nothing else, so a foreign transcript has to be converted first
+`dsh/session-adapter` reads HARNESS sessions and nothing else, so a foreign transcript has to be converted first
 (`docs/adapters-and-standards.md`). One converter ships here, for the archive `chat.deepseek.com` hands a user:
 
 ```bash
@@ -681,7 +681,7 @@ tell, and that is not the same fact as "they differ".
 **Unrelated to this plugin's trace, and kept separate on purpose.** The harness exports session telemetry to a
 remote endpoint and ships **no redaction rules** for it — measured against the installed service definition:
 *"with no listener mounted records reach the backend as captured, so exported data is exactly as clean as the
-rules a deployment mounts."* One rule costs one `ctx.on`, so `lib/telemetry.js` mounts one.
+rules a deployment mounts."* One rule costs one `ctx.on`, so `core/telemetry.js` mounts one.
 
 **It is OFF by default** (`redactSessionTelemetry`). A plugin whose contract is "it decides nothing" must not
 silently rewrite a user's telemetry the moment it mounts. When on, it scrubs the whole record — `body` *and* the

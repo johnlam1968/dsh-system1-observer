@@ -8,9 +8,9 @@ import assert from 'node:assert/strict'
 import {
   BINS, DEFAULT_OPTIONS, bias, brierBinary, classwiseSamples, ece, logLoss, meanEntropy,
   multiclassBrier, multiclassLogLoss, normalizedEntropy, samplesFor, scoreScalar,
-} from '../lib/calibrate.js'
-import { LABEL_OF_SEAM, PROBE_LABELS, SEAM_OF_LABEL, probeAnswerOf } from '../lib/probe-score.js'
-import { PROBE_QUESTION } from '../lib/seams.js'
+} from '../core/calibrate.js'
+import { LABEL_OF_SEAM, PROBE_LABELS, SEAM_OF_LABEL, probeAnswerOf } from '../core/probe-score.js'
+import { PROBE_QUESTION } from '../core/seams.js'
 
 const near = (got, want, epsilon = 1e-9) => assert.ok(Math.abs(got - want) < epsilon, `${got} != ${want}`)
 

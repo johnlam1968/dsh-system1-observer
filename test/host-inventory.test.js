@@ -6,15 +6,15 @@
 //
 // THE SCANNER READ CODE AS TEXT, AND THREE BUGS FOLLOWED -- each found by printing the exact bytes rather than
 // reasoning about them:
-//   1. `lib/*.js` was not recursive, so `lib/model/service.js` was invisible.
+//   1. `lib/*.js` was not recursive, so `core/model/service.js` was invisible.
 //   2. `[A-Za-z]+` cannot match `system1`. A service name with a DIGIT was hidden by a character class.
-//   3. comments counted as code: `lib/host/feed.js` documents `ctx.on('session/event', ...)` in its header, which the
+//   3. comments counted as code: `core/host/feed.js` documents `ctx.on('session/event', ...)` in its header, which the
 //      purity check read as a subscription. Comments are stripped before extraction now.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { HOST_SERVICES, HOST_EVENTS, HOST_SYMBOL_REACHED, ADAPTER_MODULES } from '../lib/host/index.js'
+import { HOST_SERVICES, HOST_EVENTS, HOST_SYMBOL_REACHED, ADAPTER_MODULES } from '../dsh/host/index.js'
 
 const ROOT = process.cwd()
 const NAME = '[A-Za-z0-9_-]+'
@@ -68,15 +68,16 @@ function jsFiles(dir) {
   })
 }
 
-const ROW = code(read(join(ROOT, 'index.js')))
-const LIB = jsFiles(join(ROOT, 'lib'))
-  .filter((file) => !file.includes(join('lib', 'host')))
+const ROW = code(read(join(ROOT, 'dsh/index.js')))
+const LIB = [...jsFiles(join(ROOT, 'core')), ...jsFiles(join(ROOT, 'dsh'))]
+  .filter((file) => !file.includes(join('dsh', 'host')))
+  .filter((file) => !file.includes(join('dsh', 'index.js')))
   .map((file) => code(read(file)))
   .join('\n')
 // AND THE PACKAGES THIS REPOSITORY SHIPS, because a host edge moved there and an unscanned edge is an undeclared one:
-// `dsh-session-adapter`'s plugin entry reaches `sessionQuery` with the same literal the row does. `lib/host` is excluded
+// `dsh-session-adapter`'s plugin entry reaches `sessionQuery` with the same literal the row does. `core/host` is excluded
 // above for the same reason it is excluded for `lib`: it is the INVENTORY, prose about the host rather than a call to it.
-const PACKAGES = jsFiles(join(ROOT, 'packages'))
+const PACKAGES = jsFiles(join(ROOT, 'dsh', 'session-adapter'))
   .map((file) => code(read(file)))
   .join('\n')
 
@@ -109,11 +110,11 @@ test('every event subscribed BY LITERAL is declared, and no declaration is stale
 test('the symbol-reached tier names real files, and records the dynamic service resolution', () => {
   const entries = Object.entries(HOST_SYMBOL_REACHED)
   assert.ok(entries.length >= 2, 'constants, a variable and a table are all declared rather than omitted -- the `system1` service entry went with the route that reached it')
-  // The `ctx.get(name)` entry that used to sit here declared the dynamic service lookup in `lib/model/service.js`.
+  // The `ctx.get(name)` entry that used to sit here declared the dynamic service lookup in `core/model/service.js`.
   // That module is gone, and so is the lookup, so the declaration went with it rather than being left to rot.
   assert.ok(!Object.keys(HOST_SYMBOL_REACHED).some((key) => key.includes('ctx.get(name)')), 'the dynamic service key is declared only while a dynamic lookup exists')
   for (const [key, description] of entries) {
-    for (const match of description.matchAll(/\b((?:lib|test)\/[A-Za-z0-9/._-]+\.js)\b/g)) {
+    for (const match of description.matchAll(/\b((?:core|dsh|test)\/[A-Za-z0-9/._-]+\.js)\b/g)) {
       assert.ok(existsSync(join(ROOT, match[1])), `${key} names ${match[1]}, which should exist`)
     }
   }
@@ -129,13 +130,13 @@ test('the adapter modules are PURE: no host service, no event subscription, comm
   }
 })
 
-test('the scan is RECURSIVE, so a nested lib file cannot hide a host call', () => {
-  const nested = jsFiles(join(ROOT, 'lib')).filter((file) => file.includes(join('lib', 'model')))
-  assert.ok(nested.length > 0, 'lib/model holds files')
+test('the scan is RECURSIVE, so a nested file cannot hide a host call', () => {
+  const nested = jsFiles(join(ROOT, 'core')).filter((file) => file.includes(join('core', 'model')))
+  assert.ok(nested.length > 0, 'core/model holds files')
   // WHAT THIS PROVES IS THE SCAN, NOT THE ARCHITECTURE: that a `ctx.get(` in a NESTED lib file is found. It used to
   // assert that such a call existed, which made a green suite mean "the plugin still reaches a host service" -- and
   // that is precisely what stopped being true when the service route was cut. The scan is still worth proving, so the
   // witness is now a SYNTHETIC one: the real code need not contain a dynamic lookup for the recursion to matter.
-  const witness = code(read('lib/host/index.js')) + code(read('lib/model/client.js'))
+  const witness = code(read('dsh/host/index.js')) + code(read('core/model/client.js'))
   assert.ok(!nested.some((file) => code(read(file)).includes('ctx.get(')), 'no dynamic host lookup remains in a nested lib file -- which is what the cut was for')
 })

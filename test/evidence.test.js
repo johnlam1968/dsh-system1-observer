@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createEvidence } from '../lib/evidence.js'
+import { createEvidence } from '../core/evidence.js'
 
 function sink(options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'observer-evidence-'))

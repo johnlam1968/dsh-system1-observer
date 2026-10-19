@@ -1,11 +1,11 @@
 import { test } from 'node:test'
-import { DEFAULT_HOOKS } from '../lib/register.js'
-import { DEFAULT_MAX_FIELD_CHARS } from '../lib/observe.js'
-import { DEFAULT_WIRE_URL } from '../lib/model/wire.js'
+import { DEFAULT_HOOKS } from '../core/register.js'
+import { DEFAULT_MAX_FIELD_CHARS } from '../core/observe.js'
+import { DEFAULT_WIRE_URL } from '../core/model/wire.js'
 import assert from 'node:assert/strict'
-import { Config } from '../index.js'
-import { PROBE_SEAMS } from '../lib/seams.js'
-import { QUESTION_SCOPES, TURN_HOOK } from '../lib/questions.js'
+import { Config } from '../dsh/index.js'
+import { PROBE_SEAMS } from '../core/seams.js'
+import { QUESTION_SCOPES, TURN_HOOK } from '../core/questions.js'
 
 // WHY THIS EXISTS: the settings host projects a form onto this schema before every read and every write
 // (`dsh-settings` `volatileForm` + `projectForm`), and that projection has two silent behaviours that this
@@ -18,7 +18,7 @@ import { QUESTION_SCOPES, TURN_HOOK } from '../lib/questions.js'
 //
 // `Schema.any()` for the leaf is deliberate: `projectForm` returns an ARRAY whole rather than projecting
 // its items, so a question object keeps `options`/`criteria`/`levels` verbatim, and a spec the host does
-// not understand is refused by `lib/questions.js` with a reason instead of by schemastery with a stack.
+// not understand is refused by `core/questions.js` with a reason instead of by schemastery with a stack.
 const dict = Config.dict ?? {}
 
 test('every probe seam is declared under `questions`, so no seam can be silently dropped', () => {
@@ -55,7 +55,7 @@ test('every probe seam is declared under `seamEnabled` too, and defaults to ON',
   for (const seam of PROBE_SEAMS) {
     assert.equal(field.dict[seam].type, 'boolean', `${seam} must be a boolean switch`)
     // `.default(true)` is what makes the resolved config SAY true rather than say nothing. It is not what
-    // makes an absent switch mean ON -- `lib/seams.js` enforces that with `!== false`, because a measured
+    // makes an absent switch mean ON -- `core/seams.js` enforces that with `!== false`, because a measured
     // unset volatile object can materialise to absent keys rather than to the defaults.
     assert.equal(field.dict[seam].meta?.default, true, `${seam} must default to on`)
   }
@@ -85,7 +85,7 @@ test('`sessions` is a volatile list of ANYTHING, because an entry may carry a ti
   assert.equal(field.type, 'array', 'the session menu appends one entry to a list')
   // NOT `string`: an entry may be `{ id, title }`, and a string item schema would REFUSE that object at
   // resolution -- the row would fail to load the moment the menu wrote one.
-  assert.equal(field.inner?.type, 'any', 'an entry is narrowed in `lib/sessions.js`, not by the schema')
+  assert.equal(field.inner?.type, 'any', 'an entry is narrowed in `core/sessions.js`, not by the schema')
   assert.equal(field.meta?.volatile, true)
 })
 
@@ -167,17 +167,17 @@ test('every declared field is either volatile or declared mount-bound, and none 
 // reads at all) and not the subtle one (a read nobody reaches).
 test('every volatile setting is read somewhere, or is named in the exception list with its reason', async () => {
   const { readFileSync, readdirSync } = await import('node:fs')
-  const files = ['index.js', ...readdirSync('lib').filter((name) => name.endsWith('.js')).map((name) => 'lib/' + name)]
+  const files = ['dsh/index.js', ...['core', 'dsh'].flatMap((dir) => readdirSync(dir).filter((name) => name.endsWith('.js')).map((name) => dir + '/' + name))]
   const source = files.map((file) => readFileSync(file, 'utf8')).join('\n')
   // THE PATTERN IS DELIBERATELY NARROW: the field name must appear INSIDE a `readConfigValue(...)` call, because the
   // name alone appears in the schema itself and a loose scan would pass on the very definition it polices.
   const readSomewhere = (field) => new RegExp('readConfigValue\\([^\\n]*\\.' + field + '\\b').test(source)
-  // THE SECOND LEGAL ROUTE, AND IT IS ONE NAMED FILE. `lib/instrument-input.js` is the bridge that turns the row into
+  // THE SECOND LEGAL ROUTE, AND IT IS ONE NAMED FILE. `core/instrument-input.js` is the bridge that turns the row into
   // the instrument's input object, so the settings IT reads are plain by construction (it is handed `plainConfig`),
   // and a scan that knew only `readConfigValue` reported every one of them unread -- measured: seven fields, all of
   // them read, on the first run after the instrument stopped unwrapping its own config (`F110`). The bridge is NAMED
   // rather than "any file": a read that appears anywhere else is still a failure.
-  const bridge = readFileSync('lib/instrument-input.js', 'utf8')
+  const bridge = readFileSync('core/instrument-input.js', 'utf8')
   const isRead = (field) => readSomewhere(field) || new RegExp('\\.' + field + '\\b').test(bridge)
   // THE EXCEPTIONS, each with the reason it needs none: these are read as objects through `plainConfig`, which
   // unwraps every volatile accessor at once. Asserted volatile below, so the list cannot outlive its members.
@@ -195,7 +195,7 @@ test('every field RESOLVES to a value -- or is one of the three where UNSET is t
   // code, the settings card draws a blank, and an agent reading `system1_explain` is told nothing. So every field
   // either declares a default EQUAL to the fallback the code already applies, or appears here with the reason that
   // `undefined` is the answer. Adding a field without one fails this list.
-  const { readConfigValue } = await import('../lib/config-value.js')
+  const { readConfigValue } = await import('../dsh/config-value.js')
   const resolved = Config({})
   const UNSET_IS_THE_VALUE = {
     provider: 'unset means the REQUEST SAYS NOTHING: the wire sends a model block only when `model` is set, so with both unset the endpoint applies its own default. A schema default here would override a deployment\'s choice with this file\'s guess, and the endpoint already has one',
@@ -219,7 +219,7 @@ test('every field RESOLVES to a value -- or is one of the three where UNSET is t
 })
 
 test('every declared default reaches a resolved config', async () => {
-  const { readConfigValue } = await import('../lib/config-value.js')
+  const { readConfigValue } = await import('../dsh/config-value.js')
   const resolved = Config({})
   let checked = 0
   for (const field of Object.keys(dict)) {

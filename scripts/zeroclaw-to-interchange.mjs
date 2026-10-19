@@ -6,8 +6,8 @@
 //
 // ── WHY A CONVERTER AND NOT A PLUGIN PARSER ──────────────────────────────────────────────────────────────────
 // `dsh-chat-import` reads 25+ harnesses but not this one: its `openclaw` parser is JSONL rooted at
-// `~/.openclaw/agents` (`lib/discovery/jsonl.mjs:381`), and its sqlite family covers opencode/mimocode/kilocode/
-// teleagent/zcode/goose/zed/crush/trae/hermes — no zeroclaw. `lib/zeroclaw-interchange.js` says why and what is
+// `~/.openclaw/agents` (`core/discovery/jsonl.mjs:381`), and its sqlite family covers opencode/mimocode/kilocode/
+// teleagent/zcode/goose/zed/crush/trae/hermes — no zeroclaw. `core/zeroclaw-interchange.js` says why and what is
 // lost; this file is only the half that touches a filesystem and a database.
 //
 // ── THE DB IS OPENED READ-ONLY, AND THAT IS THE POINT ────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import { groupBySession, sessionToInterchange, toEpochMs } from '../lib/zeroclaw-interchange.js'
+import { groupBySession, sessionToInterchange, toEpochMs } from '../core/zeroclaw-interchange.js'
 
 const argv = process.argv.slice(2)
 const flag = (name, fallback = null) => {

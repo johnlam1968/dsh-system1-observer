@@ -4,7 +4,7 @@
 // the traces it cannot read.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { turnLine, probeViolations, SEAM_HOOKS } from '../lib/turn-record.js'
+import { turnLine, probeViolations, SEAM_HOOKS } from '../core/turn-record.js'
 
 test('a scheduled line is a call under `turn`, which is deliberately not a seam', () => {
   const line = turnLine({ sessionId: 'session-a', turn: 5, questionIds: ['a_noul', 'a_noul', 'a_score'], dropped: ['b'], executed: { provider: 'typesafe' }, durationMs: 812.5, worstCase: null })

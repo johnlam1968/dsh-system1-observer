@@ -12,9 +12,9 @@
 // pointer that makes the move discoverable.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createSessionSubjectTool, SUBJECT_TOOL_NAME } from '../lib/session-subject-tool.js'
+import { createSessionSubjectTool, SUBJECT_TOOL_NAME } from '../dsh/session-subject-tool.js'
 import { displayTextOfEvent } from 'dsh-session-adapter/session-format'
-import { composeTurnState } from '../lib/turn-state.js'
+import { composeTurnState } from '../dsh/turn-state.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const record = (id, { cwd = '/home/john/freeciv', createdAt = 1000, live = false, persisted = true } = {}) => ({ header: { id, cwd, createdAt }, live, persisted })

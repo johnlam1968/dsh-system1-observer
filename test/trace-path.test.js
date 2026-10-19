@@ -16,7 +16,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import plugin, { resolveTracePath } from '../index.js'
+import plugin, { resolveTracePath } from '../dsh/index.js'
 
 test('DSH_HOME wins, and lands the trace beside the harness’s own logs', () => {
   assert.equal(resolveTracePath({}, '/pkg', { DSH_HOME: '/home/x/.dsh' }), '/home/x/.dsh/logs/system1-observer.jsonl')

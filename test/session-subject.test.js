@@ -9,8 +9,8 @@ import {
   DEFAULT_KINDS, SUBJECT_KINDS, eventTypesOf, listStoredSessions, readStoredSubject, sliceEvents,
 } from 'dsh-session-adapter/reader'
 // `subjectSettings` reads THIS PLUGIN's config, so it stayed here rather than going into the adapter package.
-import { subjectSettings } from '../lib/subject-settings.js'
-import { composeTurnState } from '../lib/turn-state.js'
+import { subjectSettings } from '../dsh/subject-settings.js'
+import { composeTurnState } from '../dsh/turn-state.js'
 
 /** One session event in the shape the harness writes and the composer reads. */
 const message = (seq, type, text) => ({

@@ -5,7 +5,7 @@
 // file are both acceptable. What fails is a NEW dangling citation, which is the one somebody can still fix.
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { findDanglingCitations } from '../lib/citations.js'
+import { findDanglingCitations } from '../core/citations.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const { findings, known } = findDanglingCitations({ root })

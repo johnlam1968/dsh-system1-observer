@@ -21,7 +21,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { EVENT, textOfEvent } from 'dsh-session-adapter/session-format'
-import { eventsOf, exchangesOf, livePath, parseSession, PI_BLOCK, PI_ROLE } from '../lib/pi-session-export.js'
+import { eventsOf, exchangesOf, livePath, parseSession, PI_BLOCK, PI_ROLE } from '../dsh/pi-session-export.js'
 
 /**
  * A pi session file as text: a header plus whatever entries the case needs.

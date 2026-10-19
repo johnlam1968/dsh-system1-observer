@@ -23,7 +23,7 @@ and the practical answer today is one adapter per harness.**
 
 **Measured end to end by another session in this deployment** — the *Paper screening* session, whose tools and findings
 are attributed at the end of this section. A DeepSeek Chat web export (75 conversations, the operator's own archive)
-was converted into DSH v4 session logs and read back through `packages/session-adapter`: **75/75, zero failures, exact
+was converted into DSH v4 session logs and read back through `dsh/session-adapter`: **75/75, zero failures, exact
 per-conversation parity on operator count, assistant count and visible text characters** (307 operator, 306 assistant,
 1,109,540 characters, 1,916 events), with slice paging and FTS search working. Re-run here rather than relayed.
 
@@ -46,7 +46,7 @@ The conclusion is a **contract**, not a convenience:
 | point a persistence backend at the imported root, or copy the sessions in | nothing sees them: the global session index correctly returns zero for a root no deployment is mounted on, which looks like missing data and is not |
 
 **The converter this repository ships** is `scripts/import-deepseek-web.mjs`, with the parsing and event mapping in
-`lib/deepseek-web-export.js` (both tested, `test/deepseek-web-export.test.js`), for the `chat.deepseek.com` archive.
+`dsh/deepseek-web-export.js` (both tested, `test/deepseek-web-export.test.js`), for the `chat.deepseek.com` archive.
 `--compression` must match the deployment that will read the root, or the root is refused wholesale (`F147`).
 
 **Two paths, and this repository built one and adopted nothing for the other.** To *continue chatting*, `dsh-chat-import` (audited, L5 run-tested, MIT,
@@ -181,7 +181,7 @@ The sixth harness, and the most instructive, because it solves the same problems
 | `messages.jsonl` | `{ message_id, turn_id, message: { role, content: [{ type: 'text', text }] } }` | the event log, minus the control plane |
 | **`user-message-locators.jsonl`** | **an ask index by BYTE OFFSET and LINE NUMBER**, each entry carrying `generation` and **`artifactRevision: "sha256:…"`** | the ask index we derived by hand two turns ago — mcode ships it, and pins the revision it was built against |
 | `ledger.jsonl`, `display.jsonl`, `snapshot` | separate projections of one session | our G0/G1/G2 selections, and the Composer |
-| `llm-call.json` | `api: 'anthropic-messages'`, `maxTokens`, `model`, `maxSerializedInputBytes`, an output-revision instruction | `lib/model/limits.js` + the question set |
+| `llm-call.json` | `api: 'anthropic-messages'`, `maxTokens`, `model`, `maxSerializedInputBytes`, an output-revision instruction | `core/model/limits.js` + the question set |
 
 Two transferable lessons. **The index is pinned to a revision** (`sha256` of the artifact it indexes), so a stale index
 is detectable rather than silently wrong — the same discipline as zeroclaw's `jsonl_import_receipts` and agent-eval's
@@ -751,7 +751,7 @@ with `{kind: 'surface', values: ['current']}` is the authoritative form of the f
    derived. The service offers the harness's own boundaries only.
 3. **Composition for a judge**: the labelled sections, the head/tail cut, and the surface-aware refusal (`a turn whose
    response was shadowed has NO response` — refused, not re-read from the log).
-4. **Sizing**: `coverageOf` and `lib/segment.js`, which fit a subject to the decision model's character budget.
+4. **Sizing**: `coverageOf` and `dsh/segment.js`, which fit a subject to the decision model's character budget.
 5. **The register**: the trace, the readings, the packages, reproducibility. `sessionQuery` has no concept of a
    measurement, a question, or a reading.
 6. **Cross-harness**: the service is dsh-only. pi, mcode and Hermes need their own readers.
@@ -813,7 +813,7 @@ about 114 lines of paging arithmetic and then CONSUMES the rest as its ingester.
 | `session-subject.js` `eventTypesOf`, `subjectSettings` | 51 | **stay** — the kind→event-type mapping IS the format knowledge |
 | `dsh-session-adapter/session-format` | 138 | **stay** — the vocabulary the ingester reads through |
 | `sessions-tool.js` `createSessionsTool` (contract, render, refusals) | 309 | **stay** — a tool must exist whatever answers it |
-| `lib/exchange.js` (G0/G1), `turn-state.js`, `segment.js`, `tool-blocks.js` | ~860 | **stay** — this is the business logic, and no schema holds a judgement |
+| `dsh/exchange.js` (G0/G1), `turn-state.js`, `segment.js`, `tool-blocks.js` | ~860 | **stay** — this is the business logic, and no schema holds a judgement |
 | `dsh-session-adapter/surface` (the fold) | 20 | **replace with a SERVICE CALL**, not a database: `filterEvents(id, [{kind:'surface', values:['current']}])` |
 
 So the deletion is about **114 of ~11,100 lines — roughly 1%** — and the schema would need `eventTypesOf`,
@@ -885,7 +885,7 @@ do:
 | code | `host/feed.js`, `host/fs-journal.js`, `host/surface.js`, `register.js`, `seams.js`, `observe.js`, `stream.js`, the `turn-*` path | the ingester, the schema, the queries, the per-harness readers |
 | covers other harnesses | **no, by construction** | **yes** — pi, mcode, Hermes |
 
-The constraints in `lib/host/index.js` are why channel 1 is a different engineering problem rather than a different
+The constraints in `dsh/host/index.js` are why channel 1 is a different engineering problem rather than a different
 data source: `agent/turn-stopping` is **serial**, so no O(surface) work may run inside it; `fs/write-intent` is
 **waterfall, single slot**, so the first returned intent owns a decision; `fs/observed` is `emit` but *a throw fails the
 tool call*. A store cannot be consulted inside those — which is why the two channels are not one channel with a cache.

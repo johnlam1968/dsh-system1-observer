@@ -2,12 +2,12 @@
 // reading what comes back -- a formatter unit-tested on hand-built objects would say nothing about whether
 // the file it actually reads parses.
 import { test } from 'node:test'
-import { PROBE_QUESTION } from '../lib/seams.js'
+import { PROBE_QUESTION } from '../core/seams.js'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MAX_TAIL, readTraceWindow, reportTrace, runIds } from '../lib/trace-report.js'
+import { MAX_TAIL, readTraceWindow, reportTrace, runIds } from '../core/trace-report.js'
 
 const mount = (run, at) => ({ at, run, event: 'mount', hooks: ['admit', 'draft'], transport: 'service', provider: 'typesafe', model: 'jev-latest', questionIds: ['probe'], tracePath: '/tmp/x.jsonl' })
 const call = (run, at, hook, label, ms = 200) => ({

@@ -5,10 +5,10 @@
 //                                       [--agent <name>] [--cwd <slug-filter>] [--limit N] [--dry-run]
 //   node scripts/import-pi-sessions.mjs --install <staging-root> --to <session-root>
 //
-// The conversion rules live in `lib/pi-session-import.js` (pure, tested). This file is the half that needs the
+// The conversion rules live in `core/pi-session-import.js` (pure, tested). This file is the half that needs the
 // harness: it writes the events through the harness's OWN persistence API rather than emitting JSONL by hand,
 // because the writer enforces the structural rules a hand-written log gets wrong -- `SessionFormatError:
-// assistant/message does not match an open turn and step` was measured from exactly that, and `lib/pi-session-export.js`
+// assistant/message does not match an open turn and step` was measured from exactly that, and `dsh/pi-session-export.js`
 // carries the same rules as a test because that refusal only shows up in a second process, over real files.
 //
 // ── WHY THIS WRITER IS ADDITIVE AND `import-deepseek-web.mjs` IS NOT ─────────────────────────────────────────
@@ -35,7 +35,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { eventsOf, parseSession } from '../lib/pi-session-export.js'
+import { eventsOf, parseSession } from '../dsh/pi-session-export.js'
 
 const argv = process.argv.slice(2)
 const flag = (name, fallback = null) => {

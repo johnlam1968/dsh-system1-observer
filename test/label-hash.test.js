@@ -1,7 +1,7 @@
 // A DECLARED LABEL IS RECORDED AS A HASH, and the two ways that can go wrong are both about "nothing declared".
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LABEL_HASH_CHARS, labelHash } from '../lib/label-hash.js'
+import { LABEL_HASH_CHARS, labelHash } from '../core/label-hash.js'
 
 test('a declared label hashes to a stable 12-character digest', () => {
   const once = labelHash('v3 concise-directed')

@@ -20,7 +20,7 @@ whole safety property.
 | `session-index find <term>` | **1 ms** (13–99 ms including process start) |
 | `system1_sessions { action: 'search' }` | milliseconds, because it already **fell back** to the store |
 
-So the tool was carrying a two-backend precedence policy — [the deleted `lib/sessions-search.js`](lib/README.md) —
+So the tool was carrying a two-backend precedence policy — [the deleted `lib/sessions-search.js`](core/README.md) —
 whose first backend this deployment leaves at `openAt: never` (F98). The fallback was always the answer, and the
 policy around it was always dead code.
 
@@ -31,7 +31,7 @@ tool hint" and "expanding the tool" are the same act of editing someone else's p
 needs three things, and none of them is the message list it already returns:
 
 1. **The event window, tool traffic included.** `composeTurnState` is handed the *surface*, not the messages
-   ([lib/turn-state.js:59-60](lib/turn-state.js:59)): `tool/call` and `tool/result` are not messages, so filtering to
+   ([dsh/turn-state.js:59-60](dsh/turn-state.js:59)): `tool/call` and `tool/result` are not messages, so filtering to
    messages first discards the whole tool record. `session_index_read` counts tool events today; it does not return
    them.
 2. **The surface, and whose rule it follows.** For a stored subject this repository asks the host
@@ -50,7 +50,7 @@ description should say what it now returns and point here for the measurement se
 ## Step 2 — retire the three duplicated actions (DONE)
 
 Deleted: `lib/sessions-tool.js`'s `list`/`search`/`refresh`, `lib/sessions-search.js`, `lib/sessions-tool-output.js`
-(the schema and render for all four actions). Kept and moved into `lib/session-subject-tool.js`: the read, its schema
+(the schema and render for all four actions). Kept and moved into `dsh/session-subject-tool.js`: the read, its schema
 and its render — **unchanged**, because a retirement that also changes behaviour is two changes at once.
 
 One thing rode along and did not get lost: `newest` is resolved against the service and sorted by `header.createdAt`,
@@ -68,7 +68,7 @@ The count is still nine. Three actions left this row, and the read came back und
 ### A consequence nobody had priced
 
 **This package no longer imports `dsh-session-index` at all.** `lib/sessions-search.js` and the `refresh` action were
-the only two consumers, so the store-drift guard — [the deleted `test/store-copy-is-current.test.js`](lib/README.md),
+the only two consumers, so the store-drift guard — [the deleted `test/store-copy-is-current.test.js`](core/README.md),
 which existed because this repo ran the store's *builder* and could execute a stale one against a fresh store
 (`F117`) — has no premise left here. It was deleted rather than left passing for the wrong reason. The equivalent
 guard belongs in `dsh-session-index`, where the builder and the store now live in the same package.

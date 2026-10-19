@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createDecideTool, readSpecs, DECIDE_TOOL_NAME, TOOL_HOOK } from '../lib/decide-tool.js'
+import { createDecideTool, readSpecs, DECIDE_TOOL_NAME, TOOL_HOOK } from '../core/decide-tool.js'
 
 const spec = { id: 'asked', type: 'noul', instructions: 'Is this true?' }
 const stub = (reply) => {
@@ -149,7 +149,7 @@ test('a call through the tool records a line naming the tool and its questions',
   assert.deepEqual(lines[0].questionIds, ['asked', 'ladder'])
   assert.deepEqual(lines[0].executed, { provider: 'typesafe' })
   assert.equal(lines[0].durationMs, 812.5)
-  const { probeViolations } = await import('../lib/turn-record.js')
+  const { probeViolations } = await import('../core/turn-record.js')
   assert.deepEqual(probeViolations(lines), [], 'the line satisfies the acceptance check it could otherwise violate')
 })
 
@@ -189,7 +189,7 @@ test('a tool constructed with no recorder still works, and records nothing', asy
   await tool.execute({ state: 'x', questions: [spec] })
 })
 
-// THE TRANSPORT DIFFERENCE, which cost the provenance silently. `lib/model/service.js` returns the envelope NESTED
+// THE TRANSPORT DIFFERENCE, which cost the provenance silently. `core/model/service.js` returns the envelope NESTED
 // (`{kind, answers, envelope:{executed, usage, durationMs}}`) while the wire spreads it flat -- so reading the top
 // level lost `executed`, `usage` and `durationMs` on the service path, which is the one a profile with `system1`
 // mounted runs. The tool reported answers with no record of which checkpoint answered them.
@@ -259,6 +259,6 @@ test('a signal aborted DURING the call is recorded, not silently absorbed', asyn
   assert.equal(out.failure, undefined, 'the answer the backend already produced is not thrown away')
   assert.equal(lines.length, 1)
   assert.equal(lines[0].cancelled, true, 'a cancellation the transport could not act on is visible in the record')
-  const { probeViolations } = await import('../lib/turn-record.js')
+  const { probeViolations } = await import('../core/turn-record.js')
   assert.deepEqual(probeViolations(lines), [], 'and the extra field does not break the acceptance check')
 })

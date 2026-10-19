@@ -15,7 +15,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "scripts": {
-    "prepublishOnly": "node ../../scripts/check-publish-tag.mjs"
+    "prepublishOnly": "node ../../../scripts/check-publish-tag.mjs"
   },
   "files": [
     "LICENSE",
@@ -34,7 +34,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/johnlam1968/dsh-system1-observer.git",
-    "directory": "packages/session-adapter"
+    "directory": "dsh/session-adapter"
   },
   "keywords": [
     "deepseek-harness",

@@ -2,7 +2,7 @@
 // model call and the trace line stay with the caller and this can be tested without a session or a backend.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTurnListener } from '../lib/turn-listener.js'
+import { createTurnListener } from '../core/turn-listener.js'
 
 const SPECS = [
   { id: 'a_noul', type: 'noul', instructions: 'Is this true?' },

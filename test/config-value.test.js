@@ -13,12 +13,12 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply, resolveTracePath } from '../index.js'
-import { plainConfig, readConfigValue } from '../lib/config-value.js'
-import { readHooks } from '../lib/register.js'
-import { buildQuestions } from '../lib/questions.js'
-import { createObserver } from '../lib/observe.js'
-import { instrumentInput, questionGroup } from '../lib/instrument-input.js'
+import { apply, resolveTracePath } from '../dsh/index.js'
+import { plainConfig, readConfigValue } from '../dsh/config-value.js'
+import { readHooks } from '../core/register.js'
+import { buildQuestions } from '../core/questions.js'
+import { createObserver } from '../core/observe.js'
+import { instrumentInput, questionGroup } from '../core/instrument-input.js'
 
 const accessor = (value) => ({ get: () => value })
 const fakeCtx = () => {
@@ -74,7 +74,7 @@ test('the mount-bound fields are unwrapped where they are used', () => {
 
 test('the call-time fields are unwrapped where the INPUT is built', () => {
   // THE UNWRAP MOVED, AND IT MOVED TO ONE PLACE. These fields used to be unwrapped inside the instrument, which is
-  // why the instrument could not be extracted; now `lib/instrument-input.js` is the only bridge, and the test asserts
+  // why the instrument could not be extracted; now `core/instrument-input.js` is the only bridge, and the test asserts
   // the same property one step earlier: a Cordis accessor handed to the ROW reaches the instrument as a value.
   const group = (raw) => questionGroup(plainConfig(raw))
   const questions = buildQuestions(group({ question: accessor('  Does this look complete?  ') }), 'admit').questions

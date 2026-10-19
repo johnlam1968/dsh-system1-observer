@@ -9,8 +9,8 @@
 // THE THREE BOUNDARY SHAPES, all learned the hard way and recorded here:
 //   the store   : `readSession(id)` -> `{ session, events }`, events in the composer's own shape
 //   the model   : `system1.decide(...)` -> `{ answers, meta }` where the answer is
-//                 `{ status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } }` (`lib/model/service-answers.js:39`)
-//   the envelope: `reply.meta.{executed,requested,usage,durationMs}` (`lib/model/service.js:49`)
+//                 `{ status: 'ok', answer: { type: 'noul', probabilityTrue: 0.8 } }` (`core/model/service-answers.js:39`)
+//   the envelope: `reply.meta.{executed,requested,usage,durationMs}` (`core/model/service.js:49`)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -20,9 +20,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import plugin from '../index.js'
-import { EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../lib/evaluate-tool.js'
-import { probeAnswerOf, probeScore } from '../lib/probe-score.js'
+import plugin from '../dsh/index.js'
+import { EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../dsh/evaluate-tool.js'
+import { probeAnswerOf, probeScore } from '../core/probe-score.js'
 
 /**
  * The real Cordis and the real tool registry, resolved the way `test/composition.test.js` resolves them.
@@ -76,7 +76,7 @@ const readLines = (path) => (existsSync(path) ? readFileSync(path, 'utf8').trim(
  * THE MODEL, stubbed at `fetch` -- which is where the wire goes.
  *
  * It used to be a `system1` service returning that service's OWN answer shape, `{status: 'ok', answer: {type,
- * probabilityTrue}}`, which `lib/model/service-answers.js` flattened into the wire's shape before anything else saw
+ * probabilityTrue}}`, which `core/model/service-answers.js` flattened into the wire's shape before anything else saw
  * it. That boundary is gone with the route, so the stub answers in the wire's shape directly: one fewer shape to get
  * wrong, and the comment that recorded the third wrong guess is retired with the file it described.
  */
@@ -168,7 +168,7 @@ test('a stored session is judged through the real registry, and its line stays o
 // every unit test stayed green, and each is a different mistake:
 //
 //   1. `render` WAS CALLED WITH ONE ARGUMENT HERE AND DECLARED ONE PARAMETER. The host calls
-//      `tool.output.render(exec.arguments, value)` (`dsh-tools/lib/index.js:3548`), so a single-parameter render is
+//      `tool.output.render(exec.arguments, value)` (`dsh-tools/core/index.js:3548`), so a single-parameter render is
 //      handed the ARGUMENTS. Measured live: a call whose trace line recorded `"messages":611` displayed
 //      `? subject, 0 of 0 message(s), state 0 chars [?]` -- the subject was read, the model answered and was paid,
 //      and the agent saw none of it. The assertions below call render the way the host does.
@@ -181,7 +181,7 @@ test('a stored session is asked the SELECTED SET\'s questions, and the render th
   const tracePath = join(dir, 'trace.jsonl')
   // A COMPOSITION, WRITTEN HERE RATHER THAN BORROWED FROM `criteria/`: a test that reads the shipped corpus breaks
   // when somebody edits a question, which is exactly what the corpus is for. One directory per composition, one file
-  // per scope, named for the scope (`lib/question-sets.js:198`, `:243`).
+  // per scope, named for the scope (`core/question-sets.js:198`, `:243`).
   const setsDir = join(dir, 'sets')
   mkdirSync(join(setsDir, 'session-trial'), { recursive: true })
   writeFileSync(join(setsDir, 'session-trial', 'session.json'), JSON.stringify([

@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import {
   CAPABILITIES, ENFORCEMENT, FORBIDDEN_CAPABILITIES, FORBIDDEN_SURFACES, VERIFIED,
   assertCapabilities, capabilitiesIn, readDigest,
-} from '../lib/honesty.js'
+} from '../core/honesty.js'
 
 test('the posture is asserted, not described', () => {
   assert.equal(ENFORCEMENT, 'declarative', 'the code shape, not a sandbox and not a runtime gate')
@@ -36,7 +36,9 @@ test('a capability outside the declaration, or inside the forbidden set, is refu
 // what a tool receives, never injects resident context, never prunes, never routes a model. The moment somebody
 // adds one of those because it seemed useful, this fails on the line they added.
 test('the plugin’s own source touches none of the forbidden surfaces', () => {
-  for (const file of ['index.js', 'client.js']) {
+  // BOTH ENTRY POINTS, wherever they live: the plugin entry and the Web UI half. Naming one folder would let the
+  // other drift out of the guard silently, which is the failure this guard exists to make loud.
+  for (const file of ['dsh/index.js', 'dsh/client.js']) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
     assert.deepEqual(capabilitiesIn(source), [], `${file} must not reach for a forbidden surface`)
   }

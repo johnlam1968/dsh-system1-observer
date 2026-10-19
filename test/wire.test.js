@@ -1,6 +1,6 @@
 // THE TRANSPORT'S CANCELLATION, WHICH NOTHING TESTED.
 //
-// `lib/model/wire.js` has honoured an external signal since it was written -- it forwards the caller's abort to its
+// `core/model/wire.js` has honoured an external signal since it was written -- it forwards the caller's abort to its
 // own controller and, at line 31, deliberately tells a cancellation from a timeout. `adding-a-tool.md:49` makes
 // honouring `exec.signal` the tool's obligation, and delta 6b was about the wiring between them; these two tests pin
 // the transport end of it, because the distinction is load-bearing: a caller's cancel reported as "timed out" sends
@@ -8,7 +8,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { postSystemone } from '../lib/model/wire.js'
+import { postSystemone } from '../core/model/wire.js'
 
 /** A fetch that never answers on its own, and rejects when the signal it was given aborts. */
 const untilAborted = (_url, init) => new Promise((_resolve, reject) => {

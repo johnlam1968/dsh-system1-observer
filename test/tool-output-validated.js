@@ -12,7 +12,7 @@
 // ours at construction -- so this is the pipeline's own check, minus the snapshot and freeze.
 import assert from 'node:assert/strict'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
-import { asToolDefinition } from '../lib/tool-definition.js'
+import { asToolDefinition } from '../dsh/tool-definition.js'
 
 /**
  * Assert the harness would ACCEPT this value for this tool, and return it so a caller can keep chaining.

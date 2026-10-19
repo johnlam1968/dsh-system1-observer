@@ -1,12 +1,17 @@
-import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './lib/host/fs-journal.js'
+import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './host/fs-journal.js'
+// THE VOCABULARY BY NAME, not by literal. The harness's event names have exactly one home
+// (`dsh-session-adapter/lib/session-format.js`), and a second spelling of one is somewhere a format change has to be
+// found -- which is what `test/session-format.test.js` fails on.
+import { EVENT } from 'dsh-session-adapter/session-format'
 import { surfaceEvents } from 'dsh-session-adapter/surface'
 import { currentSurfaceSeqs } from 'dsh-session-adapter/surface-authority'
 import { createEventFeed, DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //
-// THE DECISION RUNTIME IS LOCAL SOURCE -- it lives under `lib/`, in the same commit as this file, rather
-// than arriving as a fetched dependency. So a renamed or removed export is refused by ESM resolution BEFORE
+// THE DECISION RUNTIME IS LOCAL SOURCE -- `core/` is the instrument and `dsh/` is this adaptation, both in the same
+// commit as this file, rather than arriving as a fetched dependency. So a renamed or removed export is refused by ESM
+// resolution BEFORE
 // `apply`, and the argument shapes this file calls are held by the tests that execute `apply`. There is no
 // interface version to compare: pinned across a repository boundary a version integer has a job, but here it
 // could only ever fire when the person who broke the shape also volunteered to bump it.
@@ -15,57 +20,57 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
-import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from './lib/seams.js'
-import { DEFAULT_TIMEOUT_MS } from './lib/model/wire.js'
-import { probeFingerprint } from './lib/probe-score.js'
-import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from './lib/questions.js'
-import { composeQuestions } from './lib/system1.js'
+import { PROBE_SEAMS, TEXTLESS_SEAMS, seamCallsEnabled } from '../core/seams.js'
+import { DEFAULT_TIMEOUT_MS } from '../core/model/wire.js'
+import { probeFingerprint } from '../core/probe-score.js'
+import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from '../core/questions.js'
+import { composeQuestions } from '../core/system1.js'
 import { listStoredSessions, readStoredSubject } from 'dsh-session-adapter/reader'
-import { subjectSettings } from './lib/subject-settings.js'
-import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from './lib/question-sets.js'
-import { readSessions, scopeNotLiveNote, sessionObserved } from './lib/sessions.js'
-import { egressFacts } from './lib/egress.js'
-import { attachRedactionRule } from './lib/telemetry.js'
-import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from './lib/redact.js'
-import { describeSubject, subjectOfAgent } from './lib/subject.js'
-import { composeTurnState } from './lib/turn-state.js'
-import { createEvaluateTool } from './lib/evaluate-tool.js'
-import { createResultsTool } from './lib/results-tool.js'
-import { labelHash } from './lib/label-hash.js'
-import { createQuestionsTool } from './lib/questions-tool.js'
-import { createBatteryTool } from './lib/battery-tool.js'
-import { createSessionSubjectTool } from './lib/session-subject-tool.js'
-import { createEvidence } from './lib/evidence.js'
+import { subjectSettings } from './subject-settings.js'
+import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from '../core/question-sets.js'
+import { readSessions, scopeNotLiveNote, sessionObserved } from '../core/sessions.js'
+import { egressFacts } from '../core/egress.js'
+import { attachRedactionRule } from '../core/telemetry.js'
+import { TAIL_CHARS, minimisePaths, redactPolicy, sanitizeJson } from '../core/redact.js'
+import { describeSubject, subjectOfAgent } from '../core/subject.js'
+import { composeTurnState } from './turn-state.js'
+import { createEvaluateTool } from './evaluate-tool.js'
+import { createResultsTool } from '../core/results-tool.js'
+import { labelHash } from '../core/label-hash.js'
+import { createQuestionsTool } from '../core/questions-tool.js'
+import { createBatteryTool } from '../core/battery-tool.js'
+import { createSessionSubjectTool } from './session-subject-tool.js'
+import { createEvidence } from '../core/evidence.js'
 // The idle gap's default is the module's own constant: a second copy of `60000` here is the kind of number that
 // drifts from the one the cost line actually uses.
-import { IDLE_GAP_MS } from './lib/cost.js'
-import { MAX_LANES } from './lib/compare.js'
-import { BINS } from './lib/calibrate.js'
-import { createModel } from './lib/model/client.js'
-import { plainConfig, readConfigValue } from './lib/config-value.js'
-import { instrumentInput, questionGroup, redactionGroup } from './lib/instrument-input.js'
-import { createObserver, DEFAULT_MAX_FIELD_CHARS } from './lib/observe.js'
-import { DEFAULT_WIRE_URL } from './lib/model/wire.js'
-import { createTraceTool, TRACE_TOOL_NAME } from './lib/tool.js'
-import { createExplainTool, explainFacts, EXPLAIN_TOOL_NAME, TOOL_SUMMARIES } from './lib/explain-tool.js'
-import { CONFIG_TOOL_NAME } from './lib/config-tool.js'
-import { DECIDE_TOOL_NAME } from './lib/decide-tool.js'
-import { EVALUATE_TOOL_NAME } from './lib/evaluate-tool.js'
-import { QUESTIONS_TOOL_NAME } from './lib/questions-tool.js'
-import { BATTERY_TOOL_NAME } from './lib/battery-tool.js'
-import { SUBJECT_TOOL_NAME } from './lib/session-subject-tool.js'
-import { RESULTS_TOOL_NAME } from './lib/results-tool.js'
-import { defaultPackageDir } from './lib/report.js'
-import { asToolDefinition } from './lib/tool-definition.js'
-import { readTraceWindow, runIds } from './lib/trace-report.js'
-import { createObserverService, OBSERVER_SERVICE } from './lib/service.js'
+import { IDLE_GAP_MS } from '../core/cost.js'
+import { MAX_LANES } from '../core/compare.js'
+import { BINS } from '../core/calibrate.js'
+import { createModel } from '../core/model/client.js'
+import { plainConfig, readConfigValue } from './config-value.js'
+import { instrumentInput, questionGroup, redactionGroup } from '../core/instrument-input.js'
+import { createObserver, DEFAULT_MAX_FIELD_CHARS } from '../core/observe.js'
+import { DEFAULT_WIRE_URL } from '../core/model/wire.js'
+import { createTraceTool, TRACE_TOOL_NAME } from '../core/tool.js'
+import { createExplainTool, explainFacts, EXPLAIN_TOOL_NAME, TOOL_SUMMARIES } from '../core/explain-tool.js'
+import { CONFIG_TOOL_NAME } from '../core/config-tool.js'
+import { DECIDE_TOOL_NAME } from '../core/decide-tool.js'
+import { EVALUATE_TOOL_NAME } from './evaluate-tool.js'
+import { QUESTIONS_TOOL_NAME } from '../core/questions-tool.js'
+import { BATTERY_TOOL_NAME } from '../core/battery-tool.js'
+import { SUBJECT_TOOL_NAME } from './session-subject-tool.js'
+import { RESULTS_TOOL_NAME } from '../core/results-tool.js'
+import { defaultPackageDir } from '../core/report.js'
+import { asToolDefinition } from './tool-definition.js'
+import { readTraceWindow, runIds } from '../core/trace-report.js'
+import { createObserverService, OBSERVER_SERVICE } from '../core/service.js'
 import { Service } from '@deepseek-ai/cordis'
-import { createDecideTool } from './lib/decide-tool.js'
-import { createConfigTool } from './lib/config-tool.js'
-import { createConfigWriter } from './lib/config-writer.js'
-import { createTurnObserver } from './lib/turn-observer.js'
-import { createTurnListener } from './lib/turn-listener.js'
-import { DEFAULT_HOOKS, registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from './lib/register.js'
+import { createDecideTool } from '../core/decide-tool.js'
+import { createConfigTool } from '../core/config-tool.js'
+import { createConfigWriter } from '../core/config-writer.js'
+import { createTurnObserver } from '../core/turn-observer.js'
+import { createTurnListener } from '../core/turn-listener.js'
+import { DEFAULT_HOOKS, registerListeners, readHooks, isSubagent, SUBAGENT_SKIP_REASON } from '../core/register.js'
 
 const name = 'system1-observer'
 
@@ -95,7 +100,10 @@ export class ObserverService extends Service {
  */
 export function packageVersion() {
   try {
-    return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? null
+    // `../package.json`, NOT `./package.json`: this module moved into `dsh/`, and a relative path resolved against the
+    // module's own URL points one folder too deep. The catch below turns that miss into `null` rather than a crash,
+    // which is precisely how a wrong path hides as an empty value -- the failure this function's test exists to catch.
+    return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? null
   } catch {
     return null
   }
@@ -104,7 +112,9 @@ export function packageVersion() {
 /** The harness version this row is running inside, when it can be resolved. Recorded on a package, never asserted. */
 const DSH_VERSION = (() => {
   try {
-    return JSON.parse(readFileSync(new URL('./node_modules/@deepseek-ai/dsh/package.json', import.meta.url), 'utf8')).version ?? null
+    // Same one-level correction, and it is not cosmetic: the wrong depth returns `null` silently, and a recorded
+    // `dsh: null` reads as "the harness did not say" rather than "we looked in the wrong place".
+    return JSON.parse(readFileSync(new URL('../node_modules/@deepseek-ai/dsh/package.json', import.meta.url), 'utf8')).version ?? null
   } catch {
     return null
   }
@@ -1282,7 +1292,7 @@ async function apply(ctx, config) {
       const events = feed.events(sessionId)
       for (let index = events.length - 1; index >= 0 && index >= events.length - 40; index -= 1) {
         const event = events[index]
-        if (event?.type !== 'user/message') continue
+        if (event?.type !== EVENT.USER_MESSAGE) continue
         const data = event?.data ?? {}
         const message = data.message ?? data
         const id = typeof message?.id === 'string' ? message.id : ''

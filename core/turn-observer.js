@@ -14,7 +14,7 @@ import { resultEnvelope } from './model/result-envelope.js'
 // AND A FAILED JUDGEMENT WRITES NO CALL LINE. A line is a measurement; a backend that did not answer produced none,
 // and a line with empty answers would be filed as though it were one. The failure is returned so the caller can
 // record a skip with the same reason vocabulary the observation path already uses.
-import { composeTurnState } from './turn-state.js'
+import { composeTurnState } from '../dsh/turn-state.js'
 import { turnLine } from './turn-record.js'
 
 /**

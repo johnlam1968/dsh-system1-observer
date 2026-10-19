@@ -5,8 +5,8 @@
 // turning this on send?" without reading the source.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EGRESS_SEAMS, egressFacts, egressLines, egressSummary } from '../lib/egress.js'
-import { PROBE_SEAMS } from '../lib/seams.js'
+import { EGRESS_SEAMS, egressFacts, egressLines, egressSummary } from '../core/egress.js'
+import { PROBE_SEAMS } from '../core/seams.js'
 
 const BASE = {
   transport: 'service', endpoint: 'provider:typesafe', model: 'jev-latest',

@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { checkCompatibility, dshCandidates, findInstalledDsh } from '../lib/compat.js'
+import { checkCompatibility, dshCandidates, findInstalledDsh } from '../core/compat.js'
 
 const MANIFEST = {
   engines: { node: '^22.19.0 || >=24.0.0' },
@@ -62,6 +62,13 @@ test('the candidates are ordered so the copy that MATTERS is asked first', () =>
     '/home/u/.dsh/profiles/docdrift/node_modules/@deepseek-ai/dsh/package.json',
     '/home/u/.dsh/profiles/web/node_modules/@deepseek-ai/dsh/package.json',
   ], 'then every PROFILE, which is what this plugin mounts into')
+  // `lib`, and the expectation was CORRUPTED INTO SAYING `core` rather than being wrong: the folder reorganisation
+  // rewrote `lib/` -> `core/` across the repository and took `node/v25.3.0/lib/node_modules` with it, so the
+  // assertion came to expect a directory that does not exist on any machine -- there is no `core/node_modules` under
+  // this Node, and the harness this plugin mounts into is at `lib/node_modules/@deepseek-ai/dsh`. A candidate naming
+  // a directory the harness does not live in is a check that cannot pass, which is what the rewrite looked like. The
+  // same rewrite corrupted ~17 THIRD-PARTY paths (`dsh-web-app/lib/startup.js` -> `core/startup.js`) and those were
+  // restored against HEAD as well -- see the repair recorded with this change.
   assert.equal(candidates[3], '/node/lib/node_modules/@deepseek-ai/dsh/package.json', 'and the Node global root LAST, as a fallback')
   // A MACHINE WITH NO PROFILES IS NOT AN ERROR: the global fallback is still offered.
   const bare = dshCandidates({ execPath: '/node/bin/node', cwd: '/repo', home: '/home/u', readdir: () => { throw new Error('ENOENT') } })

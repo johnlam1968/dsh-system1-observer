@@ -32,7 +32,7 @@
 // NAME, so a reader that meets an unfamiliar shape says so instead of dropping it. A target built by silently
 // discarding half its evidence is worse than one built by refusing: the first produces confident answers about a
 // trajectory it never saw.
-import { TAIL_CHARS } from './redact.js'
+import { TAIL_CHARS } from '../core/redact.js'
 import { EVENT, isMessageEvent } from 'dsh-session-adapter/session-format'
 
 const textOf = (value) => (typeof value === 'string' ? value : '')

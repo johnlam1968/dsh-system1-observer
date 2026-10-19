@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 
 const accessor = (value) => ({ get: () => value })
 

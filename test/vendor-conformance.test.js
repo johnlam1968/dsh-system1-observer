@@ -13,7 +13,7 @@
 // these tests SKIP LOUDLY rather than failing, so `npm test` keeps passing with runtime dependencies only.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { choice, noul, score } from '../lib/model/questions.js'
+import { choice, noul, score } from '../core/model/questions.js'
 
 let sdk
 let sdkError

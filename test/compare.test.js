@@ -8,7 +8,7 @@
 // the checks is what makes `single` and `no-task-key` reachable at all.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { KEY_PARTS, MAX_LANES, comparabilityNote, compareRuns, taskComparability, taskKeyOf } from '../lib/compare.js'
+import { KEY_PARTS, MAX_LANES, comparabilityNote, compareRuns, taskComparability, taskKeyOf } from '../core/compare.js'
 
 /** A mount line as the current code writes one. */
 const mount = (over = {}) => ({

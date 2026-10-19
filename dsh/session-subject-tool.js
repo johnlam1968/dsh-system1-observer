@@ -30,7 +30,7 @@
 //   1. `checkAgainst` THROWS on a bad argument; it does not return a problem.
 //   2. The runtime's enforced schema subset takes a SCALAR `type`, so a field that is absent half the time is OMITTED
 //      rather than declared as nullable.
-import { checkAgainst } from './tool-args.js'
+import { checkAgainst } from '../core/tool-args.js'
 import { describeToolCut } from './tool-blocks.js'
 import { readStoredSubject, SUBJECT_KINDS } from 'dsh-session-adapter/reader'
 import { displayTextOfEvent, isAssistantMessage } from 'dsh-session-adapter/session-format'

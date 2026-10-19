@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createTraceTool } from '../lib/tool.js'
+import { createTraceTool } from '../core/tool.js'
 
 function toolWith(traceBody) {
   const dir = mkdtempSync(join(tmpdir(), 'observer-tool-'))

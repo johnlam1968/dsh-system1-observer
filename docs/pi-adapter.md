@@ -6,7 +6,7 @@ store layout, a flat JSONL log. This is that adapter, and it is the first claim 
 
 | | |
 |---|---|
-| the converter (pure, tested) | `lib/pi-session-export.js` |
+| the converter (pure, tested) | `dsh/pi-session-export.js` |
 | the writer | `scripts/import-pi-sessions.mjs` |
 | the test | `test/pi-session-export.test.js` |
 | the pi format it reads | `@earendil-works/pi-coding-agent` **0.85.1**, `docs/session-format.md` |
@@ -59,7 +59,7 @@ context without a human typing them — extension chatter, subagent notification
 them as asks and you invent **183 operator turns** out of noise. That is the "not every user message is a human"
 problem `docs/adapters-and-standards.md` records for mcode, in pi's own vocabulary. They are written as
 `user/message` with a **producer-owned** `source.kind` (`pi-subagent-notify`, `pi-goal-event`, …), which
-`lib/exchange.js` already reads as a non-human message rather than as an ask — in the log, out of the asks.
+`dsh/exchange.js` already reads as a non-human message rather than as an ask — in the log, out of the asks.
 
 **4. An unresolved call is left out of the block and counted.** dsh validates tool lifecycles: a `tool-call` block
 inside an `assistant/message` *advertises* a call, a `tool/call` must match it by name and arguments, and

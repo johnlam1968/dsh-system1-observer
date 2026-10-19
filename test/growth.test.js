@@ -10,7 +10,7 @@
 //   behind. A budget is signed; a lint rule is argued with.
 //
 //   RETIREMENT is a WAITING LIST that cannot go quiet. A file may be kept, but if its header nominates it for
-//   deletion then `lib/README.md` must carry the condition that retires it -- so "we will delete this once X" is a
+//   deletion then `core/README.md` must carry the condition that retires it -- so "we will delete this once X" is a
 //   fact in the map rather than a sentence in a comment nobody re-reads.
 
 import { test } from 'node:test'
@@ -32,7 +32,7 @@ const TEST_CEILING = 700
  * its ceiling must remove the entry, and the test says so.
  */
 const SIZE_EXEMPTIONS = {
-    'lib/evaluate-tool.js': {
+    'dsh/evaluate-tool.js': {
         // RAISED FROM 615 TO 620, which the gate asks to be a DECISION rather than a drift: four of the added lines
         // are the declarations and their reasons for shapes the live calls produced and the schema had not described --
         // a nullable `exchange.turns` item (`F122`), the selector echo, and the segmented subject's keys (`F119`,
@@ -45,18 +45,18 @@ const SIZE_EXEMPTIONS = {
             + 'behaviour that honours it; the split worth making is by LIFECYCLE (resolve, select, judge, aggregate), '
             + 'and it should be made when a fourth selection mode appears, not before.',
     },
-    'lib/results-tool.js': {
+    'core/results-tool.js': {
         max: 588,
         reason: 'four actions over one trace, each with its own selection and render. The ACTIONS are the seam, so a '
             + 'split by action is the one to make -- when a fifth action appears, not by size now.',
     },
-    'lib/report.js': {
+    'core/report.js': {
         max: 455,
         reason: 'a measurement package is ONE artifact whose files must agree: skeleton, numbers, interpretation, '
             + 'manifest and the reproducible-file list. Splitting it invites the parts to disagree about the same '
             + 'measurement, which is the defect the package exists to prevent.',
     },
-    'lib/pi-session-export.js': {
+    'dsh/pi-session-export.js': {
         max: 606,
         reason: 'ONE conversion, held whole on purpose: parse -> live branch -> ask-groups -> events -> the facts the '
             + 'log does not carry. The half that is easy to get wrong is the STRUCTURE -- an `assistant/message` '
@@ -68,11 +68,31 @@ const SIZE_EXEMPTIONS = {
             + 'lines) into its own module, so the mapper is the seam and the sidecar is the receipt. Not before -- '
             + 'one importer is not two.',
     },
-    // `lib/sessions-tool.js` USED TO BE EXEMPT AND IS NOT ANY MORE. Its own note said the seam to cut was by concern,
+    // `core/sessions-tool.js` USED TO BE EXEMPT AND IS NOT ANY MORE. Its own note said the seam to cut was by concern,
     // and when the fourth action (`refresh`) arrived the cut was made -- the schema and the render moved to
-    // `lib/sessions-tool-output.js` -- so the tool now sits at 285 lines, under the ceiling, with no exemption. The
+    // `core/sessions-tool-output.js` -- so the tool now sits at 285 lines, under the ceiling, with no exemption. The
     // gate is what said so: an exemption whose file is at or under the ceiling is paperwork, and it fails rather than
     // lingering.
+    // THE TWO ENTRY POINTS WERE NEVER SCANNED UNTIL THEY MOVED. `index.js` and `client.js` sat at the repository
+    // ROOT, and this check walks `core/` and `dsh/` -- so the two largest files in the plugin were outside its ceiling
+    // entirely, and no exemption was needed because nothing asked. That is the failure mode this file exists to
+    // prevent, found by the reorganisation rather than by growth: a budget that does not cover a file is not a budget.
+    // They are declared here because their size is a real decision about what an ENTRY POINT IS, not an accumulation.
+    'dsh/index.js': {
+        max: 1426,
+        reason: 'the Cordis plugin entry: every row, schema, service and tool registration this package performs '
+            + 'inside ONE harness, and nothing it performs anywhere else. The cut worth making is by LIFECYCLE -- '
+            + 'registration, then the question plumbing, then the session tools -- and it should be made when a second '
+            + 'harness needs the row, because that is what proves the split is at a seam rather than at a convenient '
+            + 'line. Not before: one importer is not two.',
+    },
+    'dsh/client.js': {
+        max: 1932,
+        reason: 'the Web UI half: the settings cards and the conversation projection, each field the harness schema '
+            + 'declares rendered once and then edited in place. It grows in CASES -- one card per writable setting, one '
+            + 'node per rendered group -- and cases are what a card is made of, so splitting it separates a form from '
+            + 'the schema it is a form OF. The seam, when it comes, is per card rather than per field.',
+    },
     'test/client-card.test.js': {
         max: 1752,
         reason: 'the settings card enumerated: every seam, every host-schema shape, save, refusal and error path. It '
@@ -97,7 +117,9 @@ function linesOf(rel) {
 
 test('every file over the ceiling is a declared size decision, and no declaration is stale', () => {
     const grown = []
-    for (const [dir, ceiling] of [['lib', LIB_CEILING], ['test', TEST_CEILING]]) {
+    // `core/` and `dsh/` are ONE instrument split across two folders, so both carry the same ceiling -- scanning
+    // either alone would let a file cross the line by being moved to the other.
+    for (const [dir, ceiling] of [['core', LIB_CEILING], ['dsh', LIB_CEILING], ['test', TEST_CEILING]]) {
         for (const rel of filesUnder(dir)) {
             const lines = linesOf(rel)
             const declared = SIZE_EXEMPTIONS[rel]
@@ -127,16 +149,16 @@ test('an exemption whose file is at or under the ceiling is paperwork that must 
 
 test('a file whose header nominates it for deletion is on the map\'s retirement list, with its condition', () => {
     const NOMINATES = /should be deleted|are the ones to delete|nominated for deletion/i
-    const doc = readFileSync(join(ROOT, 'lib/README.md'), 'utf8')
+    const doc = readFileSync(join(ROOT, 'core/README.md'), 'utf8')
     const section = doc.split('## Nominated for retirement')[1]
-    assert.ok(section !== undefined, 'lib/README.md has no `## Nominated for retirement` section')
-    // The map writes paths relative to `lib/`; the scan returns them relative to the repository root. A row may now
-    // name a path OUTSIDE `lib/` -- the session-shaped adapter modules moved into their own package (`F104`), and this
-    // check follows them there, because a check that stopped at `lib/` would quietly stop covering them.
+    assert.ok(section !== undefined, 'core/README.md has no `## Nominated for retirement` section')
+    // The map writes paths relative to its own folder; the scan returns them relative to the repository root. A row
+    // may name a path in either -- the session-shaped adapter modules moved into their own package (`F104`), and this
+    // check follows them there, because a check that stopped at one folder would quietly stop covering them.
     const listed = [...section.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)]
-        .map((m) => [m[1].startsWith('lib/') || m[1].startsWith('packages/') ? m[1] : `lib/${m[1]}`, m[2].trim()])
+        .map((m) => [m[1].startsWith('core/') || m[1].startsWith('dsh/') ? m[1] : `core/${m[1]}`, m[2].trim()])
 
-    const nominating = [...filesUnder('lib'), ...filesUnder('packages')]
+    const nominating = [...filesUnder('core'), ...filesUnder('dsh')]
         .filter((rel) => NOMINATES.test(readFileSync(join(ROOT, rel), 'utf8')))
 
     const missing = nominating.filter((rel) => !listed.some(([f]) => f === rel))

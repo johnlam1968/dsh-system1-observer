@@ -31,7 +31,7 @@
     "dsh-misc-tools": "link:/home/john/CodingProjects/dsh-misc-tools",
     "dsh-plugin-dev-kb": "github:Pasumao/dsh-plugin-dev-kb",
     "dsh-plugin-factory": "file:/home/john/Downloads/dsh-plugin-factory-0.3.2.tgz",
-    "dsh-session-adapter": "link:/home/john/CodingProjects/dsh-system1-observer/packages/session-adapter",
+    "dsh-session-adapter": "link:/home/john/CodingProjects/dsh-system1-observer/dsh/session-adapter",
     "dsh-session-index": "link:/home/john/CodingProjects/dsh-session-index",
     "dsh-speech-funasr-http": "link:/home/john/CodingProjects/dsh-speech-funasr-http",
     "dsh-system1": "github:exoticknight/dsh-system1",

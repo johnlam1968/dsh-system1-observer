@@ -8,10 +8,10 @@
 // never a seam that decides.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerListeners } from '../lib/register.js'
-import { PROBE_SEAMS } from '../lib/seams.js'
-import { probeHook } from '../lib/host-events.js'
-import { HOST_EVENT_MODES } from '../lib/host/index.js'
+import { registerListeners } from '../core/register.js'
+import { PROBE_SEAMS } from '../core/seams.js'
+import { probeHook } from '../dsh/host-events.js'
+import { HOST_EVENT_MODES } from '../dsh/host/index.js'
 
 /** One seam, one listener, and a record of everything the observer was asked to record. */
 function mounted(seam, hookEnabled) {
@@ -83,7 +83,7 @@ test('and switched ON, both of them do look', async () => {
 // an emit listener that calls one throws. Measured across all nine (2026-10-05, `F111`): no violation.
 //
 // THE ARGUMENTS ARE THE DOCUMENTED SIGNATURES, per seam (the notes on why `args[0]` was wrong at three of them are in
-// `lib/host-payload.js`). Each is built from the `next` under test, so a listener that reaches for the wrong argument
+// `dsh/host-payload.js`). Each is built from the `next` under test, so a listener that reaches for the wrong argument
 // is measured rather than assumed.
 const SEAM_ARGS = Object.freeze({
   assemble: (next) => [{ sections: [], contexts: [] }, { agent: { id: 'session-a' } }, next],

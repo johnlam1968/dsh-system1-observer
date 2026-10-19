@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readHooks, registerListeners, isSubagent } from '../lib/register.js'
+import { readHooks, registerListeners, isSubagent } from '../core/register.js'
 
 /** A Cordis context, reduced to what this plugin touches. */
 function fakeCtx() {

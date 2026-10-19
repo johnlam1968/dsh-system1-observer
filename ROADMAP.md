@@ -71,11 +71,11 @@ loading, evaluating, comparing, even the evaluation agent — exists.
 
 ## 3. What our code already has, so the gap is smaller than it looks
 
-- `lib/model/questions.js` **already exports `choice`, `noul`, `score`** as separate builders, each validating its
+- `core/model/questions.js` **already exports `choice`, `noul`, `score`** as separate builders, each validating its
   own shape (a choice needs ≥2 options and **exactly one** abstain; a score needs ≥2 ordered levels; a noul's
   criteria are optional). The per-type separation asked for in the brief is largely already there — as functions
   rather than classes, which is the right call for a package with two runtime dependencies.
-- `lib/questions.js` **already builds a set** per seam (`buildQuestions` → a map keyed by question id) with a
+- `core/questions.js` **already builds a set** per seam (`buildQuestions` → a map keyed by question id) with a
   character cap that **refuses rather than truncates** (`capQuestions`).
 - The trace already records `questionIds` per run, and the comparability key already treats a changed question
   set as a **different experiment**.
@@ -149,7 +149,7 @@ four decisions and opens one conflict.
 1. **Temperature fitting belongs in P2.** Laya ships over-confident and *"refitting one temperature per
    (question type, option count) moves mean ECE 0.466 → 0.081"*. We measure ECE and bias but fit nothing. A
    per-(type, option-count) temperature, reported alongside the raw figures, is the cheapest calibration win
-   available and it is one function in `lib/calibrate.js`.
+   available and it is one function in `core/calibrate.js`.
 2. **The criteria dictionary is not cosmetic.** The largest measured lever in the independent audit corpus is
    *criteria rewrites: paired accuracy 70% → 96%, 83% → 100%*. §4.2 is therefore the highest-value part of P2,
    not bookkeeping.
@@ -217,7 +217,7 @@ act row's code in its own package.**
 The last row matters: the act layer **informs**, it does not decide. It may put a reading in front of the agent;
 it may not answer an approval, rewrite a tool argument, prune a context or choose a model.
 
-**It calls through the repository's own functions** (`lib/model/*` — the same `createModel`/`postSystemone` path
+**It calls through the repository's own functions** (`core/model/*` — the same `createModel`/`postSystemone` path
 the observer uses), not through `system1_decide`. `system1_decide` is the *agent-facing* tool; the act row is
 plugin code and should use the plugin's own client, so both layers are measured by the same instrument and
 versioned together.
@@ -295,11 +295,11 @@ configurable, and composable**, which is the whole difference.
 
 | source | assembly | already implemented by |
 |---|---|---|
-| a **seam's** text | one seam firing | `probeText(seam, …)` in `lib/seams.js` |
-| a **turn** | admit-boundary segmentation | the `turns` reconstruction in `lib/cost.js` |
+| a **seam's** text | one seam firing | `probeText(seam, …)` in `core/seams.js` |
+| a **turn** | admit-boundary segmentation | the `turns` reconstruction in `core/cost.js` |
 | **operator** messages | session events where the role is user | `agent.session.snapshotEvents(sinceSeq)`, filtered — the peer bridge does exactly this |
 | **agent** messages | session events where the role is assistant | same call, other filter |
-| the **trace** | the measurement view: what was asked, answered, by which model, at what cost | `readTraceWindow` + `traceData` in `lib/trace-report.js` / `lib/trace-data.js` |
+| the **trace** | the measurement view: what was asked, answered, by which model, at what cost | `readTraceWindow` + `traceData` in `core/trace-report.js` / `core/trace-data.js` |
 | **something else** | a file, a diff, a tool result | new, last |
 
 So `X` is not a subsystem. It is the same readers this repository and the peer bridge already use, with the
@@ -493,8 +493,8 @@ act layer's whole job.**
 The operator wants this repository to expose agent tools rather than depend on `system1-bridge`. Two, and they are
 different in kind:
 
-**(a) `system1_decide`, owned by this repository.** It is a thin tool over `lib/model/client.js` plus
-`lib/questions.js` -- the same calling path the observer uses -- so the plugin's own instrument and its own tool are
+**(a) `system1_decide`, owned by this repository.** It is a thin tool over `core/model/client.js` plus
+`core/questions.js` -- the same calling path the observer uses -- so the plugin's own instrument and its own tool are
 versioned together. The bridge's row then becomes unnecessary here.
 
 > **A NAME COLLISION IS THE FIRST HAZARD.** Two tools called `system1_decide` mounted in one profile is not a
@@ -546,7 +546,7 @@ That contains two questions that must not be conflated:
 2. **Does this pair fit?** A `session`-scope set asking whether this operator's style elicited this model's weak
    behaviour. Answerable, because `SESSION TRANSCRIPT` labels both sides.
 
-**Half of the pair is already in the comparability key:** `instrument` carries the model (`lib/compare.js`), so LLM A
+**Half of the pair is already in the comparability key:** `instrument` carries the model (`core/compare.js`), so LLM A
 and LLM B are already distinguishable. The person is not, and the missing piece is a **declared** label hashed onto
 the line (`userHash`), recorded exactly as `stateHash` is -- never a raw id, because a person's identity is a fact
 about them on a durable record, and this repository's rule is already that the model's copy stays raw while the record
@@ -708,7 +708,7 @@ revision leaves `list` showing sets nothing measures). It cannot be answered ins
 
 ### 12.6 The declared axes, as built, and three proposals refused
 
-`harnessLabel` and `operatorLabel` are volatile settings with card controls; `lib/label-hash.js` turns each into a
+`harnessLabel` and `operatorLabel` are volatile settings with card controls; `core/label-hash.js` turns each into a
 12-character digest; that digest rides **every** line -- call, skip and error -- read at the point of use, and is
 **absent** rather than a hash of the empty string when nothing is declared. Neither label enters `instrument`.
 
@@ -717,7 +717,7 @@ MiniMax-M3 reviewed the design and proposed three things that are refused here, 
 1. **A per-run random salt on the hash.** It would defeat enumeration of a short label, and it would also destroy the
    only use the axis has -- grouping the same technique ACROSS runs. A salt that varies per run makes every run its own
    group, which is the same as recording nothing. If unguessability is ever needed, the fix is an opaque id the operator
-   keeps beside the label, and it is one change in `lib/label-hash.js`.
+   keeps beside the label, and it is one change in `core/label-hash.js`.
 2. **Hashing the tuple (label + model + provider).** Model and provider are ALREADY refusal axes in `instrument` and are
    already fields on every line. Folding them into the technique hash would hide which axis changed: a model swap would
    read as a technique change. The tuple is reconstructed by a reader from two fields, which is strictly more
@@ -755,13 +755,13 @@ minimum honest evidence, recorded here as the design for the missing gate:
   The set, technique, operator and backend refusals now enforce the parts they can see; a *paired* change of two axes is
   refused by arithmetic on the run table rather than by a rule of thumb.
 
-**THE BATTERY IS BUILT** (round 5): `lib/battery.js` (format, refusals, scoring -- pure), `lib/battery-tool.js` + `system1_battery` (`list` / `validate` / `run`), and a shipped battery at `criteria/agent-helpfulness-session.battery.json` -- 8 CONSTRUCTED cases covering the 8 `session` questions, hash `92823d5d3268`, whose labels are true by construction rather than by one model's opinion of another's work. A run records an `experiment` line (its own event kind), never a reading. `validate` spends nothing.
+**THE BATTERY IS BUILT** (round 5): `core/battery.js` (format, refusals, scoring -- pure), `core/battery-tool.js` + `system1_battery` (`list` / `validate` / `run`), and a shipped battery at `criteria/agent-helpfulness-session.battery.json` -- 8 CONSTRUCTED cases covering the 8 `session` questions, hash `92823d5d3268`, whose labels are true by construction rather than by one model's opinion of another's work. A run records an `experiment` line (its own event kind), never a reading. `validate` spends nothing.
 
 **Its refusal list, triaged rather than adopted wholesale:**
 
 | proposed refusal | status |
 |---|---|
-| an anonymous rewrite (no parent hash, reason, or battery) | **STILL NOT BUILT** -- `system1_battery run` records `parent` and `reason` WHEN GIVEN and refuses a `parent` that is not a hash, but `system1_question_sets write` still accepts a new version with neither. The battery half exists now (`lib/battery.js`); the half that refuses a rewrite which cannot say what it rewrote is not written |
+| an anonymous rewrite (no parent hash, reason, or battery) | **STILL NOT BUILT** -- `system1_battery run` records `parent` and `reason` WHEN GIVEN and refuses a `parent` that is not a hash, but `system1_question_sets write` still accepts a new version with neither. The battery half exists now (`core/battery.js`); the half that refuses a rewrite which cannot say what it rewrote is not written |
 | comparing two runs whose set hashes differ with no experiment line linking them | **built** as the set-axis refusal |
 | a `choice` with no abstain option, or a duplicate id | **already built** in `system1_question_sets` |
 | a rewrite that changes nothing | **STILL NOT BUILT** -- cheap, and now cheap to CHECK rather than to guess: two compositions' hashes are both recorded (`<set>@N` files carry one per scope), so a no-op rewrite is a hash comparison the writer could make |
@@ -781,7 +781,7 @@ P5's hedge, now quantified. Measured over **66 files / 11,341 lines**:
 
 * **NOTHING IN `lib/` IMPORTS A DSH MODULE** -- re-measured after the store was extracted and the grep is empty. Only
   **three files name a harness service** at all: `lib/model/service.js` (the instrument's host edge),
-  `lib/evaluate-tool.js` and `lib/telemetry.js`. The harness-SHAPED surface is a different measure: `lib/host/`
+  `dsh/evaluate-tool.js` and `core/telemetry.js`. The harness-SHAPED surface is a different measure: `core/host/`
   (**5 files, 425 lines**) plus the session-reading half (`lib/session-subject.js`, `lib/sessions-tool.js`) that
   receives `sessionQuery` by INJECTION rather than by import.
 * The interface the core would speak is **five concepts**, derived from six harnesses rather than invented: an ask, an
@@ -803,7 +803,7 @@ core never reads a log.
   (the seams); out-of-band is us pulling (`readSession`, or the index). The constraints are the harness's own:
   `agent/turn-stopping` is SERIAL, `fs/write-intent` is WATERFALL SINGLE SLOT, and a throw in `fs/observed` fails the
   tool call — a store cannot be consulted in there.
-* **What moves out** (now moved, 2026-10-05): `lib/host/*`'s session-shaped three, `session-subject.js`'s host-backed
+* **What moves out** (now moved, 2026-10-05): `core/host/*`'s session-shaped three, `session-subject.js`'s host-backed
   half (as `reader.js`), the surface authority, and the host's search call; the row's own `subjectSettings` stayed,
   because the package must not read this plugin's config.
   **Moved 2026-10-05**: the session-shaped three (`session-format`, `surface`, `feed`) are the package
@@ -811,7 +811,7 @@ core never reads a log.
   session-shaped. The remaining half calls the host, so it needs the service. **And the two files this section said to
   DELETE are not deletable, measured (`F104`)**: the authority is async and optional, so the fold is the fallback for a
   deployment with no `sessionQuery` -- they move, and the retirement rows say so.
-  **What stays**: the selection semantics (G0/G1), composition, segmentation — and `lib/sessions.js`'s allow-list rule,
+  **What stays**: the selection semantics (G0/G1), composition, segmentation — and `core/sessions.js`'s allow-list rule,
   which is ours and is not about a format.
 * **The measured case**: a title search through `sessionQuery` costs **~54 s** (seven samples, median 53,951 ms) and the
   index answers the same question in **1 ms**; the warm-up is 328 s once and **2 ms** per re-run when nothing changed.
@@ -820,7 +820,7 @@ core never reads a log.
   agent-facing tools (`session_index_list`/`_read`/`_search`/`_refresh`), a CLI, and **no dsh import at all**. Measured:
   499 sessions, **748.1 MB**, a living session refreshing in **15-21 s**, search in 4-13 ms. The offset-level design is
   **withdrawn** (`F103`: an instrumented refold measured decode 0.9 s / fold 0.9 s / insert 41.3 s -> 0.3 s).
-  **What is left of Split B is the OBSERVER's own session access**: `lib/host/` and the session-reading half of
+  **What is left of Split B is the OBSERVER's own session access**: `core/host/` and the session-reading half of
   `lib/session-subject.js` / `lib/sessions-tool.js`, so the measurement core never reads a log. Begin with the two
   files already on the retirement list (`lib/host/feed.js`, `lib/host/surface.js`), which are to be DELETED rather than
   moved -- `surface.js` is replaced by `filterEvents {kind: 'surface', values: ['current']}`.
@@ -903,11 +903,11 @@ core never reads a log.
    **And the hedge is now MEASURED rather than asserted** (`F110`, 2026-10-05): the instrument's **config** coupling
    -- six files reading this row, which is what made an extraction a reshaping -- is gone. Each takes one input object
    (`{ point, callsEnabled, subjects, axes, questions, limits, redaction, transport }`) built by the application, the
-   dsh event map moved to `lib/host-events.js`, and `test/instrument-boundary.test.js` asserts that no instrument file
+   dsh event map moved to `dsh/host-events.js`, and `test/instrument-boundary.test.js` asserts that no instrument file
    imports anything but `node:` builtins and itself, that none calls a config reader, and that the one `ctx` edge is
-   `lib/model/service.js`. **What still blocks a MOVE rather than a reshaping**: `lib/question-sets.js` READS THE FILESYSTEM (a
+   `lib/model/service.js`. **What still blocks a MOVE rather than a reshaping**: `core/question-sets.js` READS THE FILESYSTEM (a
    directory it is given) -- named in the test's set rather than hidden. The per-seam payload shapes and the event map
-   left the instrument in the same pass (`lib/host-payload.js`, `lib/host-events.js`), and the gate asserts that no
+   left the instrument in the same pass (`dsh/host-payload.js`, `dsh/host-events.js`), and the gate asserts that no
    instrument file names a harness event in code.
 
 ### 14.5 What would make us stop, or reverse
@@ -926,10 +926,10 @@ Recorded 2026-10-05, after the store was extracted. The shape is the one `system
 
 | | what it is | kind | status |
 |---|---|---|---|
-| **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned, but **the CONFIG coupling is gone and gate-held** (2026-10-05, `F110`): the set is **23 files / 4,274 lines** (re-measured -- the earlier candidate list was a text match), it takes ONE input object built by `lib/instrument-input.js`, it imports nothing but `node:` builtins and itself, and `test/instrument-boundary.test.js` holds all three. **What is left before extraction is not config and not the harness**: the per-seam PAYLOAD shapes moved to `lib/host-payload.js` and the event map to `lib/host-events.js`, so the instrument names no harness event at all (asserted); what remains is that `question-sets.js` reads the filesystem, and the trigger in §14.1, unchanged |
+| **(a)** | **the instrument**: seams, question composition and validation, the model call path, probe calibration, batteries, readings | pure package, **no dsh import** | planned, but **the CONFIG coupling is gone and gate-held** (2026-10-05, `F110`): the set is **23 files / 4,274 lines** (re-measured -- the earlier candidate list was a text match), it takes ONE input object built by `core/instrument-input.js`, it imports nothing but `node:` builtins and itself, and `test/instrument-boundary.test.js` holds all three. **What is left before extraction is not config and not the harness**: the per-seam PAYLOAD shapes moved to `dsh/host-payload.js` and the event map to `dsh/host-events.js`, so the instrument names no harness event at all (asserted); what remains is that `question-sets.js` reads the filesystem, and the trigger in §14.1, unchanged |
 | **(b)** | **the store**: the derived index over session FILES (search, list, read, refresh) | dsh plugin, no dsh import; [own repo](https://github.com/johnlam1968/dsh-session-index) | **exists, live** |
 | **(c)** | **the application**: mounts (a), binds the subject through (b)+(d), owns the rows, settings, trace and the agent-facing tools | dsh plugin (the top; nothing depends on it) | exists TODAY as the monolith; becomes only (c) after Split A |
-| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | package `dsh-session-adapter` (`packages/session-adapter/`), imported BY NAME | **BOTH halves are in the package** (2026-10-05): the in-band half (session vocabulary, surface fold, feed) and the host-backed half (`lib/reader.js` -- the subject read, the list, the window slicing, the coverage, the host's full-text search -- and `lib/surface-authority.js`). The host reaches them through a PARAMETER (`sessionQuery`), never through `ctx`, so the inventory still checks that they contain no host call. **AND THE SERVICE FORM EXISTS AND IS MOUNTED** (2026-10-05): the same functions are provided as `ctx.sessionAdapter` (row `session-adapter`, 193 composed rows, probe-verified on another port before any restart), with `getQuery` as a function so a host that mounts later is still found, and named absences (`null`, a problem sentence, `available()`) for a deployment with no host. The observer still IMPORTS rather than injects, which is what the in-band path requires -- the service exists for consumers that are not this repository's |
+| **(d)** | **the harness session adapter**: what (b) cannot serve -- live sessions, the current surface, titles as the harness holds them | package `dsh-session-adapter` (`dsh/session-adapter/`), imported BY NAME | **BOTH halves are in the package** (2026-10-05): the in-band half (session vocabulary, surface fold, feed) and the host-backed half (`lib/reader.js` -- the subject read, the list, the window slicing, the coverage, the host's full-text search -- and `lib/surface-authority.js`). The host reaches them through a PARAMETER (`sessionQuery`), never through `ctx`, so the inventory still checks that they contain no host call. **AND THE SERVICE FORM EXISTS AND IS MOUNTED** (2026-10-05): the same functions are provided as `ctx.sessionAdapter` (row `session-adapter`, 193 composed rows, probe-verified on another port before any restart), with `getQuery` as a function so a host that mounts later is still found, and named absences (`null`, a problem sentence, `available()`) for a deployment with no host. The observer still IMPORTS rather than injects, which is what the in-band path requires -- the service exists for consumers that are not this repository's |
 | **(e)** | **the composition**: the profile's load-bearing DECISIONS -- the patch (persona override and the rows we add), the mounted bundle list, the peer bridge, the pins | a `deploy/` directory in THIS repository; its own repo only when a SECOND HOST needs it | **THE DIRECTORY EXISTS NOW, WITH A DRIFT CHECK** (`F115`, 2026-10-05): `deploy/profile/` carries the patch, `cordis.yml`, the profile `package.json` (the 10-bundle list), the lock and `peer-bridge/`'s source, and `npm run check:deploy` compares them with the machine -- bytes for the files, name AND order for the bundle list -- reporting `NOT CHECKED` where there is no such profile. Its first run named a pin no second host can install (`file:/home/john/Downloads/dsh-plugin-factory-0.3.2.tgz`). **NOT a repository today, and this plan overstated it.** Measured 2026-10-05: there is **exactly ONE deployment** carrying this stack (`docdrift`, 10 bundles; `docdrift-headless` carries only `dsh-system1`; `web` and `headless` carry none), so a composition repo would have one consumer -- the mistake §14.1's stop condition refuses for (a). What IS real: `~/.dsh/profiles/docdrift` is **not under version control** (`git rev-parse` fails) and holds **four `.bak` files from tooling rewrites**, one of which silently dropped a bundle entry (`F105`). The rationale splits three ways: the **bundle list** is genuinely at risk; the **pins** are half-done (the lock pins the git dep to a commit, the spec is `github:` = master at install time, and the profile `link:`s working trees -- right for development, wrong for a deployment someone must reproduce); and **plans and ledgers do NOT belong there**, because this register is about the design of the code it sits beside |
 
 **The seams that must be drawn explicitly, or the shape drifts:**

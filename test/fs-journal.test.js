@@ -10,8 +10,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
-import { createFsJournal } from '../lib/host/fs-journal.js'
+import { apply } from '../dsh/index.js'
+import { createFsJournal } from '../dsh/host/fs-journal.js'
 
 const accessor = (value) => ({ get: () => value })
 const target = (p) => ({ targetKey: 'k', displayPath: p })

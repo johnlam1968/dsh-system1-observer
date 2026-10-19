@@ -2,7 +2,7 @@
 
 **Status:** design proposal, not yet built. **Part of it is already wired** — the seam calls land in the JSONL
 trace, the `system1Observer` service exposes seven read-only methods to other plugins
-(`lib/service.js`), and the seam listeners themselves are subscribed via `ctx.on(event, …)`. What is missing
+(`core/service.js`), and the seam listeners themselves are subscribed via `ctx.on(event, …)`. What is missing
 is the **in-process distribution channel** that lets a Cordis row (today's act row of ROADMAP §9, tomorrow's
 third-party plugin) react to a judgement without having to poll the trace or re-implement the seam listener.
 
@@ -15,16 +15,16 @@ JSONL trace as the durable fallback and the audit boundary.
 
 The repository today does the **producer** half mechanically:
 
-- `lib/observe.js` and `lib/turn-observer.js` build a `call` line at every seam and every turn boundary,
+- `core/observe.js` and `core/turn-observer.js` build a `call` line at every seam and every turn boundary,
   with `{ hook, agentId, turn, subject, questions, answer, executed, usage, durationMs, worstCase, … }`
   on the line. (`index.js:1219-1349` is the live example: nine seams, one scheduled `turn` measurement.)
-- `lib/service.js` builds `system1Observer`, a frozen, read-only service other rows already inject. It
+- `core/service.js` builds `system1Observer`, a frozen, read-only service other rows already inject. It
   exposes the trace as a window (`read`), the live runs (`runs`), the sessions (`sessions`), the
   configurable knobs (`config`), the question sets (`questionSets`), the stored sessions
   (`storedSessions`), the subject settings (`subject`), the nudge label (`label`) and the configuration
   fold (`replay`). The whole object is frozen and a full sweep leaves the trace's bytes identical
   (`test/service.test.js:77`).
-- The seam listeners themselves are subscribed through `lib/register.js`, which holds the
+- The seam listeners themselves are subscribed through `core/register.js`, which holds the
   point-to-event map and runs the gate logic before calling `observer.observe(hook, text, meta)`.
 
 The **consumer** half is the gap. Today a row that wants to react to a judgement has two routes, and
@@ -55,13 +55,13 @@ requiring the consumer to know anything about the host's events.
        │  seam listeners ─┐                   │
        │                   ▼                  │
        │           build X, decide, write     │     what already exists
-       │           call line to trace         │     (lib/observe.js,
-       │                   │                  │      lib/turn-observer.js)
+       │           call line to trace         │     (core/observe.js,
+       │                   │                  │      core/turn-observer.js)
        │                   ▼                  │
        │       publish to TWO channels:       │
        │           │                          │
        │           ├─► JSONL trace (durable)  │     what already exists
-       │           │                          │     (lib/evidence.js)
+       │           │                          │     (core/evidence.js)
        │           │                          │
        │           └─► in-process pubsub  ────┼──► NEW: same object, in
        │                                      │     memory, until either a
@@ -94,7 +94,7 @@ The design has to fit three constraints:
 | constraint | where it comes from |
 |---|---|
 | subscribers must be torn down with the row that registered them | a fiber that disposes leaves no live listeners |
-| subscribers must NOT need to know the host's event names | the host's events are dsh's and change with dsh (this is the rationale behind `lib/host-events.js`'s separation of point ids from event names) |
+| subscribers must NOT need to know the host's event names | the host's events are dsh's and change with dsh (this is the rationale behind `dsh/host-events.js`'s separation of point ids from event names) |
 | the durable record must remain the source of truth | every finding in `docs/findings.md` that touches "what was actually measured" is "the durable record said so, and the in-memory copy disagreed" |
 
 **`EventEmitter`-on-`ctx`** would lose on #1 (the `EventEmitter` survives the disposing fiber) and on #3
@@ -111,7 +111,7 @@ the consumer of an in-loop judgement cannot wait for a fsync.
 
 - The producer is a `ctx.provide`d `Service` subclass; the subscriber calls `ctx.on('system1/result', fn)`
   on its own fiber, and the disposer returned by `ctx.on` is the row's effect. Disposing the row
-  disposes the listener. (`cordis/lib/index.js:371-380` is the `on` method; `lib/telemetry.js:48` is the
+  disposes the listener. (`cordis/lib/index.js:371-380` is the `on` method; `core/telemetry.js:48` is the
   precedent in this repository.)
 - The event name is the row's own namespace (`system1/…`), not a host event. The producer maps
   every host event it cares about to its own name, and a subscriber sees the row's vocabulary, not
@@ -123,7 +123,7 @@ the consumer of an in-loop judgement cannot wait for a fsync.
 
 ## 3. The producer: what already exists, and what it must add
 
-### 3.1 Today: `lib/service.js`
+### 3.1 Today: `core/service.js`
 
 The service is **read-only and frozen** today, and that contract stays. Every method closes over a
 reader and returns its result; nothing in the service writes or subscribes. (`test/service.test.js:48`
@@ -228,8 +228,8 @@ internal hook name, with no new vocabulary.
 
 | event | when | the existing hook name |
 |---|---|---|
-| `system1/result` (default) | every seam judgement and every turn boundary | `lib/observe.js` `observe()` / `lib/turn-observer.js` `onAdmit()` |
-| `system1/seam/:id` | one specific seam fired (`:id` is one of the nine in `PROBE_SEAMS`) | the per-seam path through `lib/register.js` |
+| `system1/result` (default) | every seam judgement and every turn boundary | `core/observe.js` `observe()` / `core/turn-observer.js` `onAdmit()` |
+| `system1/seam/:id` | one specific seam fired (`:id` is one of the nine in `PROBE_SEAMS`) | the per-seam path through `core/register.js` |
 | `system1/turn` | a turn-boundary measurement fired | `hook: 'turn'` |
 | `system1/review` | a whole-session judgement (`system1_evaluate_session`) fired | `hook: 'session-review'` |
 | `system1/battery` | a battery run finished (the betters-vs-differents gate) | `hook: 'experiment'` |
@@ -237,7 +237,7 @@ internal hook name, with no new vocabulary.
 A subscriber that wants "everything" registers `system1/result`. A subscriber that wants only
 operator-message judgements registers `system1/seam/admit`. The list is exhaustive by construction:
 the event names are derived from `PROBE_SEAMS` plus the three non-seam hooks, in the same way the
-trace lines are (`lib/turn-record.js:12-14` already pins the seam-hook list).
+trace lines are (`core/turn-record.js:12-14` already pins the seam-hook list).
 
 **Why not one event with a discriminator field?** The Cordis event API is namespace-string; a
 discriminator field is what `ctx.on('system1/result', fn)` already sees in `result.hook`. Splitting
@@ -288,7 +288,7 @@ future trace-shape change cannot quietly diverge from the in-process one.
 }
 ```
 
-The shape is the trace's `call` line — see `lib/observe.js:219-258` and `lib/turn-record.js:31-42`. A
+The shape is the trace's `call` line — see `core/observe.js:219-258` and `core/turn-record.js:31-42`. A
 subscriber that wants the raw `state` text reads `excerpt`; a subscriber that wants the
 question's `instructions` reads `questions[id].instructions`. Nothing is reconstructed, nothing is
 enriched.
@@ -299,7 +299,7 @@ enriched.
   it under a separate key — the producer has one envelope, and that envelope has both names. (The
   discovery that found this is F107; the dual-name envelope was the fix.)
 - `state` (the model's input) is NOT in the result. It is reconstructed from `hook` and `excerpt`,
-  per `lib/observe.js:227-231`, because carrying both doubled the trace's bytes. A subscriber that
+  per `core/observe.js:227-231`, because carrying both doubled the trace's bytes. A subscriber that
   needs the model's input re-fires the listener; the cost is one HTTP call and a deterministic
   answer. This is a future "act row wants the model's input" finding if the cost turns out to
   matter — until then, the absence is the cheap decision.
@@ -345,7 +345,7 @@ The bus holds a bounded ring buffer of the most recent `N` results (default `32`
    will live in.
 2. **The cap's lower bound** trims on the next emit, just like the trace's `feedMaxPerSession`. The
    cap's upper bound cannot bring back what an older cap already dropped. This is the same rule
-   `lib/feed` already enforces.
+   `core/feed` already enforces.
 3. **The cap is per-row.** Each observer row owns one bus, and the row's subscriber set is its own.
    Two mounted observer rows have two buses; a subscriber attaches to whichever row's `ctx.on` it
    was registered under. The row is the unit of ownership, the bus the unit of distribution.
@@ -376,10 +376,10 @@ register would record.
 | `bus-third-party-plugin-compatibility` | a plugin that imports nothing of the observer's package subscribes via `ctx.on('system1/result', fn)` and sees the same result the operator-facing tool sees |
 
 The first eight are unit tests against the bus itself. The first asserts the result shape equals
-the trace's `call` line modulo bookkeeping keys — the spec is already enforced by `lib/observe.js:227-231`,
+the trace's `call` line modulo bookkeeping keys — the spec is already enforced by `core/observe.js:227-231`,
 and the test makes the cross-reference auditable. The eighth is a contract test on the names: the
 set of emitted event names is derived from `PROBE_SEAMS` plus the three non-seam hooks
-(`lib/turn-record.js:12-14`), so the test is a list comparison rather than a logic check. The last
+(`core/turn-record.js:12-14`), so the test is a list comparison rather than a logic check. The last
 two are integration: they are the cost of having the shape at all.
 
 ---
@@ -418,7 +418,7 @@ two are integration: they are the cost of having the shape at all.
 
 ## 11. The shape, summarised
 
-A **producer** (`lib/results.js`) sits beside `lib/service.js` in this repository. It owns a
+A **producer** (`lib/results.js`) sits beside `core/service.js` in this repository. It owns a
 bounded ring buffer of recent results, an `emit` that publishes each result to subscribers and to
 the durable trace, and a `subscribe` that hands a Cordis disposer to a caller.
 

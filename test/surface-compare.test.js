@@ -5,7 +5,7 @@
 // class of check this session has learned to distrust.
 //
 // THE FOLD'S EXPECTED LIST IS [1, 3, 4], NOT [1, 4]. A `replace 2..2` carried by seq 3 drops the REPLACED range and
-// the REPLACING EVENT SURVIVES -- which is what lib/host/surface.js's own tests have asserted since round 108, and
+// the REPLACING EVENT SURVIVES -- which is what core/host/surface.js's own tests have asserted since round 108, and
 // what my first version of this fixture got wrong twice.
 //
 // AND IT NEEDS A QUESTION SET: with `questions: { turn: [] }` the turn is SKIPPED before the composer runs, and the
@@ -16,7 +16,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 
 const accessor = (value) => ({ get: () => value })
 const msg = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })

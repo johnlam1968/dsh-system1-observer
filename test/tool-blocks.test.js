@@ -3,7 +3,7 @@
 // confident answers about a trajectory it never saw, which is the failure this whole repository catalogues.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { assembleToolCalls } from '../lib/tool-blocks.js'
+import { assembleToolCalls } from '../dsh/tool-blocks.js'
 
 // THE ENVELOPE IS MEASURED: the peer bridge reads live sessions with exactly this shape.
 const envelope = (seq, type, content) => ({ seq, type, data: { message: { content } } })

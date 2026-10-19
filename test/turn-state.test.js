@@ -3,7 +3,7 @@
 // the operator message before THAT is the REQUEST.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { composeTurnState } from '../lib/turn-state.js'
+import { composeTurnState } from '../dsh/turn-state.js'
 
 const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })
 const text = (t) => ({ type: 'text', text: t })

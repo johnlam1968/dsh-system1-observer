@@ -1,6 +1,6 @@
 // DEEPSEEK CHAT WEB EXPORT -> DSH SESSION EVENTS. The pure half: parse, linearize, map. No harness, no files.
 //
-// WHY THIS IS IN THIS REPOSITORY. `packages/session-adapter` reads HARNESS sessions and has no reader for any
+// WHY THIS IS IN THIS REPOSITORY. `dsh/session-adapter` reads HARNESS sessions and has no reader for any
 // foreign format (`docs/adapters-and-standards.md`, "The prerequisite"). So a foreign transcript has to BECOME a
 // DSH session before anything here can measure it, and this module is that conversion for one format: the archive
 // `chat.deepseek.com` hands a user, `conversations.json`.

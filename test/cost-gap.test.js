@@ -10,7 +10,7 @@
 // on `mergeIntervalsTotal`). The gap is therefore a MEASUREMENT DECISION, and it is a setting now.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { IDLE_GAP_MS, costOf, mergeIntervalsTotal } from '../lib/cost.js'
+import { IDLE_GAP_MS, costOf, mergeIntervalsTotal } from '../core/cost.js'
 
 const T0 = Date.parse('2026-01-01T00:00:00.000Z')
 const at = (offsetMs) => new Date(T0 + offsetMs).toISOString()

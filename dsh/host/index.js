@@ -75,7 +75,7 @@ export const HOST_EVENT_MODES = Object.freeze({
 /** Reached through a symbol rather than a literal. Declared because the check CANNOT see them. */
 export const HOST_SYMBOL_REACHED = Object.freeze({
     'session-telemetry/record': 'subscribed as REDACT_EVENT in lib/telemetry.js',
-    'the seam table in lib/seams.js': 'lib/register.js subscribes `ctx.on(event, ...)` for each seam; the seam-to-harness-event map lives in that table rather than at the call site',
+    'the seam table in lib/seams.js': 'core/register.js subscribes `ctx.on(event, ...)` for each seam; the seam-to-harness-event map lives in that table rather than at the call site',
     // THE SERVICE DECLARATION THAT WAS HERE IS GONE, and it is worth saying why it is not restored by reflex. The row
     // reached a model through `ctx.get('system1')`, a service owned by another plugin, because `postSystemone` sent no
     // credential -- so the host edge existed to borrow someone else's key. The wire carries one now, measured with
@@ -102,19 +102,19 @@ const HOST_EVENT_CONSTRAINTS = Object.freeze({
 
 /** The adapter modules, which are PURE: no host service, no event subscription. Checked as well. */
 export const ADAPTER_MODULES = Object.freeze([
-    'lib/host/index.js',
-    'lib/host/fs-journal.js',
+    'dsh/host/index.js',
+    'dsh/host/fs-journal.js',
     // THE SESSION-SHAPED THREE MOVED INTO THEIR OWN PACKAGE, and the check MOVED WITH THEM: `dsh-session-adapter`
     // carries the harness's event vocabulary, the surface fold and the event feed, and it is a package because those
     // modules must be IMPORTABLE -- a composer inside a synchronous path cannot await a Cordis service (`F104`). A
     // check that stopped at `lib/` would have quietly stopped covering them.
-    // NOT `packages/session-adapter/index.js`: that file IS the plugin edge -- it calls `ctx.provide` and `ctx.get` --
+    // NOT `dsh/session-adapter/index.js`: that file IS the plugin edge -- it calls `ctx.provide` and `ctx.get` --
     // so it is the opposite of a pure module and the purity check correctly refused it.
-    'packages/session-adapter/lib/session-format.js',
-    'packages/session-adapter/lib/surface.js',
-    'packages/session-adapter/lib/feed.js',
+    'dsh/session-adapter/lib/session-format.js',
+    'dsh/session-adapter/lib/surface.js',
+    'dsh/session-adapter/lib/feed.js',
     // AND THE HOST-BACKED HALF, which is pure in the sense this list means: it reaches the host through a PARAMETER
     // (`sessionQuery`), never through `ctx`, so the check can still assert it contains no host call of its own.
-    'packages/session-adapter/lib/reader.js',
-    'packages/session-adapter/lib/surface-authority.js',
+    'dsh/session-adapter/lib/reader.js',
+    'dsh/session-adapter/lib/surface-authority.js',
 ])

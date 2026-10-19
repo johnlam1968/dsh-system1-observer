@@ -29,12 +29,12 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createServer } from 'node:http'
 
-import plugin from '../index.js'
-import { TRACE_TOOL_NAME } from '../lib/tool.js'
-import { CONFIG_TOOL_NAME } from '../lib/config-tool.js'
-import { DECIDE_TOOL_NAME } from '../lib/decide-tool.js'
-import { OBSERVER_SERVICE } from '../lib/service.js'
-import { EXPLAIN_TOOL_NAME } from '../lib/explain-tool.js'
+import plugin from '../dsh/index.js'
+import { TRACE_TOOL_NAME } from '../core/tool.js'
+import { CONFIG_TOOL_NAME } from '../core/config-tool.js'
+import { DECIDE_TOOL_NAME } from '../core/decide-tool.js'
+import { OBSERVER_SERVICE } from '../core/service.js'
+import { EXPLAIN_TOOL_NAME } from '../core/explain-tool.js'
 
 /**
  * The real Cordis runtime, from the harness install rather than from a dependency of this repo.

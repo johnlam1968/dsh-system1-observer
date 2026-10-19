@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { textOf, tee } from '../lib/stream.js'
+import { textOf, tee } from '../core/stream.js'
 
 async function* source(list) { for (const chunk of list) yield chunk }
 

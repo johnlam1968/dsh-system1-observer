@@ -9,14 +9,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { KNOWN_SIBLING_CITATIONS, citationsIn, findDanglingCitations } from '../lib/citations.js'
+import { KNOWN_SIBLING_CITATIONS, citationsIn, findDanglingCitations } from '../core/citations.js'
 
 const root = join(fileURLToPath(import.meta.url), '..', '..')
 
 test('this package’s citations are exactly the known sibling ones, and no new ones', () => {
   const { findings, known } = findDanglingCitations({ root })
   assert.deepEqual(findings, [], 'a NEW dangling citation fails this test')
-  // Counted as SITES, not as paths: `lib/seams.js` cites the field guide twice, and each site is a place a
+  // Counted as SITES, not as paths: `core/seams.js` cites the field guide twice, and each site is a place a
   // reader is sent to something that is not here.
   assert.ok(known.length >= 2)
   for (const entry of known) {

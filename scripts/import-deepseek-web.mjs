@@ -2,7 +2,7 @@
 //
 //   node scripts/import-deepseek-web.mjs --export <extracted-export-dir> --out <session-root> [--compression zstd]
 //
-// The conversion rules live in `lib/deepseek-web-export.js` (pure, tested). This file is the part that needs a
+// The conversion rules live in `dsh/deepseek-web-export.js` (pure, tested). This file is the part that needs a
 // harness: it writes the events through the harness's OWN persistence API rather than emitting JSONL by hand,
 // because the writer enforces the structural rules that a hand-written log gets wrong --
 // `SessionFormatError: assistant/message does not match an open turn and step` was measured from exactly that.
@@ -20,7 +20,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { eventsOf, loadExport } from '../lib/deepseek-web-export.js'
+import { eventsOf, loadExport } from '../dsh/deepseek-web-export.js'
 
 const argv = process.argv.slice(2)
 const flag = (name, fallback = null) => {

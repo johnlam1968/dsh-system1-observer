@@ -13,8 +13,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { reportTrace } from '../lib/trace-report.js'
-import { traceData } from '../lib/trace-data.js'
+import { reportTrace } from '../core/trace-report.js'
+import { traceData } from '../core/trace-data.js'
 
 const line = (fields) => JSON.stringify(fields)
 

@@ -30,28 +30,28 @@ import { fileURLToPath } from 'node:url'
  * counted here because they exist only to serve this repository's row.
  */
 export const INSTRUMENT = Object.freeze([
-  'lib/seams.js',
-  'lib/questions.js',
-  'lib/question-sets.js',
-  'lib/observe.js',
-  'lib/redact.js',
-  'lib/cost.js',
-  'lib/evidence.js',
-  'lib/trace-data.js',
-  'lib/probe-score.js',
-  'lib/calibrate.js',
-  'lib/compare.js',
-  'lib/battery.js',
-  'lib/nudge-label.js',
-  'lib/model/client.js',
-  'lib/model/envelope.js',
-  'lib/model/escalation.js',
-  'lib/model/limits.js',
-  'lib/model/narrow.js',
-  'lib/model/questions.js',
-  'lib/model/result-envelope.js',
-  'lib/question-lint.js',
-  'lib/model/wire.js',
+  'core/seams.js',
+  'core/questions.js',
+  'core/question-sets.js',
+  'core/observe.js',
+  'core/redact.js',
+  'core/cost.js',
+  'core/evidence.js',
+  'core/trace-data.js',
+  'core/probe-score.js',
+  'core/calibrate.js',
+  'core/compare.js',
+  'core/battery.js',
+  'core/nudge-label.js',
+  'core/model/client.js',
+  'core/model/envelope.js',
+  'core/model/escalation.js',
+  'core/model/limits.js',
+  'core/model/narrow.js',
+  'core/model/questions.js',
+  'core/model/result-envelope.js',
+  'core/question-lint.js',
+  'core/model/wire.js',
 ])
 
 /**
@@ -92,7 +92,7 @@ test('no instrument file imports, or calls, a config reader', () => {
   for (const file of INSTRUMENT) {
     const source = code(read(file))
     // THE IMPORT IS THE HARD EDGE; THE CALL is the one that would survive a re-export, so both are checked and both
-    // are reported with the file, because "something reads the config" is not actionable and "lib/redact.js does" is.
+    // are reported with the file, because "something reads the config" is not actionable and "core/redact.js does" is.
     if (/from\s+'[^']*config-value\.js'/.test(source)) offenders.push(file + ' imports config-value.js')
     if (/\b(readConfigValue|plainConfig|liveConfig)\s*\(/.test(source)) offenders.push(file + ' calls a config reader')
   }
@@ -107,7 +107,7 @@ test('no instrument file imports anything but node builtins and itself', () => {
       .filter((specifier) => !specifier.startsWith('.') && !specifier.startsWith('node:'))
     for (const specifier of new Set(external)) offenders.push(file + ' imports ' + specifier)
   }
-  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION: a package that imports `dsh-session-adapter` (as `lib/seams.js`
+  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION: a package that imports `dsh-session-adapter` (as `core/seams.js`
   // once did, for one event name) or `@deepseek-ai/...` cannot leave this repository, and `dsh-session-adapter` is
   // DSH-shaped even though it is ours.
   assert.deepEqual(offenders, [], 'the instrument depends on something outside node:\n  ' + offenders.join('\n  '))
@@ -118,9 +118,9 @@ test('no instrument file names a harness event, or reads the adapter\'s event ca
   for (const file of INSTRUMENT) {
     const source = code(read(file))
     // A STRING LITERAL THAT NAMES A HARNESS EVENT IS HOW THE BINDING RE-ENTERS. The id-to-event map moved to
-    // `lib/host-events.js` and the per-seam argument shapes to `lib/host-payload.js`, so a name here again means the
+    // `dsh/host-events.js` and the per-seam argument shapes to `dsh/host-payload.js`, so a name here again means the
     // harness is being re-imported by hand -- and `EVENT.AGENT_TURN_STOPPING` was the one import that made
-    // `lib/seams.js` depend on the adapter package at all.
+    // `core/seams.js` depend on the adapter package at all.
     for (const match of source.matchAll(/'(?:agent|tools|llm|system-prompt)\/[a-z-]+(?:\/[a-z-]+)*'/g)) {
       offenders.push(file + ' names ' + match[0])
     }
@@ -131,7 +131,7 @@ test('no instrument file names a harness event, or reads the adapter\'s event ca
 
 test('the instrument has NO host edge: it reaches a model over HTTP and nothing else', () => {
   // THIS WAS THE WHOLE ARGUMENT, AND IT IS NOW THE WHOLE RESULT. `ROADMAP.md` §14.1 recorded one host edge in the
-  // instrument -- `lib/model/service.js`, the decision model reached as a Cordis service -- and this asserted it
+  // instrument -- `core/model/service.js`, the decision model reached as a Cordis service -- and this asserted it
   // stayed the only one, so a second could not appear without a reader being told. The edge existed because
   // `postSystemone` sent NO CREDENTIAL: the host route existed to borrow another plugin's key. The wire carries one
   // now (measured standalone, nothing but `fetch`), so the module is gone and so is the edge.
@@ -146,13 +146,13 @@ test('the instrument has NO host edge: it reaches a model over HTTP and nothing 
 // THE STANDALONE'S OWN BOUNDARY, DERIVED RATHER THAN DECLARED.
 //
 // `INSTRUMENT` above is a list somebody chose, and it is 22 files that predate the facade. Proved by injection: adding
-// `import { liveConfig } from './config-value.js'` to `lib/system1.js` -- the module `scripts/ask.mjs` composes every
+// `import { liveConfig } from './config-value.js'` to `core/system1.js` -- the module `scripts/ask.mjs` composes every
 // question through -- left all five boundary tests GREEN, because that file is not on the list. Only the clean-room
 // run caught it, and it did, by dying on the import. A boundary enforced by a hand-kept list is a boundary that is
 // true until someone adds a module.
 //
 // So this derives the real one: walk the import graph from `scripts/ask.mjs` and assert that every file it reaches can
-// be loaded with no `node_modules` at all -- no bare specifier anywhere in the closure, and nothing under `lib/host/`.
+// be loaded with no `node_modules` at all -- no bare specifier anywhere in the closure, and nothing under `core/host/`.
 // That is the property the standalone actually has, and it is measured from the entry point rather than asserted
 // about a list.
 test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at all', () => {
@@ -177,7 +177,7 @@ test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at a
 
   // AND THE CLOSURE IS CHECKED SEMANTICALLY, not just for bare specifiers. A FIRST attempt at this test only flagged
   // NON-RELATIVE imports, and it stayed green with `import { liveConfig } from './config-value.js'` injected into
-  // `lib/system1.js` -- a relative path to a file that exists, so the walk simply followed it and called the closure
+  // `core/system1.js` -- a relative path to a file that exists, so the walk simply followed it and called the closure
   // portable. Syntax cannot tell harness glue from a helper; the RULES the declared boundary already uses can, and
   // they are applied here to the DERIVED set rather than to a hand-kept list.
   const glue = []
@@ -185,14 +185,14 @@ test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at a
     const source = code(read(file))
     if (/from\s+'[^']*config-value\.js'/.test(source)) glue.push(file + ' imports config-value.js')
     if (/\b(readConfigValue|plainConfig|liveConfig)\s*\(/.test(source)) glue.push(file + ' calls a config reader')
-    if (file.includes('lib/host/')) glue.push(file + ' is host glue')
+    if (file.includes('core/host/')) glue.push(file + ' is host glue')
     if (/from\s+'[^']*host-events\.js'/.test(source)) glue.push(file + ' imports host-events.js')
   }
   assert.deepEqual(glue, [], 'the standalone reaches harness glue:\n  ' + glue.join('\n  '))
 
   // AND THE CLOSURE IS NOT VACUOUS -- a graph that resolved to nothing would pass every assertion above.
-  assert.ok(seen.has('lib/system1.js'), 'the closure really does reach the facade')
-  assert.ok([...seen].filter((f) => f.startsWith('lib/')).length >= 10, `and it is a real graph, ${[...seen].filter((f) => f.startsWith('lib/')).length} lib files`)
+  assert.ok(seen.has('core/system1.js'), 'the closure really does reach the facade')
+  assert.ok([...seen].filter((f) => f.startsWith('core/')).length >= 10, `and it is a real graph, ${[...seen].filter((f) => f.startsWith('core/')).length} core files`)
 })
 
 
@@ -203,7 +203,7 @@ test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at a
 // works with nothing installed. A static walk can be fooled by a dynamic import, an export condition, or a file it
 // failed to resolve; a run cannot, and it costs one `node` process.
 //
-// `lib/host/` is left out because that IS the harness glue -- excluding it is the point, not a cheat, and the test
+// `core/host/` is left out because that IS the harness glue -- excluding it is the point, not a cheat, and the test
 // asserts it is excluded so a later edit cannot quietly depend on it.
 test('the standalone RUNS in a directory with no node_modules at all', async () => {
   const { execFileSync } = await import('node:child_process')
@@ -211,9 +211,11 @@ test('the standalone RUNS in a directory with no node_modules at all', async () 
   const { tmpdir } = await import('node:os')
   const root = mkdtempSync(join(tmpdir(), 'clean-room-'))
   try {
-    for (const dir of ['lib', 'scripts', 'criteria']) cpSync(join(rootOfTest, dir), join(root, dir), { recursive: true })
-    rmSync(join(root, 'lib', 'host'), { recursive: true, force: true })
-    assert.equal(existsSync(join(root, 'lib', 'host')), false, 'the harness glue is what was left out')
+    // `dsh/` IS NOT COPIED AT ALL. An earlier version copied it and removed only `dsh/host`, which passed -- and proved
+    // less, because the adaptation was still lying there for a core file to reach. Copying the instrument ALONE is the
+    // claim: if `core/` needs the harness for anything, this dies.
+    for (const dir of ['core', 'scripts', 'criteria']) cpSync(join(rootOfTest, dir), join(root, dir), { recursive: true })
+    assert.equal(existsSync(join(root, 'dsh')), false, 'the dsh adaptation was not copied, so nothing can reach it')
     assert.equal(existsSync(join(root, 'node_modules')), false, 'and nothing was installed to replace it')
     // `--list` reads every composition and prints it. It reaches the loader, the linter, the question builder and
     // the set reader -- the whole reading half of the instrument -- and it costs nothing.

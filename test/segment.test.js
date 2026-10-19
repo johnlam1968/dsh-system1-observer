@@ -2,15 +2,15 @@
 //
 // The vendor's published limit is why: 32k tokens of `state` plus the longest question. A 611-message session is about
 // twice that, and the request does not fail loudly -- it returns answers nobody can read. So the session is split, and
-// every rule in `lib/segment.js` is a way that split could judge something nobody wrote.
+// every rule in `dsh/segment.js` is a way that split could judge something nobody wrote.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregateReadings, segmentsOf } from '../lib/segment.js'
-import { createEvaluateTool, EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../lib/evaluate-tool.js'
-import { composeTurnState } from '../lib/turn-state.js'
-import { choice, noul } from '../lib/model/questions.js'
-import { checkAgainst } from '../lib/tool-args.js'
-import { stateBudgetChars } from '../lib/model/limits.js'
+import { aggregateReadings, segmentsOf } from '../dsh/segment.js'
+import { createEvaluateTool, EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../dsh/evaluate-tool.js'
+import { composeTurnState } from '../dsh/turn-state.js'
+import { choice, noul } from '../core/model/questions.js'
+import { checkAgainst } from '../core/tool-args.js'
+import { stateBudgetChars } from '../core/model/limits.js'
 
 const message = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
 const toolCall = (seq, id, name, args) => ({ seq, time: seq, type: 'tool/call', data: { callId: id, name, arguments: args } })

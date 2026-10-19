@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { describeSubject, subjectOfAgent, subjectOfRequest } from '../lib/subject.js'
+import { describeSubject, subjectOfAgent, subjectOfRequest } from '../core/subject.js'
 
 // THE FACT THE MEASUREMENT WAS MISSING. `provider`/`model` on a trace line are the observer's own config and
 // `executed` is the judge -- neither says which model WROTE the excerpt. The same question scores differently

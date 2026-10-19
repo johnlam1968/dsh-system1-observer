@@ -9,10 +9,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bundledSetsDir, SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../lib/question-sets.js'
-import { plainConfig } from '../lib/config-value.js'
-import { questionGroup } from '../lib/instrument-input.js'
-import { QUESTION_SCOPES, buildQuestions } from '../lib/questions.js'
+import { bundledSetsDir, SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../core/question-sets.js'
+import { plainConfig } from '../dsh/config-value.js'
+import { questionGroup } from '../core/instrument-input.js'
+import { QUESTION_SCOPES, buildQuestions } from '../core/questions.js'
 
 const dirWith = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'sets-'))

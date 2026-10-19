@@ -1,6 +1,6 @@
 // PI SESSIONS -> DSH SESSION EVENTS. The pure half: parse, choose the live branch, map, count. No harness, no files.
 //
-// WHY THIS IS IN THIS REPOSITORY, AND WHY IT LOOKS LIKE `lib/deepseek-web-export.js`. `packages/session-adapter`
+// WHY THIS IS IN THIS REPOSITORY, AND WHY IT LOOKS LIKE `lib/deepseek-web-export.js`. `dsh/session-adapter`
 // reads HARNESS sessions and has no reader for any foreign format (`docs/adapters-and-standards.md`, "The
 // prerequisite"), so a foreign transcript has to BECOME a DSH session before anything here can measure it. That
 // file is that conversion for `chat.deepseek.com`; this is the same conversion for **pi** (`pi-coding-agent` 0.85.1),

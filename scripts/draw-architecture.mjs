@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // THE ARCHITECTURE CHART, GENERATED. `node scripts/draw-architecture.mjs` writes `docs/architecture.svg`.
 //
-// WHY A GENERATOR: the map in `lib/README.md` is grouped by what a READER is doing, which is the right grouping for
+// WHY A GENERATOR: the map in `core/README.md` is grouped by what a READER is doing, which is the right grouping for
 // prose and the wrong one for a picture -- a chart that has to be redrawn by hand whenever a module moves is a
 // chart that is wrong. Every box here names the file that owns the thing it draws, so a box that has gone stale
 // names the place to look; the counts in the footer are read off the working tree at draw time rather than typed.
@@ -243,7 +243,7 @@ const filesIn = (rel) => {
 /** A shallow count is enough for a footer that says how much of it; a deep walk is not worth an import here. */
 const countIn = (rel, ext) => filesIn(rel).filter((e) => ext === undefined || e.name.endsWith(ext)).length
 
-/** The footer counts MODULES, not directory entries, so `lib/` is walked: `lib/model/` and `lib/host/` are part of it. */
+/** The footer counts MODULES, not directory entries, so `lib/` is walked: `core/model/` and `core/host/` are part of it. */
 function countRecursive(rel, ext, dirs = false) {
   let count = 0
   for (const entry of filesIn(rel)) {
@@ -286,13 +286,13 @@ const ROW = {
   title: '2 · The row: index.js',
   note: '`apply()` mounts one Config schema, the listeners, the service and the tools. Every volatile setting is read per line rather than captured at mount, so a settings save reaches a running row.',
   blocks: [
-    { type: 'item', name: 'lib/register.js', desc: 'which seams are subscribed, and the shape each one needs' },
-    { type: 'item', name: 'lib/host-events.js · host-payload.js', desc: 'the two halves of a point descriptor: which dsh EVENT it attaches to, and which ARGUMENT carries the text' },
-    { type: 'item', name: 'lib/turn-listener.js', desc: 'the turn listener, as a decision rather than an effect' },
-    { type: 'item', name: 'lib/turn-observer.js · turn-trigger.js', desc: 'the turn observation, and the trigger\'s decision: whether to fire, and which question set' },
-    { type: 'item', name: 'lib/observe.js', desc: 'the call and the line: everything that can go wrong, covered' },
-    { type: 'strip', text: 'lib/instrument-input.js — THE BRIDGE: the row\'s settings become the instrument\'s one input object. It is the only place a plain read of a setting is allowed, because it is where every `Volatile` is unwrapped before the instrument sees it.', fill: '#eff6ff', stroke: '#dbeafe', color: '#1e40af', size: 11 },
-    { type: 'item', name: 'lib/service.js', desc: '`ObserverService`, frozen: another row can read what this one measured' },
+    { type: 'item', name: 'core/register.js', desc: 'which seams are subscribed, and the shape each one needs' },
+    { type: 'item', name: 'dsh/host-events.js · host-payload.js', desc: 'the two halves of a point descriptor: which dsh EVENT it attaches to, and which ARGUMENT carries the text' },
+    { type: 'item', name: 'core/turn-listener.js', desc: 'the turn listener, as a decision rather than an effect' },
+    { type: 'item', name: 'core/turn-observer.js · turn-trigger.js', desc: 'the turn observation, and the trigger\'s decision: whether to fire, and which question set' },
+    { type: 'item', name: 'core/observe.js', desc: 'the call and the line: everything that can go wrong, covered' },
+    { type: 'strip', text: 'core/instrument-input.js — THE BRIDGE: the row\'s settings become the instrument\'s one input object. It is the only place a plain read of a setting is allowed, because it is where every `Volatile` is unwrapped before the instrument sees it.', fill: '#eff6ff', stroke: '#dbeafe', color: '#1e40af', size: 11 },
+    { type: 'item', name: 'core/service.js', desc: '`ObserverService`, frozen: another row can read what this one measured' },
   ],
 }
 
@@ -300,14 +300,14 @@ const SUBJECT = {
   title: '3a · The subject — what gets judged',
   note: 'A judgement is made from a composed state, never from the raw log: the same turn read two ways is two measurements.',
   blocks: [
-    { type: 'item', name: 'lib/turn-state.js', desc: 'the state a judgement is made from, and what it keeps at both ends' },
-    { type: 'item', name: 'lib/segment.js', desc: 'splitting a subject that will not fit one request, and the arithmetic over the parts' },
-    { type: 'item', name: 'lib/tool-blocks.js', desc: 'the TOOL CALLS section, and what was clipped out of it' },
-    { type: 'item', name: 'lib/redact.js', desc: 'redaction, applied to the trace\'s copy only — never to what the model is asked' },
+    { type: 'item', name: 'dsh/turn-state.js', desc: 'the state a judgement is made from, and what it keeps at both ends' },
+    { type: 'item', name: 'dsh/segment.js', desc: 'splitting a subject that will not fit one request, and the arithmetic over the parts' },
+    { type: 'item', name: 'dsh/tool-blocks.js', desc: 'the TOOL CALLS section, and what was clipped out of it' },
+    { type: 'item', name: 'core/redact.js', desc: 'redaction, applied to the trace\'s copy only — never to what the model is asked' },
     { type: 'sub', label: 'WHERE A SESSION COMES FROM' },
-    { type: 'item', name: 'packages/session-adapter/', desc: 'harness sessions, as a package: reader · session-format · surface · feed · surface-authority' },
+    { type: 'item', name: 'dsh/session-adapter/', desc: 'harness sessions, as a package: reader · session-format · surface · feed · surface-authority' },
     { type: 'item', name: 'dsh-session-index', desc: 'a separate plugin and repo behind a service: FTS5 search, listing, reading, incremental rebuild' },
-    { type: 'item', name: 'lib/deepseek-web-export.js', desc: 'intake for a FOREIGN transcript (a DeepSeek Chat web export), and the losses it refuses to fabricate' },
+    { type: 'item', name: 'dsh/deepseek-web-export.js', desc: 'intake for a FOREIGN transcript (a DeepSeek Chat web export), and the losses it refuses to fabricate' },
   ],
 }
 
@@ -315,9 +315,9 @@ const INSTRUMENT = {
   title: '3b · The instrument — what gets asked',
   note: 'A question set is a file, and its hash rides every line that used it: a reworded question is a NEW measurement, never a comparison.',
   blocks: [
-    { type: 'item', name: 'lib/seams.js', desc: 'the nine points as ONE table (id, textless, tool) — the loop\'s vocabulary, naming no harness event, payload or config field' },
-    { type: 'item', name: 'lib/questions.js', desc: 'what the observer asks, in one place; the fireable hooks and the scopes' },
-    { type: 'item', name: 'lib/question-sets.js', desc: 'sets as files: read them, hash them, list them' },
+    { type: 'item', name: 'core/seams.js', desc: 'the nine points as ONE table (id, textless, tool) — the loop\'s vocabulary, naming no harness event, payload or config field' },
+    { type: 'item', name: 'core/questions.js', desc: 'what the observer asks, in one place; the fireable hooks and the scopes' },
+    { type: 'item', name: 'core/question-sets.js', desc: 'sets as files: read them, hash them, list them' },
     { type: 'sub', label: 'criteria/ — THE SETS THAT SHIP' },
     { type: 'chips', items: [
       { label: 'agent-helpfulness-seams@1' }, { label: 'human-conduct-session@1' },
@@ -332,8 +332,8 @@ const JUDGE = {
   title: '4 · The judge — a System One model',
   note: 'Two routes, one client shape `{decide, health}` — so a profile with the service uses it, and a profile without it still works over HTTP.',
   blocks: [
-    { type: 'item', name: 'lib/model/service.js', desc: 'the host `system1` service as the PREFERRED route; service-answers.js holds its answer shape, which is not the wire\'s' },
-    { type: 'item', name: 'lib/model/wire.js · client.js', desc: 'the fallback: one POST, and every way it can go wrong turned into a result; default http://127.0.0.1:8766' },
+    { type: 'item', name: 'core/model/service.js', desc: 'the host `system1` service as the PREFERRED route; service-answers.js holds its answer shape, which is not the wire\'s' },
+    { type: 'item', name: 'core/model/wire.js · client.js', desc: 'the fallback: one POST, and every way it can go wrong turned into a result; default http://127.0.0.1:8766' },
     { type: 'sub', label: 'AROUND THE CALL' },
     { type: 'item', name: 'narrow.js', desc: 'narrowing a reply to the answer type that was asked for' },
     { type: 'item', name: 'envelope.js · result-envelope.js', desc: 'one home for what crosses the transport boundary, and where a transport puts its envelope' },
@@ -346,14 +346,14 @@ const RECORD = {
   title: '5 · The record',
   note: 'One append-only JSONL file, redacted on the way in. Its product is evidence about the judge\'s replies — not judgements about the session it watches.',
   blocks: [
-    { type: 'item', name: 'lib/evidence.js', desc: 'the evidence record: what was observed, what was decided, what is missing — and the sink that writes it' },
+    { type: 'item', name: 'core/evidence.js', desc: 'the evidence record: what was observed, what was decided, what is missing — and the sink that writes it' },
     { type: 'strip', text: '~/.dsh/logs/system1-observer.jsonl', fill: '#ecfdf5', stroke: '#c9f0e0', color: '#065f46', size: 11.5 },
     { type: 'item', name: 'line kinds', desc: 'call · skip · mount · config · experiment · error · rotate — and a skip says WHY it did not ask' },
-    { type: 'item', name: 'lib/config-event.js', desc: 'a settings change is written to the trace before it takes effect: readings either side are not comparable' },
+    { type: 'item', name: 'core/config-event.js', desc: 'a settings change is written to the trace before it takes effect: readings either side are not comparable' },
     { type: 'sub', label: 'READ BACK BY' },
     { type: 'item', name: 'trace-read.js → trace-report.js', desc: 'one reader, so the views of the trace cannot disagree; `system1_trace` is its agent face' },
     { type: 'item', name: 'trace-data.js · the card · scripts/trace.mjs', desc: 'the same trace as a shape a renderer can draw' },
-    { type: 'sub', label: 'AND PACKAGED — lib/report.js' },
+    { type: 'sub', label: 'AND PACKAGED — core/report.js' },
     { type: 'strip', text: 'manifest.json · report.md · readings.json · trace.jsonl · manifest.sha256 — every file\'s sha256 on the manifest, so a reader can re-derive the numbers. The interpretation is a separate call: prose cannot be derived from numbers.', fill: '#fafbfc', stroke: '#e8ebf0', color: MUTED, size: 11 },
   ],
 }
@@ -390,11 +390,11 @@ const REPO = [
   {
     title: 'A second corpus — pi',
     accent: ACCENT.repo,
-    note: 'A foreign harness becomes measurable by BECOMING a dsh session: `lib/pi-session-export.js` maps pi\'s DAG, its absent turn and its injected messages into dsh events, `scripts/import-pi-sessions.mjs` writes them through the harness\'s own persistence API into the live root, and every tool on this page then reads a pi session with no change at all. 223 sessions on this host, measured end to end; the rules and the losses are in `docs/pi-adapter.md`.',
+    note: 'A foreign harness becomes measurable by BECOMING a dsh session: `dsh/pi-session-export.js` maps pi\'s DAG, its absent turn and its injected messages into dsh events, `scripts/import-pi-sessions.mjs` writes them through the harness\'s own persistence API into the live root, and every tool on this page then reads a pi session with no change at all. 223 sessions on this host, measured end to end; the rules and the losses are in `docs/pi-adapter.md`.',
   },
   {
     title: 'The packages around it',
-    note: 'packages/session-adapter — the pure half of session-shaped reading, importable because the composer runs in a synchronous path that cannot await a service. dsh-session-index — the store, in its own repository, importing no dsh code.',
+    note: 'dsh/session-adapter — the pure half of session-shaped reading, importable because the composer runs in a synchronous path that cannot await a service. dsh-session-index — the store, in its own repository, importing no dsh code.',
   },
   {
     title: 'deploy/ · scripts/ · skills/',

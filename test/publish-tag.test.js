@@ -11,7 +11,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { publishTagProblem } from '../lib/publish-tag.js'
+import { publishTagProblem } from '../core/publish-tag.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(root, 'scripts', 'check-publish-tag.mjs')
@@ -65,8 +65,9 @@ test('the SCRIPT settles it by exit code, in the package it is run from', () => 
   assert.equal(stable.code, 0, 'a stable version with no tag is the normal release')
   // AND IT READS THE MANIFEST OF ITS OWN DIRECTORY: the adapter has its own name and version, and its
   // `prepublishOnly` calls this same script, so a guard that read the root's package.json would report the wrong
-  // package -- which it did, until the relative path was measured (`packages/../scripts` does not exist).
-  const adapter = guard(join(root, 'packages', 'session-adapter'), 'beta')
+  // package -- which it did, until the relative path was measured (`packages/../scripts` does not exist). The adapter
+  // now lives under `dsh/`, so that path is `dsh/../scripts`, and the guard is still the only thing that can tell.
+  const adapter = guard(join(root, 'dsh', 'session-adapter'), 'beta')
   assert.equal(adapter.code, 0)
   assert.match(adapter.out, /dsh-session-adapter@/, 'the guard must name the package being published')
 })

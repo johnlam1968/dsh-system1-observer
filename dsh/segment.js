@@ -29,7 +29,7 @@
 // ends are the informative readings, and the middle is where a session's work happens rather than where its outcome
 // is decided.
 import { textOfEvent } from 'dsh-session-adapter/session-format'
-import { stateBudgetChars } from './model/limits.js'
+import { stateBudgetChars } from '../core/model/limits.js'
 
 /**
  * The default segment size in characters.

@@ -10,8 +10,8 @@ import {
   ALWAYS_REDACT_KEYS, MAX_DEPTH, REDACTED, TAIL_CHARS,
   PATH_MODES, basenameOf, cutHeadTail, isRedactedKey, minimisePaths, redactPolicy, redactText, sanitizeField,
   sanitizeJson, sanitizeToolText, tokenizeKey,
-} from '../lib/redact.js'
-import { instrumentInput } from '../lib/instrument-input.js'
+} from '../core/redact.js'
+import { instrumentInput } from '../core/instrument-input.js'
 
 const ON = redactPolicy({})
 const OFF = redactPolicy({ redactEnabled: false })
@@ -191,7 +191,7 @@ test('the three path modes reduce an absolute path, and leave everything else al
 // ANCHORED ON REAL ROOTS, so prose and URLs survive. A rule that mangled `https://host/a/b` would corrupt the
 // thing it is meant to protect.
 test('a URL is not an absolute path, and neither is a relative one', () => {
-  const urls = 'see https://host/a/b and http://x/Users/y and lib/model/narrow.js'
+  const urls = 'see https://host/a/b and http://x/Users/y and core/model/narrow.js'
   for (const mode of ['basename', 'omit']) {
     assert.equal(minimisePaths(urls, mode), urls, `${mode} must not touch a URL`)
   }
@@ -225,7 +225,7 @@ test('minimisation happens before the cut, so no half-path survives', () => {
 })
 
 test('minimisation never touches the MODEL’s copy, which is the whole design', async () => {
-  const { createObserver } = await import('../lib/observe.js')
+  const { createObserver } = await import('../core/observe.js')
   const lines = []
   let handed = null
   const observer = createObserver({
@@ -277,7 +277,7 @@ test('surrounding syntax is not swallowed into the path token', () => {
 
 // AND THE URL EXCLUSION IS NOW STRUCTURAL rather than a list of roots: the path must begin with a SINGLE slash.
 test('the structural URL exclusion still holds, including a scheme-relative //', () => {
-  for (const text of ['https://example.com/home/foo', 'http://host/tmp/x', '//host/home/x', 'lib/model/narrow.js', 'and / or', 'a / b']) {
+  for (const text of ['https://example.com/home/foo', 'http://host/tmp/x', '//host/home/x', 'core/model/narrow.js', 'and / or', 'a / b']) {
     assert.equal(minimisePaths(text, 'omit'), text, `${text} must survive`)
   }
 })
@@ -350,7 +350,7 @@ test('a scheme word is never redacted on its own, leaving the credential behind 
 // `passwd: hunter2` was scrubbed. That is the same "one form with a rule and another without" inconsistency that
 // produced the last leak here.
 test('`pw` and `pword` are credential names in every form this module handles', async () => {
-  const { sanitizeJson } = await import('../lib/redact.js')
+  const { sanitizeJson } = await import('../core/redact.js')
   const text = sanitizeToolText('pw: hunter2 and PWORD=opensesame', redactPolicy({}))
   assert.equal(text.includes('hunter2'), false, 'the header form: ' + text)
   assert.equal(text.includes('opensesame'), false, 'the environment form: ' + text)
@@ -377,7 +377,7 @@ test('`pw` and `pword` are credential names in every form this module handles', 
 // deployment can only make the record MORE redacted than the shipped behaviour. A setting that could disable a
 // shipped rule would turn a leak into a preference.
 test('a deployment pattern is compiled, and applied AFTER the shipped rules', async () => {
-  const { redactPolicy, sanitizeToolText } = await import('../lib/redact.js')
+  const { redactPolicy, sanitizeToolText } = await import('../core/redact.js')
   const policy = redactPolicy({ redactEnabled: true, redactPatterns: ['ACME-[0-9]{6}'] })
   assert.equal(sanitizeToolText('token ACME-123456 here', policy), 'token [REDACTED] here', 'an in-house token shape is redacted')
   assert.equal(sanitizeToolText('nothing to hide', policy), 'nothing to hide', 'and an unrelated string is not touched')
@@ -388,7 +388,7 @@ test('a deployment pattern is compiled, and applied AFTER the shipped rules', as
 test('a pattern that does not compile is DROPPED and its reason RETURNED, never thrown', async () => {
   // It sits in the path of every line. A throw here would empty the trace -- the opposite of a redaction failure
   // anyone would notice -- so the bad entry is refused with a reason and the good ones keep working.
-  const { compilePatterns, redactPolicy } = await import('../lib/redact.js')
+  const { compilePatterns, redactPolicy } = await import('../core/redact.js')
   const compiled = compilePatterns(['ACME[', 'fine-[0-9]+', 42, '', null])
   assert.equal(compiled.patterns.length, 1, 'only the valid pattern survives')
   assert.equal(compiled.problems.length, 4, 'and every refusal is accounted for')
@@ -408,7 +408,7 @@ test('a pattern that does not compile is DROPPED and its reason RETURNED, never 
 // HOW MUCH OF THE TAIL SURVIVES A CUT. `cutHeadTail` keeps the head AND the tail; how much tail is `tailChars` now,
 // because how much of the END of a long value is evidence depends on what a deployment asks about.
 test('the tail a cut keeps is a parameter, and zero means head-only', async () => {
-  const { cutHeadTail, TAIL_CHARS } = await import('../lib/redact.js')
+  const { cutHeadTail, TAIL_CHARS } = await import('../core/redact.js')
   // THE BUDGET HAS TO BE BIGGER THAN THE TAIL for the tail to be kept at all -- `max <= tailChars + 1` is the
   // head-only fallback, and my first version of this asserted the default tail against a 30-character budget, so the
   // CODE was right and the test was wrong. Third time in this session; the fixture is derived from the constant now.
@@ -433,7 +433,7 @@ test('the tail a cut keeps is a parameter, and zero means head-only', async () =
 // a field that was explicitly null read identically -- and the redaction marker is a string, so the three are
 // distinguishable only if absence is dropped rather than spelled.
 test('an undefined member is dropped from the walk, not written as null', async () => {
-  const { sanitizeJson } = await import('../lib/redact.js')
+  const { sanitizeJson } = await import('../core/redact.js')
   const walked = sanitizeJson({ present: 1, absent: undefined, explicitNull: null, token: 'abc123' }, redactPolicy({}))
   assert.equal('absent' in walked, false, 'an absent field must not become a null one: ' + JSON.stringify(walked))
   assert.equal(walked.explicitNull, null, 'and an explicit null stays a null')

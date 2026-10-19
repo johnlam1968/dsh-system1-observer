@@ -3,7 +3,7 @@
 // that vanishes on the way back is the same defect as one that was never logged, and only one of those is obvious.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { configEvent, replayConfig, CONFIG_EVENT, CONFIG_ACTIONS } from '../lib/config-event.js'
+import { configEvent, replayConfig, CONFIG_EVENT, CONFIG_ACTIONS } from '../core/config-event.js'
 
 test('an event names the action, the knob, the move and the actor -- and refuses a bad action or knob', () => {
   const line = configEvent({ action: 'set', knob: 'provider', from: 'typesafe', to: 'laya', by: 'agent-1' })

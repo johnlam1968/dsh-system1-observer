@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { RECORDED, bundlesOf, compareDeploy, machineLocalPins, readDeploy } from '../lib/deploy-drift.js'
+import { RECORDED, bundlesOf, compareDeploy, machineLocalPins, readDeploy } from '../core/deploy-drift.js'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..')
 

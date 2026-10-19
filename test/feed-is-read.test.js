@@ -12,7 +12,7 @@ import { createServer } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 import { createEventFeed } from 'dsh-session-adapter/feed'
 
 const accessor = (value) => ({ get: () => value })

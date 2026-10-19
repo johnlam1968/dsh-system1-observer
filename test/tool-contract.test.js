@@ -2,7 +2,7 @@
 //
 // `reference/cookbook/adding-a-tool.md:44`: `defineTool` validates the model's arguments before `execute` runs --
 // "a raw JSON-Schema tool registered directly is responsible for its own input validation." These three tools are
-// registered raw (see `lib/tool.js:8` for why), so nothing else stands between a malformed call and a tool that acts
+// registered raw (see `core/tool.js:8` for why), so nothing else stands between a malformed call and a tool that acts
 // on it. The record carried that as UNVERIFIED for two rounds with the reason stated: a grep is not a test. This is
 // the test.
 //
@@ -19,9 +19,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createTraceTool, TRACE_TOOL_NAME } from '../lib/tool.js'
-import { createConfigTool } from '../lib/config-tool.js'
-import { createDecideTool, DECIDE_TOOL_NAME, TOOL_HOOK } from '../lib/decide-tool.js'
+import { createTraceTool, TRACE_TOOL_NAME } from '../core/tool.js'
+import { createConfigTool } from '../core/config-tool.js'
+import { createDecideTool, DECIDE_TOOL_NAME, TOOL_HOOK } from '../core/decide-tool.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const tracePath = join(mkdtempSync(join(tmpdir(), 'tool-contract-')), 'trace.jsonl')

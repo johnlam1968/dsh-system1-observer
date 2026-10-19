@@ -5,9 +5,9 @@
 // disappearing behind 34 answers.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../lib/results-tool.js'
+import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../core/results-tool.js'
 // THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
-import { answerOf, readTraceLines, windowOf, writerOf } from '../lib/trace-read.js'
+import { answerOf, readTraceLines, windowOf, writerOf } from '../core/trace-read.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const call = (over = {}) => ({
@@ -81,7 +81,7 @@ test('skips are reported beside the answers, with their reasons, and the share o
     { event: 'mount', run: 'r1', model: 'jev-latest', provider: 'typesafe', hooks: ['draft'], probeHash: 'abc', sessions: ['s1'] },
   ]
   const summary = summarise(lines)
-  // ONE VOCABULARY, from `lib/trace-read.js`: every kind the plugin can write is counted by name.
+  // ONE VOCABULARY, from `core/trace-read.js`: every kind the plugin can write is counted by name.
   assert.deepEqual(summary.counts, { total: 5, broken: 0, call: 1, skip: 3, mount: 1, config: 0, experiment: 0, error: 0, rotate: 0, other: 0, secondWriter: 0 })
   assert.deepEqual(summary.skips, [
     { reason: 'no question configured for this seam', n: 2 },

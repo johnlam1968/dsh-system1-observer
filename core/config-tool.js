@@ -18,7 +18,7 @@
 // too, because a tool that logged its own reads would drown the record it exists to keep honest.
 import { checkAgainst } from './tool-args.js'
 import { configEvent, CONFIG_ACTIONS } from './config-event.js'
-import { readConfigValue } from './config-value.js'
+import { readConfigValue } from '../dsh/config-value.js'
 
 export const CONFIG_TOOL_NAME = 'system1_settings'
 

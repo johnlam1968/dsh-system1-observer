@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createObserver } from '../lib/observe.js'
-import { exitCodeOf } from '../lib/seams.js'
-import { labelHash } from '../lib/label-hash.js'
-import { instrumentInput } from '../lib/instrument-input.js'
+import { createObserver } from '../core/observe.js'
+import { exitCodeOf } from '../core/seams.js'
+import { labelHash } from '../core/label-hash.js'
+import { instrumentInput } from '../core/instrument-input.js'
 
 function recorder() {
   const lines = []
@@ -24,7 +24,7 @@ function observed(observer, hook, text, meta = {}) {
 
 // A FIXTURE IS STILL A CONFIG. The observer reads the instrument's INPUT now (`readInput`), and the bridge from a
 // row's config to that input is the application's own function -- so these tests keep describing a config and let
-// `lib/instrument-input.js` do the mapping, rather than hand-building an object the application may not build.
+// `core/instrument-input.js` do the mapping, rather than hand-building an object the application may not build.
 // It takes a config OR an accessor for one: `readInput` is read at the point of use, so a test about a setting that
 // changes while the row runs has to keep the accessor rather than a snapshot.
 const inputOf = (values) => (point) => {

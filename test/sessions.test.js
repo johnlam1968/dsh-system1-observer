@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { observesEverySession, readSessions, sessionObserved } from '../lib/sessions.js'
+import { observesEverySession, readSessions, sessionObserved } from '../core/sessions.js'
 
 const accessor = (value) => ({ get: () => value })
 

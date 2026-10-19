@@ -12,8 +12,8 @@ import { createServer } from 'node:http'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
-import { probeViolations } from '../lib/turn-record.js'
+import { apply } from '../dsh/index.js'
+import { probeViolations } from '../core/turn-record.js'
 
 const accessor = (value) => ({ get: () => value })
 const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })
@@ -95,7 +95,7 @@ test('a mounted row fires the trigger on an admit and records a usable turn line
   assert.equal(turns[0].answers.a_noul.confidence, 0.9, 'and the confidence the narrowing derives from it')
   // THE ENVELOPE IS NOT ASSERTED HERE, by decision rather than omission. `durationMs` is the SERVICE path's field
   // and the wire envelope is model, usage, routing and executed -- so checking it here was checking another module's
-  // contract from the outside, one guessed field at a time, at a round per guess. lib/model/client.js owns that
+  // contract from the outside, one guessed field at a time, at a round per guess. core/model/client.js owns that
   // contract and its tests cover it. What THIS test owns is the chain: that the judge was asked, that X was what it
   // was asked about, that a turn line was recorded with the right questions and the narrowed answer, and that the
   // trace passes the acceptance check.

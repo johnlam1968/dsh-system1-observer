@@ -11,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { surfaceEvents } from 'dsh-session-adapter/surface'
-import { composeTurnState } from '../lib/turn-state.js'
+import { composeTurnState } from '../dsh/turn-state.js'
 
 const msg = (seq, type, text, surfaceOp = 'append') => ({
   seq, time: seq, type, surfaceOp,
@@ -121,7 +121,7 @@ test('a HARNESS-DECLARED user/message event is read, where `data` is the message
 
 // THE TEST THAT SHOULD HAVE EXISTED FROM THE START, BUILT FROM THE HARNESS'S DECLARATION RATHER THAN FROM MY FIXTURE.
 //
-// lib/tool-blocks.js said in its own header that the block types were NOT VERIFIED and reported what it could not
+// dsh/tool-blocks.js said in its own header that the block types were NOT VERIFIED and reported what it could not
 // classify -- honest, and it still matched nothing real, because every fixture in this suite used the Anthropic-style
 // `tool_use`/`input` while ContentBlockMap declares `'tool-call'` with `arguments` as a JSON STRING. Measured with
 // declared shapes, the TOOL CALLS section came out EMPTY: the call name absent, the result dropped. That is the state

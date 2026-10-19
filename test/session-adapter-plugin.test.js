@@ -54,7 +54,7 @@ test('the adapter is a PLUGIN, and the service is registered as a CLASS', async 
   }
   // AND THE INVENTORY IS TRUE OF THE SOURCE: the services this package reaches are the ones it declares.
   const { HOST_SERVICES } = await import('dsh-session-adapter')
-  const source = await (await import('node:fs/promises')).readFile(new URL('../packages/session-adapter/index.js', import.meta.url), 'utf8')
+  const source = await (await import('node:fs/promises')).readFile(new URL('../dsh/session-adapter/index.js', import.meta.url), 'utf8')
   const reached = [...source.matchAll(/ctx\.get\('([A-Za-z]+)'\)/g)].map((m) => m[1])
   assert.deepEqual([...new Set(reached)].sort(), [...HOST_SERVICES].sort(), 'HOST_SERVICES is exactly what the source reaches')
 })

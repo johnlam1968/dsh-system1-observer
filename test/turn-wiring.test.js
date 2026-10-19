@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 
 const accessor = (value) => ({ get: () => value })
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5))
@@ -39,7 +39,7 @@ function mount({ sessions = ['*'], turn = 1, agent = { id: 'session-a' }, questi
     wireUrl: accessor('http://127.0.0.1:9'),
     timeoutMs: accessor(200),
   }
-  // A FILE NOTHING WROTE TO IS AN EMPTY LIST, NOT AN ERROR -- the same rule lib/evidence.js states, because "the row
+  // A FILE NOTHING WROTE TO IS AN EMPTY LIST, NOT AN ERROR -- the same rule core/evidence.js states, because "the row
   // said nothing" is exactly what two of these tests assert and readFileSync would throw on it.
   const lines = () => {
     if (!existsSync(tracePath)) return []

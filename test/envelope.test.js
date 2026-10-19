@@ -2,7 +2,7 @@
 //
 // The finding this file answers was not "a field is missing" but "a field always reads null": the two
 // transports kept their own copy of the whitelist, the service's copy lifted `requested` out of `meta`, and the
-// wire's copy never listed it -- so `lib/observe.js`'s read of `envelope.requested` was dead by construction on
+// wire's copy never listed it -- so `core/observe.js`'s read of `envelope.requested` was dead by construction on
 // one transport and populated on the other. A checker found it by reading the two lists side by side; the unit
 // suite never could, because nothing drove a wire reply that carried `requested` to begin with.
 //
@@ -11,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
-import { ENVELOPE_KEYS, projectEnvelope } from '../lib/model/envelope.js'
+import { ENVELOPE_KEYS, projectEnvelope } from '../core/model/envelope.js'
 
 test('every field the observer reads is in the shared list, `requested` included', () => {
   // The observer reads exactly these two from the envelope; `requested` is the one that was absent from the
@@ -56,17 +56,17 @@ test('the transport projects through the shared list and keeps no private copy',
   // private whitelist in either transport silently drops a field the other records. With the service gone there is
   // nothing to disagree WITH, so the guard that matters is that the remaining module imports the shared list rather
   // than declaring one -- which is what a second transport would have to fight, whenever it comes.
-  const wire = readFileSync(new URL('../lib/model/client.js', import.meta.url), 'utf8')
+  const wire = readFileSync(new URL('../core/model/client.js', import.meta.url), 'utf8')
   assert.match(wire, /from '\.\/envelope\.js'/, 'the transport must take the list from the shared module')
   assert.equal(/const ENVELOPE = \[/.test(wire), false, 'it must not keep its own copy of the list')
-  assert.equal(existsSync(new URL('../lib/model/service.js', import.meta.url)), false, 'and there is no second transport left to keep a private copy of anything')
+  assert.equal(existsSync(new URL('../core/model/service.js', import.meta.url)), false, 'and there is no second transport left to keep a private copy of anything')
 })
 
 test('a WIRE reply that carries `requested` puts it in the envelope -- the list can be right while nothing reaches it', async () => {
   // The finding was a read that was dead on ONE transport: the wire's private whitelist omitted `requested`, so
-  // `lib/observe.js` recorded `requested: null` beside a populated envelope. The tests above assert the list and
+  // `core/observe.js` recorded `requested: null` beside a populated envelope. The tests above assert the list and
   // the source; this drives a real reply through the wire client, which is what the list is for.
-  const { createModel } = await import('../lib/model/client.js')
+  const { createModel } = await import('../core/model/client.js')
   const model = createModel({
     baseUrl: 'http://127.0.0.1:1',
     fetch: async () => ({

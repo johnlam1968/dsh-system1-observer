@@ -9,7 +9,7 @@ let captured
 async function load() {
   if (captured !== undefined) return captured
   globalThis.window = { __ModuleLoader__: { load(spec) { captured = spec } } }
-  await import('../client.js')
+  await import('../dsh/client.js')
   delete globalThis.window
   return captured
 }
@@ -410,10 +410,10 @@ test('it registers all FIVE seats: the two config pages, the session menu, and t
     { ownerKey: 'sidebar.workspaces.session.menu.item', target: { name: 'sidebar.workspaces.session.menu.item', id: 'system1-observer:observe', order: 500 } },
     // THE CARD FOR OUR OWN TOOL. The seat is keyed by WIRE TOOL NAME and its key domain is open, so a name
     // this package registered is allowed -- and a mismatch is silent: the generic row renders and nothing
-    // says why. `system1_trace` is therefore spelled identically here and in `lib/tool.js`.
+    // says why. `system1_trace` is therefore spelled identically here and in `core/tool.js`.
     { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_trace' } },
     // AND THE EVALUATION CARD, for the whole-conversation tool. Same seat, same open key domain, same silence on a
-    // mismatch -- so the name is spelled identically here and in `lib/evaluate-tool.js`.
+    // mismatch -- so the name is spelled identically here and in `dsh/evaluate-tool.js`.
     { ownerKey: 'tool.call.toolview', target: { name: 'tool.call.toolview', key: 'system1_evaluate_session' } },
   ])
 })
@@ -433,9 +433,9 @@ test('the tool-name literals in the card match their modules, because a mismatch
   // The seat's key domain is open and "a typo never renders": the generic row appears and nothing says why. Both names
   // are therefore pinned to the modules that declare them.
   const { readFileSync } = await import('node:fs')
-  const { TRACE_TOOL_NAME } = await import('../lib/tool.js')
-  const { EVALUATE_TOOL_NAME } = await import('../lib/evaluate-tool.js')
-  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const { TRACE_TOOL_NAME } = await import('../core/tool.js')
+  const { EVALUATE_TOOL_NAME } = await import('../dsh/evaluate-tool.js')
+  const source = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
   assert.ok(source.includes("const TRACE_TOOL_NAME = '" + TRACE_TOOL_NAME + "'"), 'the trace tool name')
   assert.ok(source.includes("const EVALUATE_TOOL_NAME = '" + EVALUATE_TOOL_NAME + "'"), 'the evaluate tool name')
 })
@@ -662,8 +662,8 @@ test('the number field saves a number, not the string that was typed', async () 
 // field is added to `index.js` and not to `client.js`.
 test('EVERY volatile setting has a control, and the panels that group them all exist', async () => {
   const { readFileSync } = await import('node:fs')
-  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  const { Config } = await import('../index.js')
+  const source = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
+  const { Config } = await import('../dsh/index.js')
   // The settings the table drives, read from the table itself rather than restated here.
   const tableFields = [...source.matchAll(/field: '([a-zA-Z]+)'/g)].map((match) => match[1])
   assert.ok(tableFields.length >= 20, 'the table was found: ' + tableFields.length + ' entries')
@@ -694,7 +694,7 @@ test('the card\u2019s subject-kind choices ARE the adapter\u2019s map -- pinned,
   // a person a checkbox that maps to no event type -- a slice that judges less than the row asked for.
   const { readFileSync } = await import('node:fs')
   const { SUBJECT_KINDS } = await import('dsh-session-adapter/reader')
-  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
   const entry = /field: 'subjectKinds'[\s\S]{0,220}?choices: \[([^\]]*)\]/.exec(source)
   assert.ok(entry, 'the subjectKinds entry must name its choices')
   const choices = entry[1].split(',').map((part) => part.trim().replace(/^'|'$/g, '')).filter((part) => part !== '')
@@ -711,8 +711,8 @@ test('EVERY card fallback equals the SCHEMA default -- one home per number, chec
   const { readFileSync } = await import('node:fs')
   // THE SCHEMA, IMPORTED HERE: this file deliberately does not import the plugin at the top, because the card is a
   // browser half and the test drives it through a stubbed module table. `Config` comes in where it is used.
-  const { Config } = await import('../index.js')
-  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const { Config } = await import('../dsh/index.js')
+  const source = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
   // ENTRIES ARE SPLIT ON THE TABLE'S OWN DELIMITER, not matched with a regex that spans them: a `[\s\S]{0,300}?`
   // pattern reached into the NEXT entry and reported `model` (a text field with no fallback) as a mismatch.
   const chunks = source.split("{ panel: '").slice(1)

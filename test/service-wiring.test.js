@@ -7,9 +7,9 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 import { Context } from '@deepseek-ai/cordis'
-import { OBSERVER_SERVICE } from '../lib/service.js'
+import { OBSERVER_SERVICE } from '../core/service.js'
 
 const accessor = (value) => ({ get: () => value })
 

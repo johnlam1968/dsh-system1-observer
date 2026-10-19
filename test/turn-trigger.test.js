@@ -6,9 +6,9 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { shouldFire, turnQuestions } from '../lib/turn-trigger.js'
-import { PROBE_QUESTION } from '../lib/seams.js'
-import { ABSTAIN_LABEL } from '../lib/probe-score.js'
+import { shouldFire, turnQuestions } from '../core/turn-trigger.js'
+import { PROBE_QUESTION } from '../core/seams.js'
+import { ABSTAIN_LABEL } from '../core/probe-score.js'
 
 /** A criteria directory with the compositions these tests select, written here so no shipped corpus is edited. */
 function setsDir() {
@@ -104,7 +104,7 @@ test('a set that declares NO turn scope is refused BY NAME, not as "nothing conf
   assert.doesNotMatch(broken.reason, /no question set is configured under/)
 })
 
-// THE OTHER HALF OF REGISTER ROW O17. A probe row at `turn` is `correct: false` ALWAYS (`lib/probe-score.js`:
+// THE OTHER HALF OF REGISTER ROW O17. A probe row at `turn` is `correct: false` ALWAYS (`core/probe-score.js`:
 // `expected` is `LABEL_OF_SEAM[hook]`, and there is no seam called `turn`), so the scorer no longer scores one. That
 // makes a hand-written probe in the `turn` scope UNSCORED -- and unscored by silence is what this repository refuses.
 // It is refused by name instead.

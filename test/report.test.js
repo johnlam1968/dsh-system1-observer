@@ -10,9 +10,9 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from 'node:os'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../lib/report.js'
-import { createResultsTool, summarise } from '../lib/results-tool.js'
-import { packageVersion } from '../index.js'
+import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../core/report.js'
+import { createResultsTool, summarise } from '../core/results-tool.js'
+import { packageVersion } from '../dsh/index.js'
 
 const line = (over = {}) => ({ event: 'call', hook: 'draft', run: 'r1', at: 'T', questionIds: ['q'], answers: { q: { type: 'noul', probability: 0.8 } }, ...over })
 const LINES = [line(), line({ at: 'T2' }), { event: 'skip', hook: 'draft', run: 'r1', reason: 'session not observed' }]

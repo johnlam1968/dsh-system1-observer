@@ -2,7 +2,7 @@
 // flatter a question instead of measuring it. Each refusal below is one of those ways.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { batteryHash, checkBattery, coveredQuestions, isCorrect, MIN_CASES, parseBattery, scoreBattery } from '../lib/battery.js'
+import { batteryHash, checkBattery, coveredQuestions, isCorrect, MIN_CASES, parseBattery, scoreBattery } from '../core/battery.js'
 
 const cases = (n) => Array.from({ length: n }, (_, i) => ({ id: 'c' + i, state: 'state ' + i, expected: { q: true } }))
 const batteryOf = (n) => parseBattery(JSON.stringify({ cases: cases(n) })).battery

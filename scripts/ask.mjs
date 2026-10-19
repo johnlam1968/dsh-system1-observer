@@ -10,8 +10,8 @@
 //   node scripts/ask.mjs --set news-claim-check@2 --scope admit --state '...' --json
 //
 // WHY THIS EXISTS. The instrument -- composing questions, reading a set, calling the model -- reaches a decision
-// service over HTTP and needs nothing else. That was measured rather than argued: `lib/model/wire.js` is `fetch` and
-// a key, `lib/question-lint.js` and the question builders import nothing outside `node:*`, and
+// service over HTTP and needs nothing else. That was measured rather than argued: `core/model/wire.js` is `fetch` and
+// a key, `core/question-lint.js` and the question builders import nothing outside `node:*`, and
 // `test/instrument-boundary.test.js` now asserts the instrument has NO host edge. So this script runs in a directory
 // with no `node_modules` at all, and the same script works inside dsh as `system1_decide`.
 //
@@ -27,13 +27,13 @@
 // THE KEY IS READ FROM THE ENVIRONMENT and named by `--key-env`, never taken as an argument: a key on a command line
 // is a key in the shell history, in the process table, and in every `ps` on the host.
 import { readFileSync } from 'node:fs'
-import { validateSpecs } from '../lib/questions.js'
+import { validateSpecs } from '../core/questions.js'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // THE THREE OPERATIONS, from the one module every surface uses. `scripts/ask.mjs` has no question code of its own:
 // what it adds is a STATE (a file, a URL, stdin), a credential, and a place to print -- and none of that is a rule
 // about questions, so none of it is written here.
-import { composeQuestions, listQuestionSets, askQuestions, wireTransport, writeQuestionSet, renderAnswerLines } from '../lib/system1.js'
+import { composeQuestions, listQuestionSets, askQuestions, wireTransport, writeQuestionSet, renderAnswerLines } from '../core/system1.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')

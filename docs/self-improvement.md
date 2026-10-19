@@ -58,7 +58,7 @@ external truth left to disagree with. The ledger helps, because `ledger_open` re
 way back. But a ledger is a discipline, and disciplines do not survive incentives.
 
 **The only anchor is a signal that arrives from outside the model, after the fact** — and this repository already
-has the right one. `lib/nudge-label.js` is explicit about why: it is *"the one question every other question depends
+has the right one. `core/nudge-label.js` is explicit about why: it is *"the one question every other question depends
 on the judge being right about its own call, except this one, because the operator's next message is in the record."*
 It is also three-valued by design, because `false` on an open turn is *"the flattering reading"*.
 

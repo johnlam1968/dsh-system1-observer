@@ -10,7 +10,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareDeploy, readDeploy } from '../lib/deploy-drift.js'
+import { compareDeploy, readDeploy } from '../core/deploy-drift.js'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const profile = process.env.DSH_PROFILE ?? 'docdrift'

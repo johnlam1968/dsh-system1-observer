@@ -2,8 +2,8 @@
 // fresh object containing one knob would persist a row that lost every other setting -- silently, with no error.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createConfigWriter, entryIdOf } from '../lib/config-writer.js'
-import { createConfigTool } from '../lib/config-tool.js'
+import { createConfigWriter, entryIdOf } from '../core/config-writer.js'
+import { createConfigTool } from '../core/config-tool.js'
 
 /** A configEditor that holds one row's config and answers the way the service does. */
 function editor({ rows = [{ id: 'system1-observer' }], config = { hooks: ['admit'], provider: 'typesafe' }, fail = null } = {}) {

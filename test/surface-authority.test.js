@@ -1,6 +1,6 @@
 // THE SURFACE AUTHORITY, AND THE WIRING THAT USES IT.
 //
-// `lib/host/surface.js` folds `surfaceOp: replace` spans out of the events in hand and nominates itself for deletion
+// `core/host/surface.js` folds `surfaceOp: replace` spans out of the events in hand and nominates itself for deletion
 // "when the plugin is wired to" the host's own answer. Two things had to be measured before that could be believed:
 // the authority EXISTS (`sessionQuery.filterEvents(sessionId, [{kind:'surface', values:['current']}])`, verified in the
 // producer, where `SessionEventSurface = 'current' | 'shadowed' | 'log-only'`), and it is ASYNC and OPTIONAL -- so the
@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { apply } from '../dsh/index.js'
 import { currentSurfaceSeqs } from 'dsh-session-adapter/surface-authority'
 
 const FILTER = [{ kind: 'surface', values: ['current'] }]

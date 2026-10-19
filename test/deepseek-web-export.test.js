@@ -1,6 +1,6 @@
 // THE CONVERSION RULES, TESTED WITHOUT A HARNESS, A MODEL OR SOMEBODY'S PRIVATE CHAT.
 //
-// Every assertion here corresponds to a rule that was measured rather than guessed (`lib/deepseek-web-export.js`
+// Every assertion here corresponds to a rule that was measured rather than guessed (`dsh/deepseek-web-export.js`
 // records where each came from). The fixtures are synthetic: the export this was built from is the operator's own
 // conversation archive, and a test that needed it would be a test nobody else could run.
 import { test } from 'node:test'
@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { branchPoints, eventsOf, exchangesOf, linearize, loadExport, readNode, sideOf, slugify } from '../lib/deepseek-web-export.js'
+import { branchPoints, eventsOf, exchangesOf, linearize, loadExport, readNode, sideOf, slugify } from '../dsh/deepseek-web-export.js'
 
 /** A node in the export's `mapping` shape. */
 const node = (id, parent, children, fragments, extra = {}) => [id, {

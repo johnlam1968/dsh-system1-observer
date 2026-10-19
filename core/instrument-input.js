@@ -25,7 +25,7 @@
 import { isRecord } from './is-record.js'
 import { labelHash } from './label-hash.js'
 import { seamCallsEnabled } from './seams.js'
-import { hostPoint } from './host-events.js'
+import { hostPoint } from '../dsh/host-events.js'
 import { sessionObserved } from './sessions.js'
 
 /** The question group: what `lib/questions.js` asks, with the set location beside it. */

@@ -13,14 +13,14 @@
 // EVERY COLLABORATOR IS INJECTED, which is what makes it testable without a harness and what keeps the row's settings
 // out of this file: `settings`, `stored`, `liveEvents`, `compose`, `questions`, `decide`, `record`.
 import { createHash } from 'node:crypto'
-import { checkAgainst } from './tool-args.js'
-import { isRecord } from './is-record.js'
-import { resultEnvelope } from './model/result-envelope.js'
-import { scoreScales } from './system1.js'
+import { checkAgainst } from '../core/tool-args.js'
+import { isRecord } from '../core/is-record.js'
+import { resultEnvelope } from '../core/model/result-envelope.js'
+import { scoreScales } from '../core/system1.js'
 import { describeToolCut } from './tool-blocks.js'
 import { aggregateReadings, firstAndLast, segmentsOf, DEFAULT_SEGMENT_CHARS } from './segment.js'
-import { CONTEXT, stateBudgetChars, withinStateBudget } from './model/limits.js'
-import { round } from './report.js'
+import { CONTEXT, stateBudgetChars, withinStateBudget } from '../core/model/limits.js'
+import { round } from '../core/report.js'
 import { applyGroups, selectionNote } from './exchange.js'
 import { textOfEvent } from 'dsh-session-adapter/session-format'
 

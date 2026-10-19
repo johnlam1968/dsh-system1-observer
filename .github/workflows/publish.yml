@@ -12,7 +12,7 @@
 #      that does not gate the publish; here a red suite stops the release.
 #   3. `--tag beta`: these are prereleases, so `npm i dsh-system1-observer` must not pick them up. `publishConfig`
 #      in each manifest says the same thing; the flag is explicit so the intent survives a manifest edit.
-#   4. Two packages from one repository: `packages/session-adapter` is a workspace, published before the plugin that
+#   4. Two packages from one repository: `dsh/session-adapter` is a workspace, published before the plugin that
 #      depends on it.
 name: Publish to npm
 
@@ -47,7 +47,7 @@ jobs:
       - name: Print the versions being published
         run: |
           echo "Publishing the workspace packages at their current versions:"
-          for pkg in packages/session-adapter .; do
+          for pkg in dsh/session-adapter .; do
             name=$(node -p "require('./${pkg}/package.json').name")
             ver=$(node -p "require('./${pkg}/package.json').version")
             echo "  ${name}@${ver}"
@@ -56,7 +56,7 @@ jobs:
       - name: Validate every package.json has a valid semver version
         run: |
           failed=0
-          for pkg in packages/session-adapter .; do
+          for pkg in dsh/session-adapter .; do
             name=$(node -p "require('./${pkg}/package.json').name")
             ver=$(node -p "require('./${pkg}/package.json').version")
             if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
@@ -89,7 +89,7 @@ jobs:
 
       - name: "Publish dsh-session-adapter (the anchor the observer depends on)"
         run: |
-          cd packages/session-adapter
+          cd dsh/session-adapter
           ver=$(node -p "require('./package.json').version")
           if npm view "dsh-session-adapter@${ver}" version >/dev/null 2>&1; then
             echo "::notice::dsh-session-adapter@${ver} already on npm, skipping"
@@ -120,7 +120,7 @@ jobs:
       - name: Every version published must be INSTALLABLE, because a staged publish is not a release
         run: |
           failed=0
-          for pkg_dir in packages/session-adapter .; do
+          for pkg_dir in dsh/session-adapter .; do
             name=$(node -p "require('./${pkg_dir}/package.json').name")
             ver=$(node -p "require('./${pkg_dir}/package.json').version")
             # RETRY FOR MINUTES, NOT SECONDS, and the reason is measured: npm prints the SAME two lines whether it

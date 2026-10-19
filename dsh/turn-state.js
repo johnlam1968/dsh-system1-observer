@@ -1,4 +1,4 @@
-import { cutHeadTail } from './redact.js'
+import { cutHeadTail } from '../core/redact.js'
 import { surfaceEvents } from 'dsh-session-adapter/surface'
 // `X`, THE TARGET THE TURN TRIGGER ASKS ABOUT.
 //

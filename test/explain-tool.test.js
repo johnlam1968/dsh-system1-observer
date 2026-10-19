@@ -1,8 +1,8 @@
 // THE EXPLANATION MUST EQUAL THE RUNTIME, NOT DESCRIBE IT.
 //
-// `lib/explain-tool.js` exists because an agent on a task reads its tool list and not the README. That makes it a
+// `core/explain-tool.js` exists because an agent on a task reads its tool list and not the README. That makes it a
 // SECOND place where this plugin's facts are written down -- and this repository has paid twice for a second copy that
-// drifted (a README row naming a seam-to-event map `lib/seams.js` no longer had; a comment promising a probe fallback
+// drifted (a README row naming a seam-to-event map `core/seams.js` no longer had; a comment promising a probe fallback
 // the code never had, `F123`). So the tool DERIVES what can be read: the writable/mount-bound split comes from the
 // schema's own `volatile` metadata, the live values from the config it is handed, the sets from the directory.
 //
@@ -11,8 +11,8 @@
 // this fails rather than the reader being misled.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import plugin from '../index.js'
-import { EXPLAIN_TOOL_NAME, TOOL_SUMMARIES, createExplainTool, explainFacts } from '../lib/explain-tool.js'
+import plugin from '../dsh/index.js'
+import { EXPLAIN_TOOL_NAME, TOOL_SUMMARIES, createExplainTool, explainFacts } from '../core/explain-tool.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const dict = plugin.Config.dict
