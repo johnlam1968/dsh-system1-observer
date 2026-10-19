@@ -25,15 +25,24 @@ The store's `source_sha256` was the first **16** hex characters of a digest, so 
 of **every** session in the index and the reader could not repair it. The store writes the whole digest now
 (**`F174`**), and the live index has been rebuilt to `SCHEMA_VERSION` 5.
 
-**What is still open is a restart**, not code: see §5.
+**The standalone's two routes disagreed about where the instrument posts.** The `--state` route named an endpoint and
+the `session` route named none, so the wire built its URL from `undefined` and every question came back
+`Failed to parse URL from undefined/v1/systemone` — which reads as *the model declined*, not as *you named no
+endpoint*. The run then wrote a package anyway, whose `readings.json` said `n: 0` and `failed: 1` for every
+question. The endpoint is now bound in **one** place (`core/system1.js`'s `wireTransport`, over a default declared
+beside the row's own in `core/model/wire.js`), the script builds its transport in **one** place, and a measurement
+with no reading is **refused** instead of written. Recorded as **`F176`**.
+
+**The `web` profile has been restarted** (new process, new token) and the store's fix is live there. The `docdrift`
+profile is still down and needs the same restart before its row serves the rebuilt index — see §5.
 
 ## 1. State
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**; **900 tests**, 893 pass, 0 fail, 7 skipped; **three commits AHEAD of the pushed branch** |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`f89f075`**, one commit ahead of the pushed branch; 42 tests; **`SCHEMA_VERSION` 5** |
-| coverage | **97.56 / 82.23 / 91.81** against a 90 / 75 / 75 gate |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`1f9adb5`); **906 tests**, 899 pass, 0 fail, 7 skipped |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`f89f075`**, **pushed**; 42 tests; **`SCHEMA_VERSION` 5** |
+| coverage | **97.55 / 82.41 / 91.81** against a 90 / 75 / 75 gate |
 | gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
 
@@ -94,6 +103,10 @@ looked like a measurement that was complete** — `n: 0` and `failed: 1` for eve
 endpoint**: no model, no harness, no money, and it is proven to have teeth (with the source fixes stashed it goes
 red). If you change anything on this path, that test is the one that will tell you.
 
+**THE ROUTE REACHES AN ENDPOINT BY ITSELF.** `--wire-url` is optional: the endpoint is resolved in one place, and the
+route prints the endpoint it used. An endpoint that cannot be reached is **refused by name**, and **no package is
+written** — a package of failures is not a measurement (**`F176`**).
+
 `trace.jsonl` is written **empty** by the script route — no harness, no trace — and the manifest says so. `report.md`
 is the **skeleton**, numbers filled and the reading column blank, because prose cannot be derived from numbers.
 
@@ -116,6 +129,10 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   cannot resolve its own vocabulary.
 * **Leading narration joins the FIRST ask-group**, because a boundary with no ask in it is a group that "what did the
   operator ask here" returns empty for.
+* **A missing configuration value that reads as a model verdict is worse than a crash.** The session route passed no
+  endpoint, the wire built `undefined/v1/systemone`, and the answer came back as a per-question refusal — so a
+  measurement that never reached the model looked like one the model declined, and it was written to a package. Name
+  the fault, refuse before spending anything, and let a run that measured nothing say so.
 * **A fixture that omits a field the harness requires agrees with an implementation that ignores it.** Every
   `user/message` fixture in this suite omitted `data.source.kind`, and the producer never read it — so the two were
   wrong in the same shape, and **32 tests went red** when the field was finally honoured. The harness REQUIRES a
@@ -130,11 +147,12 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   `dsh-speech-funasr-http`, `system1-bridge` recorded-only). **Against `docdrift`, which the repository specifies, it
   is green** — so run `DSH_PROFILE=docdrift npm run check:deploy`, and note that `DSH_PROFILE` is set to `web` in
   some shells, which is how this gets misread.
-* **The docdrift profile is edited but not restarted.** The `dsh-session-adapter` row was removed from its manifest,
-  lockfile and `node_modules`; the change takes effect on the next harness restart. **The restart is now also what
-  makes the store's fix live**: the running process loaded the store's code before it, so a `session_index_refresh`
-  would rewrite the index at `SCHEMA_VERSION` 4 with the truncated digest and undo the rebuild. The index on disk is
-  correct; the PROCESS is behind it.
+* **The `web` profile has been restarted; the `docdrift` profile has not.** The `dsh-web.service` (profile `web`,
+  port 3080) was restarted, so the **store's fix is live there** and a `session_index_refresh` cannot rewrite the
+  index at `SCHEMA_VERSION` 4 with the truncated digest. The `dsh@docdrift.service` unit (port 3090) is **dead**, and
+  the `dsh-session-adapter` row was removed from its manifest, lockfile and `node_modules` — that change takes effect
+  on the next harness restart. The index on disk is correct; a `docdrift` PROCESS that was started before the store
+  fix is behind it. **Start it before you trust a docdrift row's session tools.**
 * **`ask.mjs session --from-sqlite` used to refuse an index built before `exchange` existed, and said so. Rebuild it
   — and know that a rebuild alone was not enough.** The digest was truncated too (**`F174`**), and the producer and
   the store disagreed about who spoke (**`F173`**). All three are fixed and the index is rebuilt.
