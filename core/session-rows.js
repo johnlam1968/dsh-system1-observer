@@ -91,7 +91,11 @@ export function validateRows(rows) {
         }
         // RULE 1. The exchange is what makes a per-exchange query mean anything, and a native `turn` is refused rather
         // than ignored: a producer that reaches for one is the dsh-shaped producer this contract exists to catch.
-        if (!('exchange' in row)) problems.push(`${at}: no exchange -- a boundary is derived from the asks, and this harness may have no turn`)
+        // EVERY ROW BELONGS TO A GROUP, so a null exchange is a defect rather than an absence. It is also what a reader
+        // produces when the source could not supply one -- an index built before `exchange` existed, say -- and the
+        // difference between "this row has no group" and "nobody could tell me the group" is one a reader cannot see.
+        // Reporting it here is what stops that from becoming a silent null in a measurement.
+        if (row.exchange === null || row.exchange === undefined) problems.push(`${at}: no exchange -- every row belongs to an ask-group, and a null one means the producer could not supply it`)
         if ('turn' in row) problems.push(`${at}: carries a native \`turn\`; the boundary is the ask-group (\`exchange\`), because a harness with no turn would otherwise read as a dsh-only session`)
         if (row.kind !== 'message') return
         if (!MESSAGE_ROLES.includes(row.role)) problems.push(`${at}: role ${JSON.stringify(row.role)} is not one of ${MESSAGE_ROLES.join(', ')}`)

@@ -84,6 +84,12 @@ and this map stay, because the filesystem journal is not session-shaped.
   call, and combine the answers in code. `system1_evaluate_session` delegates here and a standalone script will too,
   because a measurement is only comparable with a measurement and the part that would be wrong to have twice is the
   judging. No `ctx`, no schema, no render: those belong to whichever surface is asking
+* `rows-sqlite.js` — **THE SAME ROWS, READ OUT OF AN INDEX**: finding a session and measuring it are different
+  problems with different costs, and this answers "which sessions" where walking a directory of logs does not. Written
+  against column NAMES, and it asks the index what it HAS rather than assuming — an index built before `exchange`
+  existed reads as rows with no ask-group, which the contract refuses, instead of raising `no such column` and taking
+  the route down with it. A tool call gets its group derived from the last message at or before it, because the index
+  stores none
 * `session-rows.js` — **THE NORMALIZED SESSION**, one shape for every harness: a receipt, messages, tool calls,
   facts. The unit is the ask-group (`exchange`), never a native `turn`, because pi has no turn at all and a
   per-turn query would silently become a dsh-only one while looking cross-harness (`F110`'s lesson, one level down).

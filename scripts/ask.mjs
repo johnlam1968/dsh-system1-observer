@@ -59,6 +59,11 @@ const flags = (name) => argv.reduce((all, value, index) => (value === name ? [..
 const USAGE = `ask.mjs -- a question set and a state, answered by a System One model, with no harness
 
   session                    MEASURE a normalized session (see below); the other routes just ask about a state
+
+    --from-sqlite DB           read the session out of an index instead of a file
+    --session-id ID            which session, when reading from an index
+    --package                  write a shareable package in the same call
+    --dir D                    where packages go (default: ~/.dsh/measurements)
   measurements               SHARE a measurement: package | interpret | skeleton | list
 
     --file PATH                the session rows, JSONL -- receipt + messages + tool calls
@@ -191,11 +196,32 @@ if (argv[0] === 'session') {
     const { judgeSegments, segmentBudgetFor, measurementSummary } = await import('../dsh/measure.js')
     const { composeQuestions, askQuestions, wireTransport, validateSpecs, renderAnswerLines } = await import('../core/system1.js')
 
-    const source = flag('--file') ?? flag('--from-sqlite')
-    if (source === null) die('`session` needs --file <rows.jsonl> (or --from-sqlite <db>)')
-    const rowsText = readFileSync(resolve(source), 'utf8')
-    const parsed = readRowsJsonl(rowsText)
-
+    // WHERE THE ROWS COME FROM, and the two routes answer different questions. `--file` reads a session somebody already
+    // normalized; `--from-sqlite` reads one out of an INDEX, which is how you find one among hundreds without walking
+    // every log. The SQLite reader is reached by a DYNAMIC import for the same reason the chain is: `node:sqlite`
+    // prints an ExperimentalWarning on load, and the routes that touch no database should not pay for that.
+    const parsed = await (async () => {
+        const fromIndex = flag('--from-sqlite')
+        if (fromIndex !== null) {
+            const wanted = flag('--session-id')
+            if (wanted === null) die('`--from-sqlite` needs --session-id <id>: an index holds many sessions')
+            return import('../core/rows-sqlite.js')
+                .then(({ rowsFromSqlite }) => {
+                    const found = rowsFromSqlite(resolve(fromIndex), wanted)
+                    if (found.problem !== null) die(found.problem)
+                    // AND IT SAYS WHAT IT COULD NOT SUPPLY. An index built before `exchange` existed reads as rows
+                    // with no ask-group, which the contract refuses a moment later -- and the receipt names the
+                    // version gap here rather than leaving a reader to work out why the rows are unusable.
+                    if (found.receipt.missing.length > 0) {
+                        process.stderr.write(`ask.mjs: this index could not supply ${found.receipt.missing.join(', ')} -- rebuild it\n`)
+                    }
+                    return { rows: found.rows, malformed: [] }
+                })
+        }
+        const source = flag('--file')
+        if (source === null) die('`session` needs --file <rows.jsonl> or --from-sqlite <db> --session-id <id>')
+        return readRowsJsonl(readFileSync(resolve(source), 'utf8'))
+    })()
     // RULE 3, AT THE POINT IT COSTS SOMETHING. A malformed line is reported and the run STOPS: measuring a shorter
     // conversation than the file holds would answer every question correctly and about the wrong session, which is
     // the one failure no later check can catch.
