@@ -21,6 +21,32 @@ Step 2 is the whole mechanical workflow in one call: it reads the session, segme
 question set of every segment, aggregates in code, and writes a measurement report package. Step 3 is yours, and it
 cannot be done for you — see below.
 
+## The same three calls, with no harness running
+
+Every step has a script route, and the script judges with **the same chain** — `dsh/measure.js` — so a measurement taken
+this way is comparable with one taken through the tool. That is the only reason both exist.
+
+```
+1. FIND      node scripts/ask.mjs measurements list                  # or: session_index_search, inside dsh
+2. MEASURE   node scripts/ask.mjs session --log <dsh.jsonl> --set agent-helpfulness-session@1 --package
+   ...or     node scripts/ask.mjs session --from-sqlite <index.db> --session-id <id> --set … --package
+3. INTERPRET node scripts/ask.mjs measurements interpret --package <id> --text '<your reading>' --by '<you>'
+```
+
+**`--log` takes any dsh session log**, which is where every importer lands: `import-pi-sessions`,
+`import-deepseek-web`, and `zeroclaw-to-interchange` (via `dsh-chat-import`) all end there, so a conversation you
+sourced by any route is measurable with no step in between. `--from-sqlite` reads straight out of the index when you
+are choosing among hundreds. `--describe` says what a session holds and asks nothing, which is the cheap way to check
+your rows before spending a call.
+
+`trace.jsonl` is written **empty** by the script route, and that is recorded rather than hidden: the measurement went
+straight to the model, so there was no harness and no trace to slice. `readings.json` carries the numbers either way.
+`report.md` is the **skeleton**, with every number filled and the reading column blank — prose is never derived, so a
+script that wrote prose there would be inventing a judgement.
+
+**An index built before the `exchange` column exists cannot supply the ask-groups**, and the script says so and stops
+rather than measuring a conversation it cannot group. Rebuild the index.
+
 ## Why step 3 is a separate call, and why that is the point
 
 Prose cannot be derived from numbers. Step 2 produces readings; a READING of them is somebody's judgement, so it is
