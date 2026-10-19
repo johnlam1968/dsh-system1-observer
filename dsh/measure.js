@@ -116,6 +116,10 @@ export async function judgeSegments({
         rows.push({
             index: part.index, from: part.from, to: part.to, messages: part.messages,
             chars: text.length, stateHash, truncated: piece.truncated === true,
+            // WHICH BACKEND ANSWERED, per segment. A reading that does not say who produced it cannot be compared with
+            // a reading from another model, and the whole reason a package records a mount is that the numbers and the
+            // model that made them travel together.
+            ...(reply.executed === undefined ? {} : { executed: reply.executed }),
             // A SEGMENT OVER THE ESTIMATED BUDGET IS REPORTED, NOT HIDDEN: it is the one reading most likely to be
             // about nothing, and it is here because a single message can exceed the budget on its own.
             ...(budget.ok === false ? { overBudget: budget.problem } : {}),
@@ -171,4 +175,35 @@ export async function judgeOnce({ events, questions, compose, decide, sessionId 
     const answers = isRecord(reply.answers) ? reply.answers : {}
     if (typeof onLine === 'function') onLine({ stateHash, answers })
     return { state, stateHash, answers, reply, composed }
+}
+
+/**
+ * A measurement, in the shape a PACKAGE EXPECTS.
+ *
+ * It is built here rather than in the script that writes the package, because the shape is a fact about a measurement
+ * and not about a command line -- and because a shape only a caller can reach is a shape no test can check. The tool
+ * builds an equivalent over a trace WINDOW; this one is over a subject that was read from a file, and the difference is
+ * recorded rather than disguised: `window.run` is `null` and the manifest's trace slice is empty, because there was no
+ * harness and so no trace.
+ *
+ * @param {object} input
+ * @returns {object} the summary a package's `readings.json` holds
+ */
+export function measurementSummary({ receipt, session, judged, set = null, at = null }) {
+    const answered = (judged?.rows ?? []).filter((row) => row.failure === undefined)
+    const firstExecuted = answered.find((row) => row.executed !== undefined)?.executed ?? null
+    return {
+        window: { run: null, hook: 'session-review', question: set, groupBy: 'session', tail: at },
+        counts: { call: judged?.rows?.length ?? 0, skip: (judged?.rows?.length ?? 0) - answered.length, mount: 1, total: judged?.rows?.length ?? 0 },
+        mount: { model: firstExecuted?.model ?? null, provider: firstExecuted?.provider ?? null, probeHash: null },
+        groups: [{ questions: Object.entries(judged?.aggregate ?? {}).map(([id, entry]) => ({ id, ...entry })) }],
+        // A REFUSAL IS CARRIED INTO THE PACKAGE. A segment that could not be judged is written as a sentence a reader
+        // will see, because a package whose `n` quietly shrank reads as a smaller measurement rather than a partial one.
+        refusals: (judged?.rows ?? []).filter((row) => row.failure !== undefined).map((row) => `segment ${row.index}: ${row.failure.reason}`),
+        subject: {
+            harness: receipt?.harness ?? null, id: receipt?.id ?? null,
+            sourceSha256: receipt?.sourceSha256 ?? null, highWater: receipt?.highWater ?? null,
+            messages: session?.messages ?? null, exchanges: session?.exchanges ?? null,
+        },
+    }
 }

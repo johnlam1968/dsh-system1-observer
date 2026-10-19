@@ -27,6 +27,7 @@
 // THE KEY IS READ FROM THE ENVIRONMENT and named by `--key-env`, never taken as an argument: a key on a command line
 // is a key in the shell history, in the process table, and in every `ps` on the host.
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { validateSpecs } from '../core/questions.js'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,6 +59,7 @@ const flags = (name) => argv.reduce((all, value, index) => (value === name ? [..
 const USAGE = `ask.mjs -- a question set and a state, answered by a System One model, with no harness
 
   session                    MEASURE a normalized session (see below); the other routes just ask about a state
+  measurements               SHARE a measurement: package | interpret | skeleton | list
 
     --file PATH                the session rows, JSONL -- receipt + messages + tool calls
     --describe                 what the session holds, and ask nothing
@@ -119,6 +121,56 @@ async function readState() {
   return null
 }
 
+
+// ── SHARING: package a measurement, and attach an interpretation to it ──────────────────────────────────────────────
+//
+// THE WHOLE REASON `core/report.js` IS HARNESS-FREE. Before this, `action: 'package'` and `action: 'interpret'` were
+// reachable only from inside a running dsh process, through `system1_measurements` -- so a measurement taken with a
+// script could not be SHARED in the one format a reader is meant to re-derive. These two routes are the same two calls,
+// with the same package format, the same manifest hashes and the same anchoring: `interpretation.md` records the
+// sha256 of the exact `readings.json` it was written against, so if the readings are ever regenerated differently the
+// interpretation is visibly ORPHANED rather than quietly wrong.
+//
+// `trace.jsonl` IS WRITTEN EMPTY HERE, and that is not a gap. A measurement taken by this script went straight to the
+// model: there was no harness, so there is no trace to slice. The manifest says so rather than implying one exists.
+if (argv[0] === 'measurements') {
+    const { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, packageId, writePackage } = await import('../core/report.js')
+    const action = argv[1] ?? 'help'
+    const where = flag('--dir') ?? defaultPackageDir()
+    if (action === 'interpret') {
+        const asked = flag('--package')
+        if (asked === null) die('`measurements interpret` needs --package <dir> (a path, or an id under --dir)')
+        const text = flag('--text') ?? (flag('--text-file') === null ? null : readFileSync(resolve(flag('--text-file')), 'utf8'))
+        if (text === null) die('an interpretation needs --text <text> or --text-file <path> ("-" reads stdin)')
+        const target = asked.includes('/') ? asked : join(where, asked)
+        const attached = attachInterpretation(target, { text, by: flag('--by') ?? 'unknown', at: flag('--at') })
+        if (attached.problem !== null) die(attached.problem)
+        process.stdout.write(`interpretation attached to ${attached.file}\n  anchored to readings.json sha256 ${String(attached.anchor).slice(0, 16)}\n`)
+        process.exit(0)
+    }
+    if (action === 'skeleton') {
+        // THE FORMAT, NOT THE PROSE. Prose cannot be derived from numbers, so this route prints the report shape with
+        // every number filled and the READING column left blank -- a report that cannot mistype a median, and cannot
+        // pretend to contain a judgement nobody made.
+        const summary = JSON.parse(readFileSync(resolve(flag('--summary') ?? die('`measurements skeleton` needs --summary <file.json>')), 'utf8'))
+        process.stdout.write(buildSkeleton({ summary, tables: flag('--tables') === null ? [] : JSON.parse(flag('--tables')), at: flag('--at') }))
+        process.exit(0)
+    }
+    if (action === 'list') {
+        const { readdirSync } = await import('node:fs')
+        let names = []
+        try { names = readdirSync(where, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) } catch { names = [] }
+        if (names.length === 0) { process.stdout.write(`no packages under ${where}\n`); process.exit(0) }
+        for (const name of names.sort()) {
+            let interpreted = 'no'
+            try { readFileSync(join(where, name, 'interpretation.md'), 'utf8'); interpreted = 'yes' } catch { interpreted = 'no' }
+            process.stdout.write(`  ${name}  interpretation: ${interpreted}\n`)
+        }
+        process.exit(0)
+    }
+    die(`measurements: unknown action ${JSON.stringify(action)}; expected package | interpret | skeleton | list`)
+}
+
 if (has('--help') || has('-h')) { process.stdout.write(USAGE); process.exit(0) }
 
 // ── THE SUBCOMMANDS ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -136,7 +188,7 @@ if (argv[0] === 'session') {
     const { readRowsJsonl, validateRows, rowsSummary, receiptOf, exchangesOfRows, segmentsOfRows } = await import('../core/session-rows.js')
     // The chain is the SAME one `system1_evaluate_session` judges with. A measurement is only comparable with a
     // measurement, so this does not re-implement judging; it supplies a row-native cut and a row-native composer.
-    const { judgeSegments, segmentBudgetFor } = await import('../dsh/measure.js')
+    const { judgeSegments, segmentBudgetFor, measurementSummary } = await import('../dsh/measure.js')
     const { composeQuestions, askQuestions, wireTransport, validateSpecs, renderAnswerLines } = await import('../core/system1.js')
 
     const source = flag('--file') ?? flag('--from-sqlite')
@@ -158,25 +210,25 @@ if (argv[0] === 'session') {
     }
 
     const receipt = receiptOf(parsed.rows)
-    const summary = rowsSummary(parsed.rows)
+    const sessionSummary = rowsSummary(parsed.rows)
     const exchanges = exchangesOfRows(parsed.rows)
     if (has('--describe')) {
         process.stdout.write(`${receipt.harness} session ${receipt.id}  sha256 ${String(receipt.sourceSha256).slice(0, 12)}\n`)
-        process.stdout.write(`${summary.messages} message(s), ${summary.toolCalls} tool call(s), ${exchanges.length} exchange(s)\n`)
-        process.stdout.write(`${summary.reasoningChars} reasoning char(s); ${summary.shadowed} shadowed, ${summary.shadowedChars} char(s) withdrawn by compaction\n`)
+        process.stdout.write(`${sessionSummary.messages} message(s), ${sessionSummary.toolCalls} tool call(s), ${exchanges.length} exchange(s)\n`)
+        process.stdout.write(`${sessionSummary.reasoningChars} reasoning char(s); ${sessionSummary.shadowed} shadowed, ${sessionSummary.shadowedChars} char(s) withdrawn by compaction\n`)
         for (const exchange of exchanges) {
             process.stdout.write(`  exchange ${exchange.exchange}: ${exchange.asks.length} ask(s), ${exchange.answers.length} answer(s), ${exchange.shadowed} shadowed\n`)
         }
         process.exit(0)
     }
 
-    const built = composeQuestions({ set: flag('--set'), scope: flag('--scope') ?? 'session', setsDir: () => SETS })
+    const built = composeQuestions({ set: flag('--set'), scope: flag('--scope') ?? 'session', question: flags('--question'), setsDir: () => SETS })
     if (!built.ok) die(built.reason)
     if (Array.isArray(built.problems) && built.problems.length > 0) die(built.problems[0])
 
     const segmentChars = Number.isInteger(flag('--segment-chars')) ? Number(flag('--segment-chars')) : 57600
     const { segmentChars: chosen, autoSegmented } = segmentBudgetFor({
-        windowChars: summary.visibleChars, askedChars: flag('--segment-chars'), stateBudgetChars: segmentChars, defaultSegmentChars: segmentChars,
+        windowChars: sessionSummary.visibleChars, askedChars: flag('--segment-chars'), stateBudgetChars: segmentChars, defaultSegmentChars: segmentChars,
     })
     const transport = wireTransport({ baseUrl: flag('--wire-url') ?? undefined, keyEnv: flag('--key-env') ?? undefined, timeoutMs: Number(flag('--timeout')) || undefined })
     const judge = askQuestions(transport)
@@ -194,17 +246,42 @@ if (argv[0] === 'session') {
         decide: (request) => judge(request),
     })
 
+    const summary = measurementSummary({
+        receipt, session: { ...sessionSummary, exchanges: exchanges.length },
+        judged: { rows: judged.rows, aggregate: judged.aggregate },
+        set: flag('--set') ?? null, at: new Date().toISOString(),
+    })
+
+    // `report.md` IS THE SKELETON, not prose. `buildSkeleton` fills every number and leaves the READING column blank on
+    // purpose: prose cannot be derived from numbers, so a script that wrote prose here would be inventing a judgement.
+    const tables = [{ title: flag('--set') ?? 'the inline questions', set: flag('--set'), setHash: built.hash ?? null, questions: Object.keys(judged.aggregate) }]
+    const at = new Date().toISOString()
+    const report = buildSkeleton({ summary, tables, at })
+
+    let written = null
+    if (has('--package')) {
+        const { buildPackage, defaultPackageDir, packageId, writePackage } = await import('../core/report.js')
+        const id = packageId({ at, run: null })
+        const pkg = buildPackage({ id, at, report, summary, lines: [], meta: { plugin: 'ask.mjs', version: null, dsh: null } })
+        const root = flag('--dir') ?? defaultPackageDir()
+        const done = writePackage(join(root, id), pkg)
+        if (done.problem !== null) die(done.problem)
+        written = { id, dir: done.dir, files: done.files }
+    }
+
     const rendered = renderAnswerLines(judged.aggregate, {})
     const out = {
+        ...(written === null ? {} : { package: written }),
         session: { harness: receipt.harness, id: receipt.id, sourceSha256: receipt.sourceSha256, highWater: receipt.highWater },
-        summary, autoSegmented, segmentChars: chosen,
+        session: sessionSummary, measurement: summary, autoSegmented, segmentChars: chosen,
         segments: judged.rows.map((row) => ({ index: row.index, messages: row.messages, chars: row.chars, stateHash: row.stateHash, ...(row.failure === undefined ? {} : { failure: row.failure }) })),
         answers: judged.aggregate,
     }
-    if (has('--json')) process.stdout.write(`${JSON.stringify(out, null, 2)}\n`)
+    if (has('--json')) process.stdout.write(`${JSON.stringify({ ...out, packageSummary: written === null ? null : summary }, null, 2)}\n`)
     else {
+        if (written !== null) process.stdout.write(`package: ${written.dir}  (${written.files.length} file(s))\n`)
         process.stdout.write(`${receipt.harness} session ${receipt.id} [${String(receipt.sourceSha256).slice(0, 12)}]\n`)
-        process.stdout.write(`${summary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n\n`)
+        process.stdout.write(`${sessionSummary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n\n`)
         process.stdout.write(rendered)
     }
     process.exit(0)
