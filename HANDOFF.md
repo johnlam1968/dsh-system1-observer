@@ -31,8 +31,8 @@ of **every** session in the index and the reader could not repair it. The store 
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed**; **900 tests**, 893 pass, 0 fail, 7 skipped |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`752a4bd`**, pushed; **42 tests**; **`SCHEMA_VERSION` 5** |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**; **900 tests**, 893 pass, 0 fail, 7 skipped; **three commits AHEAD of the pushed branch** |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`f89f075`**, one commit ahead of the pushed branch; 42 tests; **`SCHEMA_VERSION` 5** |
 | coverage | **97.56 / 82.23 / 91.81** against a 90 / 75 / 75 gate |
 | gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
