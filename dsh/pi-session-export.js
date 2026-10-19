@@ -53,7 +53,7 @@
 // `model_change` facts, and the per-message cost. Each is returned in `facts` and written to the import's
 // sidecar, because a loss nothing reports reads as a measurement that saw everything.
 
-import { EVENT, HUMAN_SOURCE_KIND } from 'dsh-session-adapter/session-format'
+import { EVENT, HUMAN_SOURCE_KIND } from './session-adapter/lib/session-format.js'
 
 /** pi's entry types, as this importer reads them. Anything else is counted, not dropped. */
 export const PI_ENTRY = Object.freeze({

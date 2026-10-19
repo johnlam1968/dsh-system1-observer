@@ -6,7 +6,7 @@
 // `scripts/**/*.mjs` (which shipped all five development gates until it was narrowed) cannot come back unnoticed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -57,14 +57,24 @@ test('and ships what a user needs to run it', () => {
   assert.ok([...paths].some((p) => p.startsWith('locale/')), 'no locale shipped')
 })
 
-// THE NESTED PACKAGE SHIPS AS A DEPENDENCY, NOT AS A COPY. `dsh/session-adapter/` has its own `package.json`, is
-// published separately as `dsh-session-adapter`, and is reached by NAME — so a copy of it inside this tarball would be
-// a second, unversioned, silently divergent one. Its presence here means `files` grew a `dsh/**` pattern, which is a
-// shape that cannot express the exclusion; its absence here is what says the exclusion is deliberate and still holds.
-test('the nested session-adapter is NOT vendored into this tarball', () => {
-  const vendored = packed().filter((p) => p.startsWith('dsh/session-adapter/'))
-  assert.deepEqual(vendored, [], `this package must depend on dsh-session-adapter, not carry it: ${vendored.join(', ')}`)
-  // AND IT IS A REAL DEPENDENCY, so the claim above is falsifiable from the manifest rather than from this file's intent.
+// THE SESSION ADAPTER SHIPS IN HERE, ALL FIVE MODULES, because it is no longer a separate package. It WAS one, and the
+// guard then said the opposite — that a copy inside this tarball would be a second, unversioned, silently divergent one.
+// That was true while the code imported it BY NAME. Now the code imports it by RELATIVE PATH, so there is no second
+// copy to diverge: these five files are the only ones, and the entry point that imports them is in the same tarball.
+// What replaces the old guard is the one that would have caught its demotion going wrong — a `dsh/*.js` pattern that
+// stops at the folder boundary and ships an entry point whose fifteen imports cannot resolve.
+test('the session adapter ships in here, and nothing resolves it by name any more', () => {
+  const paths = new Set(packed())
+  for (const module of ['session-format', 'surface', 'surface-authority', 'feed', 'reader']) {
+    assert.ok(paths.has(`dsh/session-adapter/lib/${module}.js`), `dsh/session-adapter/lib/${module}.js is missing from the package`)
+  }
+  // AND THE NAME IS GONE FROM BOTH SIDES OF THE BOUNDARY. A surviving `dependencies` entry would make npm install a
+  // published copy that nothing imports; a surviving specifier would make this package unresolvable at install time.
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-  assert.ok(manifest.dependencies['dsh-session-adapter'], 'the dependency is what makes the absence correct')
+  assert.equal(manifest.dependencies['dsh-session-adapter'], undefined, 'it is no longer a dependency')
+  assert.equal(manifest.workspaces, undefined, 'and no longer a workspace, so npm has nothing to link')
+  // SCOPED TO `.js`, and it has to be: the folder's own README quotes the specifier as an example of what it no
+  // longer is, and a check that flagged its own explanation would be a check that cannot be satisfied.
+  const named = spawnSync('grep', ['-rlE', "(from|import\\()\\s*['\"]dsh-session-adapter", '--include=*.js', '--include=*.mjs', 'dsh', 'core'], { cwd: root, encoding: 'utf8' }).stdout
+  assert.equal(named, '', `no shipped source may still import it by name:\n${named}`)
 })

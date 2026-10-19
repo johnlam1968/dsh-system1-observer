@@ -104,12 +104,14 @@ const HOST_EVENT_CONSTRAINTS = Object.freeze({
 export const ADAPTER_MODULES = Object.freeze([
     'dsh/host/index.js',
     'dsh/host/fs-journal.js',
-    // THE SESSION-SHAPED THREE MOVED INTO THEIR OWN PACKAGE, and the check MOVED WITH THEM: `dsh-session-adapter`
-    // carries the harness's event vocabulary, the surface fold and the event feed, and it is a package because those
-    // modules must be IMPORTABLE -- a composer inside a synchronous path cannot await a Cordis service (`F104`). A
-    // check that stopped at `lib/` would have quietly stopped covering them.
-    // NOT `dsh/session-adapter/index.js`: that file IS the plugin edge -- it calls `ctx.provide` and `ctx.get` --
-    // so it is the opposite of a pure module and the purity check correctly refused it.
+    // THE SESSION-SHAPED FIVE, and the check moved with them. They were a published package (`dsh-session-adapter`)
+    // because a composer inside a synchronous path cannot await a Cordis service (`F104`), so the in-band half had to
+    // be IMPORTABLE -- and being importable was read as being reachable by name. It was a package with no consumer
+    // outside this repository, and its `index.js` was the one IMPURE file in the set: it called `ctx.provide` and
+    // `ctx.get` to mount a `ctx.sessionAdapter` service nobody injected, which is why the purity check excluded it.
+    // Both are gone. Every module below is now reachable by a relative import, so the reason the package existed --
+    // `await`, not module resolution -- no longer applies, and this list is the WHOLE of the session adapter with no
+    // exception to remember. A check with an exception is a check one edit from silently covering less.
     'dsh/session-adapter/lib/session-format.js',
     'dsh/session-adapter/lib/surface.js',
     'dsh/session-adapter/lib/feed.js',

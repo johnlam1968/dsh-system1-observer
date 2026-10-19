@@ -26,11 +26,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// THE HARNESS'S EVENT VOCABULARY HAS ONE HOME (`dsh-session-adapter/session-format`), and a test in this repository
+// THE HARNESS'S EVENT VOCABULARY HAS ONE HOME (`dsh/session-adapter/lib/session-format.js`), and a test in this repository
 // enforces it: no other file in `lib/` may name a harness event as a string literal. This module writes events, so
 // it imports the names rather than spelling them -- which is also why adding an event to the vocabulary cannot
 // silently leave this converter behind.
-import { EVENT, HUMAN_SOURCE_KIND } from 'dsh-session-adapter/session-format'
+import { EVENT, HUMAN_SOURCE_KIND } from './session-adapter/lib/session-format.js'
 
 /** Fragment types, as the export spells them. */
 export const FRAGMENT = Object.freeze({

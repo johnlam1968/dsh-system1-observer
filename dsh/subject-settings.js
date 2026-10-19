@@ -4,7 +4,7 @@
 // event types are the two voices, how a window slices, what a slice covers), and the package must not depend on this
 // plugin's config reader. This function is the one part that reads the row, so it stays here and imports the
 // vocabulary it fills in.
-import { DEFAULT_KINDS } from 'dsh-session-adapter/reader'
+import { DEFAULT_KINDS } from './session-adapter/lib/reader.js'
 import { readConfigValue } from './config-value.js'
 
 /** The row's own settings, as the reader needs them. Read live, like every other setting in this plugin. */

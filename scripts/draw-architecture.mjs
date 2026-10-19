@@ -305,7 +305,7 @@ const SUBJECT = {
     { type: 'item', name: 'dsh/tool-blocks.js', desc: 'the TOOL CALLS section, and what was clipped out of it' },
     { type: 'item', name: 'core/redact.js', desc: 'redaction, applied to the trace\'s copy only — never to what the model is asked' },
     { type: 'sub', label: 'WHERE A SESSION COMES FROM' },
-    { type: 'item', name: 'dsh/session-adapter/', desc: 'harness sessions, as a package: reader · session-format · surface · feed · surface-authority' },
+    { type: 'item', name: 'dsh/session-adapter/', desc: 'harness sessions, as pure modules: reader · session-format · surface · feed · surface-authority' },
     { type: 'item', name: 'dsh-session-index', desc: 'a separate plugin and repo behind a service: FTS5 search, listing, reading, incremental rebuild' },
     { type: 'item', name: 'dsh/deepseek-web-export.js', desc: 'intake for a FOREIGN transcript (a DeepSeek Chat web export), and the losses it refuses to fabricate' },
   ],
@@ -394,7 +394,7 @@ const REPO = [
   },
   {
     title: 'The packages around it',
-    note: 'dsh/session-adapter — the pure half of session-shaped reading, importable because the composer runs in a synchronous path that cannot await a service. dsh-session-index — the store, in its own repository, importing no dsh code.',
+    note: 'dsh/session-adapter — the pure half of session-shaped reading, reachable because the composer runs in a synchronous path that cannot await a service. dsh-session-index — the store, in its own repository, importing no dsh code.',
   },
   {
     title: 'deploy/ · scripts/ · skills/',

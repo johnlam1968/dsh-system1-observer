@@ -118,7 +118,7 @@ export function lintScope(specList, scope) {
   }
   // A PLAIN GROUP OBJECT, AND NOT `questionGroup(...)`. That helper assembles a SEAM's input, and it is what
   // pulled this module -- and therefore the linter -- out of the portable core: `questionGroup` lives in
-  // `instrument-input.js`, which imports `host-events.js`, which imports `dsh-session-adapter`. `buildQuestions`
+  // `instrument-input.js`, which imports `host-events.js`, which imports the session adapter's vocabulary. `buildQuestions`
   // needs none of it; it reads the group it is handed. Measured: with this import gone the whole lint surface
   // loads from a directory with no `node_modules` at all, and still folds the loader's complaints in below.
   // THE LOADER'S OWN COMPLAINTS, FOLDED IN, so `lint` is a SUPERSET of `validate` rather than a second opinion that

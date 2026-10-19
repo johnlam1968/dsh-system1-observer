@@ -28,7 +28,7 @@
 // by the LAST segment, not by the median. `firstAndLast` exists for that reason: for a whole-session question the two
 // ends are the informative readings, and the middle is where a session's work happens rather than where its outcome
 // is decided.
-import { textOfEvent } from 'dsh-session-adapter/session-format'
+import { textOfEvent } from './session-adapter/lib/session-format.js'
 import { stateBudgetChars } from '../core/model/limits.js'
 
 /**

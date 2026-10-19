@@ -32,8 +32,8 @@
 //      rather than declared as nullable.
 import { checkAgainst } from '../core/tool-args.js'
 import { describeToolCut } from './tool-blocks.js'
-import { readStoredSubject, SUBJECT_KINDS } from 'dsh-session-adapter/reader'
-import { displayTextOfEvent, isAssistantMessage } from 'dsh-session-adapter/session-format'
+import { readStoredSubject, SUBJECT_KINDS } from './session-adapter/lib/reader.js'
+import { displayTextOfEvent, isAssistantMessage } from './session-adapter/lib/session-format.js'
 
 export const SUBJECT_TOOL_NAME = 'system1_session_subject'
 

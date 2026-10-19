@@ -29,9 +29,6 @@ importers:
       dsh-plugin-factory:
         specifier: file:/home/john/Downloads/dsh-plugin-factory-0.3.2.tgz
         version: file:../../../Downloads/dsh-plugin-factory-0.3.2.tgz
-      dsh-session-adapter:
-        specifier: link:/home/john/CodingProjects/dsh-system1-observer/dsh/session-adapter
-        version: link:../../../CodingProjects/dsh-system1-observer/dsh/session-adapter
       dsh-session-index:
         specifier: link:/home/john/CodingProjects/dsh-session-index
         version: link:../../../CodingProjects/dsh-session-index

@@ -75,7 +75,7 @@ const LIB = [...jsFiles(join(ROOT, 'core')), ...jsFiles(join(ROOT, 'dsh'))]
   .map((file) => code(read(file)))
   .join('\n')
 // AND THE PACKAGES THIS REPOSITORY SHIPS, because a host edge moved there and an unscanned edge is an undeclared one:
-// `dsh-session-adapter`'s plugin entry reaches `sessionQuery` with the same literal the row does. `core/host` is excluded
+// The session adapter's modules reach `sessionQuery` with the same literal the row does. `dsh/host` is excluded
 // above for the same reason it is excluded for `lib`: it is the INVENTORY, prose about the host rather than a call to it.
 const PACKAGES = jsFiles(join(ROOT, 'dsh', 'session-adapter'))
   .map((file) => code(read(file)))

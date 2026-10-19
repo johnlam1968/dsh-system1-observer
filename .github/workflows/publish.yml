@@ -12,8 +12,9 @@
 #      that does not gate the publish; here a red suite stops the release.
 #   3. `--tag beta`: these are prereleases, so `npm i dsh-system1-observer` must not pick them up. `publishConfig`
 #      in each manifest says the same thing; the flag is explicit so the intent survives a manifest edit.
-#   4. Two packages from one repository: `dsh/session-adapter` is a workspace, published before the plugin that
-#      depends on it.
+#   4. ONE package. `dsh-session-adapter` was published first, as the anchor this plugin depended on; when it
+#      was folded back in as `dsh/session-adapter/`, the ordering, the anchor step and the second package all
+#      went with it. What is left is the same shape this account's other repositories use.
 name: Publish to npm
 
 on:
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish the adapter, then the observer
+    name: Publish the observer
     runs-on: ubuntu-latest
 
     steps:
@@ -44,28 +45,18 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: npm
 
-      - name: Print the versions being published
+      - name: Print the version being published
         run: |
-          echo "Publishing the workspace packages at their current versions:"
-          for pkg in dsh/session-adapter .; do
-            name=$(node -p "require('./${pkg}/package.json').name")
-            ver=$(node -p "require('./${pkg}/package.json').version")
-            echo "  ${name}@${ver}"
-          done
+          name=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          echo "  ${name}@${ver}"
 
-      - name: Validate every package.json has a valid semver version
+      - name: The manifest has a valid semver version
         run: |
-          failed=0
-          for pkg in dsh/session-adapter .; do
-            name=$(node -p "require('./${pkg}/package.json').name")
-            ver=$(node -p "require('./${pkg}/package.json').version")
-            if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-              echo "::error::${name} has invalid version: ${ver}"
-              failed=1
-            fi
-          done
-          if [[ $failed -ne 0 ]]; then
-            echo "::error::One or more packages have invalid semver. Run \`npm version <X.Y.Z>\` in the package directory."
+          name=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::${name} has invalid version: ${ver}"
             exit 1
           fi
 
@@ -87,21 +78,6 @@ jobs:
       - name: The suite and every gate
         run: npm run ci
 
-      - name: "Publish dsh-session-adapter (the anchor the observer depends on)"
-        run: |
-          cd dsh/session-adapter
-          ver=$(node -p "require('./package.json').version")
-          if npm view "dsh-session-adapter@${ver}" version >/dev/null 2>&1; then
-            echo "::notice::dsh-session-adapter@${ver} already on npm, skipping"
-          else
-            # THE TAG FOLLOWS THE VERSION: a prerelease goes to `beta` so it cannot become what `npm i` installs,
-            # and a STABLE release goes to `latest`, which is the only thing that moves the npm page and the
-            # default install. Hard-coding `beta` here would publish 0.1.0 and leave `latest` on an old beta.
-            if [[ "$ver" == *-* ]]; then tag=beta; else tag=latest; fi
-            echo "publishing ${ver} with dist-tag ${tag}"
-            npm publish --provenance --access public --tag "$tag"
-          fi
-
       - name: Publish dsh-system1-observer
         run: |
           ver=$(node -p "require('./package.json').version")
@@ -119,36 +95,30 @@ jobs:
 
       - name: Every version published must be INSTALLABLE, because a staged publish is not a release
         run: |
-          failed=0
-          for pkg_dir in dsh/session-adapter .; do
-            name=$(node -p "require('./${pkg_dir}/package.json').name")
-            ver=$(node -p "require('./${pkg_dir}/package.json').version")
-            # RETRY FOR MINUTES, NOT SECONDS, and the reason is measured: npm prints the SAME two lines whether it
-            # published a version that is still being processed or STAGED one awaiting approval --
-            #   "Your package is being processed and may take a few minutes to become available."
-            #   "+ name@version"
-            # -- so only the registry, plus time, can tell them apart. A 20-second window declared a published
-            # release "staged" (F136). 13 checks over ~3 minutes covers npm's own "few minutes".
-            found=false
-            for attempt in $(seq 1 13); do
-              if npm view "${name}@${ver}" version >/dev/null 2>&1; then found=true; break; fi
-              sleep 15
-            done
-            if [ "$found" = true ]; then
-              echo "installable: ${name}@${ver}"
-            else
-              failed=1
-              # MEASURED TWICE: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run
-              # signs a provenance statement, the publish step exits 0, and nothing is installable. A green job is
-              # then evidence of staging, not of publication.
-              echo "::error::${name}@${ver} is still not on the registry after ~3 minutes. npm accepted it and said it was 'being processed', so either the processing is unusually slow or it was STAGED; the two are indistinguishable from the CLI's output."
-            fi
+          name=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          # RETRY FOR MINUTES, NOT SECONDS, and the reason is measured: npm prints the SAME two lines whether it
+          # published a version that is still being processed or STAGED one awaiting approval --
+          #   "Your package is being processed and may take a few minutes to become available."
+          #   "+ name@version"
+          # -- so only the registry, plus time, can tell them apart. A 20-second window declared a published
+          # release "staged" (F136). 13 checks over ~3 minutes covers npm's own "few minutes".
+          found=false
+          for attempt in $(seq 1 13); do
+            if npm view "${name}@${ver}" version >/dev/null 2>&1; then found=true; break; fi
+            sleep 15
           done
-          if [ "$failed" -ne 0 ]; then
-            echo "::error::Approve the staged version (npm >= 12): npx npm@latest stage list && npx npm@latest stage approve <id>"
-            echo "::error::Or publish directly: npmjs.com -> the package -> Trusted Publishing -> allowed action 'npm publish', then re-run this workflow."
-            exit 1
+          if [ "$found" = true ]; then
+            echo "installable: ${name}@${ver}"
+            exit 0
           fi
+          # MEASURED TWICE: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run
+          # signs a provenance statement, the publish step exits 0, and nothing is installable. A green job is
+          # then evidence of staging, not of publication.
+          echo "::error::${name}@${ver} is still not on the registry after ~3 minutes. npm accepted it and said it was 'being processed', so either the processing is unusually slow or it was STAGED; the two are indistinguishable from the CLI's output."
+          echo "::error::Approve the staged version (npm >= 12): npx npm@latest stage list && npx npm@latest stage approve <id>"
+          echo "::error::Or publish directly: npmjs.com -> the package -> Trusted Publishing -> allowed action 'npm publish', then re-run this workflow."
+          exit 1
       - name: A prerelease must not be `latest` once a stable version exists
         run: |
           ver=$(node -p "require('./package.json').version")

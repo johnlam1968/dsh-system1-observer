@@ -107,8 +107,8 @@ test('no instrument file imports anything but node builtins and itself', () => {
       .filter((specifier) => !specifier.startsWith('.') && !specifier.startsWith('node:'))
     for (const specifier of new Set(external)) offenders.push(file + ' imports ' + specifier)
   }
-  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION: a package that imports `dsh-session-adapter` (as `core/seams.js`
-  // once did, for one event name) or `@deepseek-ai/...` cannot leave this repository, and `dsh-session-adapter` is
+  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION: a module that imports the session adapter (as `core/seams.js`
+  // once did, for one event name) or `@deepseek-ai/...` cannot leave this repository, and the session adapter is
   // DSH-shaped even though it is ours.
   assert.deepEqual(offenders, [], 'the instrument depends on something outside node:\n  ' + offenders.join('\n  '))
 })

@@ -297,7 +297,7 @@ export const QUESTION_SCOPES = Object.freeze([...FIREABLE_HOOKS, SESSION_HOOK])
  *
  * IT LIVES HERE, not in `questions-tool.js`, and that is not tidiness. The tool imports the host event bus to record
  * what it did, and the standalone needs this function to store a composition -- so when `scripts/ask.mjs` reached for
- * the tool's copy it pulled `dsh-session-adapter` into a directory with no `node_modules`, and the clean-room run
+ * the tool's copy it pulled the session-adapter MODULES into a directory with no `node_modules`, and the clean-room run
  * died on an import. A rule that both surfaces need belongs where both can reach it, and the tool re-exports this so
  * nothing it publishes changed.
  */
@@ -308,7 +308,8 @@ export function validateSpecs(scope, specs) {
     return ['an empty list asks nothing at this scope, and silence that looks like a measurement is worse than no measurement']
   }
   // THE LOADER DIRECTLY, WITHOUT `questionGroup`. The group adds seam ATTRIBUTION, and reaching it would pull
-  // `lib/instrument-input.js` -> `lib/host-events.js` -> `dsh-session-adapter` into a file the standalone needs --
+  // `core/instrument-input.js` -> `dsh/host-events.js` -> the session adapter's vocabulary into a file the standalone
+  // needs --
   // which is the import that broke the clean-room run. Attribution is for a seam that records; validation is a
   // question about the specs, and both forms build the same question (pinned in `test/question-staging.test.js`).
   const built = buildQuestions({ questions: { [scope]: specs } }, scope)

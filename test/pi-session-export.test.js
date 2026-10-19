@@ -20,7 +20,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import { EVENT, textOfEvent } from 'dsh-session-adapter/session-format'
+import { EVENT, textOfEvent } from '../dsh/session-adapter/lib/session-format.js'
 import { eventsOf, exchangesOf, livePath, parseSession, PI_BLOCK, PI_ROLE } from '../dsh/pi-session-export.js'
 
 /**

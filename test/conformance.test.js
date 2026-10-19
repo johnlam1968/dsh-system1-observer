@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 import { readConfigValue } from '../dsh/config-value.js'
 import { HOST_EVENT_MODES, HOST_EVENTS } from '../dsh/host/index.js'
-import { DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
+import { DEFAULT_MAX_PER_SESSION } from '../dsh/session-adapter/lib/feed.js'
 import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../dsh/host/fs-journal.js'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -80,9 +80,11 @@ test('packaging: a bundle that names its patch, and a declared client half', () 
   for (const file of ['dsh/index.js', 'dsh/client.js', 'dsh/host/index.js', 'cordis.patch.yml']) {
     assert.ok(covers(file), `files must ship ${file}`)
   }
-  // AND THE NESTED PACKAGE IS STILL EXCLUDED by that same rule, which is why the patterns are spelled out rather than
-  // collapsed to `dsh/**`: the session adapter is published on its own and must not be vendored into this tarball.
-  assert.equal(covers('dsh/session-adapter/index.js'), false, 'the nested package must not be vendored into this one')
+  // THE SESSION ADAPTER SHIPS AS PART OF THIS PACKAGE, and `dsh/*.js` does not reach it -- a `*` matches one path
+  // segment and stops at the folder. That is the same trap as above, one level down: an entry point listed while the
+  // fifteen modules that import it were dropped, which is a plugin that installs and then cannot resolve its own
+  // vocabulary. The glob has to say `dsh/session-adapter/**/*.js` out loud.
+  assert.ok(covers('dsh/session-adapter/lib/session-format.js'), 'files must ship the session adapter modules')
 })
 
 test('packaging: the patch inserts a row the profile can target by id', () => {

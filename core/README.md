@@ -30,7 +30,7 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 
 **THE SESSION-SHAPED THREE ARE NO LONGER IN `lib/host/`.** The harness's event vocabulary (`session-format`), the surface
 fold (`surface`) and the event feed (`feed`) are the pure half of the session adapter and live in the package
-[`dsh-session-adapter`](dsh/session-adapter/), imported by name. The reason is measured (`F104`): they must be
+[`dsh/session-adapter/`](dsh/session-adapter/), imported by name. The reason is measured (`F104`): they must be
 **importable**, because the composer runs inside a synchronous path that cannot await a Cordis service. `fs-journal.js`
 and this map stay, because the filesystem journal is not session-shaped.
 * `dsh/session-subject-tool.js` — **the SUBJECT a judgement is composed from**: one stored session's operator and
@@ -43,7 +43,7 @@ and this map stay, because the filesystem journal is not session-shaped.
   schema and render for all four actions) went with them; the read's schema and render are in the tool now
 * `dsh/subject-settings.js` — the row's own subject settings (`source`, `sessionId`, `kinds`, `lastMessages`), read
   live. It is the ONE part of the old `session-subject.js` that read OUR config; the rest was the harness's shapes
-  and is now `dsh-session-adapter/reader`, with `surface-authority` beside it. Both take the `sessionQuery`
+  and is now `dsh/session-adapter/lib/reader.js`, with `surface-authority` beside it. Both take the `sessionQuery`
   service as a PARAMETER, so they still contain no host call for the inventory to find.
 * `dsh/deepseek-web-export.js` — **intake for a foreign transcript**: a DeepSeek Chat web export (`conversations.json`)
   as DSH session events, because the adapter reads HARNESS sessions and has no reader for any other format. Every
@@ -159,23 +159,25 @@ and this map stay, because the filesystem journal is not session-shaped.
 * `dsh/host/index.js` — the host surface this plugin depends on, in one place, and how it is checked
 * `dsh/host/fs-journal.js` — what the filesystem actually did, recorded from the harness
 
-## The session adapter — its own package, under `dsh/`
+## The session adapter — five pure modules, under `dsh/`
 
-`dsh/session-adapter/` is a workspace of its own (`packages/*` → `dsh/session-adapter`) and is PUBLISHED as
-`dsh-session-adapter`, because these modules must be IMPORTABLE BY NAME rather than reached through a relative path:
-a composer inside a synchronous path cannot await a Cordis service (`F104`). Being a package is also why it can sit
-HERE, under the dsh half, rather than at the top level — a folder with its own `package.json` is still a package root,
-so moving it changed no published name, no tarball contents, and no importer. Everything dsh-specific is now in one
-folder; `core/` is what a port to another harness reads.
+These answer what a session's events ARE, which of them are in the model's surface, what has been seen, and what the
+host will read back. They were a **published npm package** (`dsh/session-adapter/`) because a composer inside a
+synchronous path cannot await a Cordis service (`F104`), so the in-band half had to be IMPORTABLE — and being
+importable was taken to mean being reachable by name. Measured, that boundary had no one on the far side of it: no
+module outside this repository imported them, no consumer injected the `ctx.sessionAdapter` service they also
+provided, and the only other installation on this host was a stale entry in a package that stopped referencing it.
 
-* `dsh/session-adapter/index.js` — the package entry, providing those functions both as imports and as the
-  `sessionAdapter` service, so a consumer that is not this repository's does not have to be a file in it
+The service form went first — a row mounted in every profile to hand an object to nobody, and the one impure file in
+a set the inventory otherwise holds to containing no host call at all. The package went second, because **importable
+was never the same as packaged**: a relative import is equally importable, and the constraint was `await`.
+
 * `dsh/session-adapter/lib/session-format.js` — the harness's SESSION EVENT VOCABULARY: the names, the message shapes,
   and the text extraction, in the one home `test/session-format.test.js` refuses to let a second spelling grow in
 * `dsh/session-adapter/lib/surface.js` — the IN-BAND surface fold: what a synchronous caller can see without asking the
   host, and therefore what it may get wrong when no `sessionQuery` exists
 * `dsh/session-adapter/lib/surface-authority.js` — the ASYNC authority over that fold (`sessionQuery.filterEvents`),
-  with NAMED ABSENCES (`null`, a problem sentence, `available()`) rather than a throw, for a deployment with no host
+  with NAMED ABSENCES (`null`, a problem sentence) rather than a throw, for a deployment with no host
 * `dsh/session-adapter/lib/feed.js` — the per-session event feed, with its window limits
 * `dsh/session-adapter/lib/reader.js` — the HOST-BACKED reads: the subject read, the session list, the window
   slicing, the coverage, and the host's full-text search

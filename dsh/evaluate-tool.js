@@ -22,7 +22,7 @@ import { aggregateReadings, firstAndLast, segmentsOf, DEFAULT_SEGMENT_CHARS } fr
 import { CONTEXT, stateBudgetChars, withinStateBudget } from '../core/model/limits.js'
 import { round } from '../core/report.js'
 import { applyGroups, selectionNote } from './exchange.js'
-import { textOfEvent } from 'dsh-session-adapter/session-format'
+import { textOfEvent } from './session-adapter/lib/session-format.js'
 
 export const EVALUATE_TOOL_NAME = 'system1_evaluate_session'
 

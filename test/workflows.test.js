@@ -56,7 +56,8 @@ test('the publish workflow keeps the promises a release depends on', () => {
   assert.match(yamlText, /npm view "\$\{name\}@\$\{ver\}" version/, 'the installability check must query the registry')
   // AND IT MUST COVER EVERY PACKAGE THE TAG PUBLISHES, not only the root one: a staged adapter beside a published
   // plugin is half a release, which is exactly the shape that reads as success.
-  assert.match(yamlText, /for pkg_dir in dsh\/session-adapter \./, 'the installability check must cover both packages')
+  assert.match(yamlText, /name=\$\(node -p "require\('\.\/package\.json'\)\.name"\)/,
+    'the installability check must read the one manifest this repository publishes')
   // AND IT MUST RETRY: the registry is eventually consistent, so a single check a second after publishing can
   // report a staged release that merely lagged.
   // AND THE WINDOW MUST COVER npm's OWN "few minutes": 20 seconds declared a published release staged (F136).

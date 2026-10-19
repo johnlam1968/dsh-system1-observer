@@ -63,11 +63,14 @@ test('the SCRIPT settles it by exit code, in the package it is run from', () => 
   // AND A STABLE VERSION NEEDS NO TAG: `latest` is what it is for, which is the release this guard exists to allow.
   const stable = guard(root, null)
   assert.equal(stable.code, 0, 'a stable version with no tag is the normal release')
-  // AND IT READS THE MANIFEST OF ITS OWN DIRECTORY: the adapter has its own name and version, and its
-  // `prepublishOnly` calls this same script, so a guard that read the root's package.json would report the wrong
-  // package -- which it did, until the relative path was measured (`packages/../scripts` does not exist). The adapter
-  // now lives under `dsh/`, so that path is `dsh/../scripts`, and the guard is still the only thing that can tell.
-  const adapter = guard(join(root, 'dsh', 'session-adapter'), 'beta')
-  assert.equal(adapter.code, 0)
-  assert.match(adapter.out, /dsh-session-adapter@/, 'the guard must name the package being published')
+  // AND IT READS THE MANIFEST OF ITS OWN DIRECTORY. This repository used to publish TWO packages, and the adapter's
+  // `prepublishOnly` called this same script from its own directory -- a guard that read the root's package.json would
+  // have reported the wrong package, which it did, until the relative path was measured. That case is GONE now
+  // (`packages/../scripts` became `dsh/session-adapter/` and then stopped being a package), so what is asserted here
+  // is the property that made the bug possible and is now the only one left: the manifest is read FROM THE DIRECTORY
+  // THE SCRIPT RUNS IN, not from a path relative to the repository.
+  const elsewhere = mkdtempSync(join(tmpdir(), 'publish-tag-other-'))
+  writeFileSync(join(elsewhere, 'package.json'), JSON.stringify({ name: 'fixture-other', version: '9.9.9' }))
+  const named = guard(elsewhere, null)
+  assert.match(named.out, /fixture-other@/, 'the guard must name the package being published, not this repository')
 })

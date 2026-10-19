@@ -24,7 +24,7 @@ import {
     textOfEvent,
     textOfMessage,
     turnOf,
-} from 'dsh-session-adapter/session-format'
+} from '../dsh/session-adapter/lib/session-format.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -77,10 +77,11 @@ test('the predicates separate messages from traffic, and a tool result is NOT a 
 test('the vocabulary is the ONLY place in the plugin that names a session event, and it still names them all', () => {
     const NAMES = Object.values(EVENT)
     const pattern = new RegExp(`(['"])(${NAMES.map((n) => n.replace(/[/-]/g, '\\$&')).join('|')})\\1`)
-    // THE ONE FILE ALLOWED TO NAME THEM is the one that exports `EVENT`, RESOLVED rather than typed: a hand-written
-    // path would go stale the moment the vocabulary moved home again, and a scan that then flagged the vocabulary's own
-    // definition would be a test that cannot be satisfied without lying about where the names live.
-    const VOCABULARY = fileURLToPath(import.meta.resolve('dsh-session-adapter/session-format'))
+    // THE ONE FILE ALLOWED TO NAME THEM is the one that exports `EVENT`, resolved against THIS MODULE rather than
+    // typed as a path. It used to be `import.meta.resolve('dsh-session-adapter/session-format')`, which stopped
+    // resolving when the adapter stopped being a package -- a scan that cannot name its own exemption is a scan that
+    // either throws or, worse, quietly exempts nothing.
+    const VOCABULARY = fileURLToPath(import.meta.resolve('../dsh/session-adapter/lib/session-format.js'))
     const offenders = []
     const walk = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
         const rel = `${dir}/${entry.name}`

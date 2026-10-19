@@ -3,13 +3,13 @@
 // WHY THIS IS NOT IN `lib/seams.js`. The instrument owns the loop's VOCABULARY -- nine point ids and what is true of
 // each (a point with no text, a point whose subject is a tool). This file owns the HARNESS BINDING: the event names,
 // which are dsh's and change with dsh. Keeping them together was the single reason `lib/seams.js` imported
-// `dsh-session-adapter`, and it is the difference between an instrument that can be extracted and one that carries
+// the session adapter, and it is the difference between an instrument that can be extracted and one that carries
 // the harness in its pocket.
 //
 // IT IS ALSO THE ONLY VALIDATION. `probeHook` asks the instrument whether the id exists (`pointOf`, which throws on
 // an unknown one) and then looks up the event, so a point cannot be declared here and missing there, or the reverse:
 // one list of ids, one map of events, and a mismatch refuses by name.
-import { EVENT } from 'dsh-session-adapter/session-format'
+import { EVENT } from './session-adapter/lib/session-format.js'
 import { pointOf } from '../core/seams.js'
 
 /**

@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   DEFAULT_KINDS, SUBJECT_KINDS, eventTypesOf, listStoredSessions, readStoredSubject, sliceEvents,
-} from 'dsh-session-adapter/reader'
+} from '../dsh/session-adapter/lib/reader.js'
 // `subjectSettings` reads THIS PLUGIN's config, so it stayed here rather than going into the adapter package.
 import { subjectSettings } from '../dsh/subject-settings.js'
 import { composeTurnState } from '../dsh/turn-state.js'

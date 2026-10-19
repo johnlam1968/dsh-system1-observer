@@ -33,7 +33,7 @@
 // discarding half its evidence is worse than one built by refusing: the first produces confident answers about a
 // trajectory it never saw.
 import { TAIL_CHARS } from '../core/redact.js'
-import { EVENT, isMessageEvent } from 'dsh-session-adapter/session-format'
+import { EVENT, isMessageEvent } from './session-adapter/lib/session-format.js'
 
 const textOf = (value) => (typeof value === 'string' ? value : '')
 

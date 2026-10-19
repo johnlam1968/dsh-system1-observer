@@ -13,7 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionSubjectTool, SUBJECT_TOOL_NAME } from '../dsh/session-subject-tool.js'
-import { displayTextOfEvent } from 'dsh-session-adapter/session-format'
+import { displayTextOfEvent } from '../dsh/session-adapter/lib/session-format.js'
 import { composeTurnState } from '../dsh/turn-state.js'
 import { assertValidOutput } from './tool-output-validated.js'
 

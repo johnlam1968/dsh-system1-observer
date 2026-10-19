@@ -542,7 +542,7 @@ it falls back to the wire at `wireUrl`. Installing the bundle into a profile is 
 dsh plugin --profile <profile> add dsh-system1-observer
 ```
 
-`dsh-session-adapter` and `dsh-session-index` come with it as ordinary dependencies; `@deepseek-ai/cordis` and
+`dsh/session-adapter/` and `dsh-session-index` come with it as ordinary dependencies; `@deepseek-ai/cordis` and
 `@deepseek-ai/dsh-tools` are **peerDependencies**, supplied by the profile, which is why the CLI is the right installer
 and a bare `npm i` in an empty directory is not.
 

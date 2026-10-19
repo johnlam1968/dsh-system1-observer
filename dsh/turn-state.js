@@ -1,5 +1,5 @@
 import { cutHeadTail } from '../core/redact.js'
-import { surfaceEvents } from 'dsh-session-adapter/surface'
+import { surfaceEvents } from './session-adapter/lib/surface.js'
 // `X`, THE TARGET THE TURN TRIGGER ASKS ABOUT.
 //
 // ROADMAP §9.6: X is an artifact, not "the operator's message", and §10.2 requires it to carry the tool calls with
@@ -22,7 +22,7 @@ import { surfaceEvents } from 'dsh-session-adapter/surface'
 // indistinguishable from an absent one once it reaches the model, which is the failure this repository catalogues as
 // presence-versus-absence.
 import { assembleToolCalls } from './tool-blocks.js'
-import { isMessageEvent, roleOf, textOfContent, textOfMessage } from 'dsh-session-adapter/session-format'
+import { isMessageEvent, roleOf, textOfContent, textOfMessage } from './session-adapter/lib/session-format.js'
 
 const isMessage = (event) => isMessageEvent(event)
     // EITHER SHAPE, AND IT MUST CARRY ONE. `SessionEventMap` declares `'user/message': UserMessage` -- `data` IS the

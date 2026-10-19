@@ -18,7 +18,7 @@
 // NOTHING HERE THROWS. A stored evaluation is on demand rather than in the critical path of a turn, so a throw would
 // not fail a turn -- but it would still be the wrong shape for a caller that has to explain what went wrong. Every
 // failure comes back as a named problem beside an empty or partial event list.
-import { EVENT, isToolTraffic, textOfEvent } from 'dsh-session-adapter/session-format'
+import { EVENT, isToolTraffic, textOfEvent } from './session-format.js'
 
 /**
  * THE KINDS A SLICE CAN BE MADE OF, as a name a person chooses mapped to the event type the harness writes.

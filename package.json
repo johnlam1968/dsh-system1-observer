@@ -14,9 +14,6 @@
     "./nudge-label": "./core/nudge-label.js"
   },
   "icon": "./icon.svg",
-  "workspaces": [
-    "dsh/session-adapter"
-  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -49,7 +46,6 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
-    "dsh-session-adapter": "^0.1.0",
     "dsh-session-index": "^0.1.0",
     "yaml": "^2.9.1"
   },
@@ -65,6 +61,7 @@
     "install.sh",
     "dsh/*.js",
     "dsh/host/*.js",
+    "dsh/session-adapter/**/*.js",
     "core/**/*.js",
     "core/README.md",
     "scripts/trace.mjs",

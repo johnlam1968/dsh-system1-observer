@@ -10,7 +10,7 @@
 // one asserted here: nothing is invented out of the log.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { surfaceEvents } from 'dsh-session-adapter/surface'
+import { surfaceEvents } from '../dsh/session-adapter/lib/surface.js'
 import { composeTurnState } from '../dsh/turn-state.js'
 
 const msg = (seq, type, text, surfaceOp = 'append') => ({

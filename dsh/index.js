@@ -1,11 +1,11 @@
 import { createFsJournal, DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from './host/fs-journal.js'
 // THE VOCABULARY BY NAME, not by literal. The harness's event names have exactly one home
-// (`dsh-session-adapter/lib/session-format.js`), and a second spelling of one is somewhere a format change has to be
+// (`dsh/session-adapter/lib/session-format.js`), and a second spelling of one is somewhere a format change has to be
 // found -- which is what `test/session-format.test.js` fails on.
-import { EVENT } from 'dsh-session-adapter/session-format'
-import { surfaceEvents } from 'dsh-session-adapter/surface'
-import { currentSurfaceSeqs } from 'dsh-session-adapter/surface-authority'
-import { createEventFeed, DEFAULT_MAX_PER_SESSION } from 'dsh-session-adapter/feed'
+import { EVENT } from './session-adapter/lib/session-format.js'
+import { surfaceEvents } from './session-adapter/lib/surface.js'
+import { currentSurfaceSeqs } from './session-adapter/lib/surface-authority.js'
+import { createEventFeed, DEFAULT_MAX_PER_SESSION } from './session-adapter/lib/feed.js'
 // THE ROW. What it does: call a System One model at the configured points of the agent loop, and write the
 // call -- request and response -- to a trace. What it must never do: change anything the loop decided.
 //
@@ -25,7 +25,7 @@ import { DEFAULT_TIMEOUT_MS } from '../core/model/wire.js'
 import { probeFingerprint } from '../core/probe-score.js'
 import { MAX_QUESTION_CHARS_DEFAULT, QUESTION_SCOPES, SESSION_HOOK, TURN_HOOK, buildQuestions, configuredQuestionIds, probeOf } from '../core/questions.js'
 import { composeQuestions } from '../core/system1.js'
-import { listStoredSessions, readStoredSubject } from 'dsh-session-adapter/reader'
+import { listStoredSessions, readStoredSubject } from './session-adapter/lib/reader.js'
 import { subjectSettings } from './subject-settings.js'
 import { DEFAULT_SESSION_SET, listSets, readSelectedSet, setSettings } from '../core/question-sets.js'
 import { readSessions, scopeNotLiveNote, sessionObserved } from '../core/sessions.js'
