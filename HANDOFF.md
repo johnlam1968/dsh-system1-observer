@@ -7,14 +7,34 @@ which is the plan itself; this page is the state of it, plus the traps that cost
 **You are reading this cold.** Nothing from the conversation that produced it transfers. Everything below is either
 in the repository or was measured on the machine it was written on.
 
+## 0. What changed after this page was first written
+
+**The two producers disagreed about who spoke, and the observer was the one that was wrong.** `dsh/normalize.js`
+counted an ask by EVENT TYPE — every `user/message` opened an ask-group — while `dsh/exchange.js` counted it by
+`data.source.kind`, which is the only thing that separates a person from the harness. The harness speaks on the user
+channel: a goal, a skill catalogue, a runtime context. Measured on one real session of 39,098 events: **753
+`user/message` events, 403 of them the human and 350 the harness** — so the ask count was inflated by **86.8%**, every
+injection opened a group of its own, and the judge was handed skill catalogues as though the operator had typed them.
+
+`isHumanMessage` now lives in **one** place (`dsh/session-adapter/lib/session-format.js`, beside the vocabulary it
+reads), the producer and the live composer both use it, and `dsh-session-index` was aligned to match. **The
+consequence for every measurement taken before this is that the ask count was too high by roughly half.** Recorded as
+**`F173`**.
+
+The store's `source_sha256` was the first **16** hex characters of a digest, so the rows contract refused the receipt
+of **every** session in the index and the reader could not repair it. The store writes the whole digest now
+(**`F174`**), and the live index has been rebuilt to `SCHEMA_VERSION` 5.
+
+**What is still open is a restart**, not code: see §5.
+
 ## 1. State
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed**; **894 tests**, 887 pass, 0 fail, 7 skipped |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`752a4bd`**, pushed; 40 tests; **`SCHEMA_VERSION` 5** |
-| coverage | **97.54 / 81.99 / 91.69** against a 90 / 75 / 75 gate |
-| gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **200 rows**), `check:deploy` |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed**; **900 tests**, 893 pass, 0 fail, 7 skipped |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`752a4bd`**, pushed; **42 tests**; **`SCHEMA_VERSION` 5** |
+| coverage | **97.56 / 82.23 / 91.81** against a 90 / 75 / 75 gate |
+| gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
 
 **ALL SIX GATES RUN HEADLESSLY.** `check:composition` shells out to `dsh --profile <p> --dump-config`, and
@@ -64,6 +84,16 @@ ask.mjs session --from-sqlite <db> --session-id <id> # read one out of the index
 ask.mjs measurements interpret --package <id> --text '…' --by '<you>'
 ```
 
+**THE MEASUREMENT ROUTE NOW WORKS, AND IT NEVER DID** (**`F175`**). It was broken in six separate ways, and the suite
+was green throughout because `test/measure.test.js` only ever drove the dsh cut and the script's own test only drove
+the free routes. The worst of the six was silent: the judge was called with the arguments in the wrong places, so
+every segment failed, the failure was written into the package as a refusal, and **a measurement with no answers
+looked like a measurement that was complete** — `n: 0` and `failed: 1` for every question.
+
+**THE ROUTE IS NOW TESTED, not just described.** `test/ask-script.test.js` drives it against a **local fake
+endpoint**: no model, no harness, no money, and it is proven to have teeth (with the source fixes stashed it goes
+red). If you change anything on this path, that test is the one that will tell you.
+
 `trace.jsonl` is written **empty** by the script route — no harness, no trace — and the manifest says so. `report.md`
 is the **skeleton**, numbers filled and the reading column blank, because prose cannot be derived from numbers.
 
@@ -86,6 +116,12 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   cannot resolve its own vocabulary.
 * **Leading narration joins the FIRST ask-group**, because a boundary with no ask in it is a group that "what did the
   operator ask here" returns empty for.
+* **A fixture that omits a field the harness requires agrees with an implementation that ignores it.** Every
+  `user/message` fixture in this suite omitted `data.source.kind`, and the producer never read it — so the two were
+  wrong in the same shape, and **32 tests went red** when the field was finally honoured. The harness REQUIRES a
+  producer-owned source kind (a v4 log is refused without one), and across 120 real session files and 1,501
+  `user/message` events, **zero** lacked a source. A fixture is a claim about what the harness emits; when it is
+  simpler than the truth, it cannot fail for the truth's reasons.
 
 ## 5. Open, and known not to be yours
 
@@ -95,10 +131,18 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   is green** — so run `DSH_PROFILE=docdrift npm run check:deploy`, and note that `DSH_PROFILE` is set to `web` in
   some shells, which is how this gets misread.
 * **The docdrift profile is edited but not restarted.** The `dsh-session-adapter` row was removed from its manifest,
-  lockfile and `node_modules`; the change takes effect on the next harness restart.
-* **`ask.mjs session --from-sqlite` refuses an index built before `exchange` existed**, and says so. Rebuild it.
+  lockfile and `node_modules`; the change takes effect on the next harness restart. **The restart is now also what
+  makes the store's fix live**: the running process loaded the store's code before it, so a `session_index_refresh`
+  would rewrite the index at `SCHEMA_VERSION` 4 with the truncated digest and undo the rebuild. The index on disk is
+  correct; the PROCESS is behind it.
+* **`ask.mjs session --from-sqlite` used to refuse an index built before `exchange` existed, and said so. Rebuild it
+  — and know that a rebuild alone was not enough.** The digest was truncated too (**`F174`**), and the producer and
+  the store disagreed about who spoke (**`F173`**). All three are fixed and the index is rebuilt.
 * **pi and web producers.** Both importers end in a dsh log, so `--log` measures them. If a substrate arrives that
   does NOT write a dsh log, it needs its own producer writing the same rows — not its own copy of the concept.
+* **The store is a second producer, so it needs the same rules said twice.** It imports no dsh code by design, so
+  "the ask-group opens on a human message" and "a message with no declared source is not the human" now live in it as
+  a restatement. They are aligned today; a change to one is a change to the other, and nothing enforces it.
 
 ## 6. Where to start
 
