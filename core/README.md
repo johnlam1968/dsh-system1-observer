@@ -76,6 +76,10 @@ and this map stay, because the filesystem journal is not session-shaped.
 
 * `dsh/turn-state.js` — the state a judgement is made from, and what it keeps at both ends
 * `dsh/segment.js` — segmenting a subject that does not fit one request, and the arithmetic over the parts
+* `dsh/normalize.js` — **THE PRODUCER**: a dsh event log turned into those rows, and the one place that knows what a
+  dsh log is. Three things are DERIVED rather than projected — the ask-group (never the log's own turn, which pi does
+  not have), `shadowed` (what the surface withheld, from the `surfaceOp: replace` spans), and the receipt's sha256
+  and high-water. A pi transcript and a web export each need their own producer writing the same rows
 * `dsh/measure.js` — **THE CHAIN, ONCE**: decide the segment size, judge each segment, judge a whole subject in one
   call, and combine the answers in code. `system1_evaluate_session` delegates here and a standalone script will too,
   because a measurement is only comparable with a measurement and the part that would be wrong to have twice is the

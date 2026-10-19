@@ -57,6 +57,14 @@ const flags = (name) => argv.reduce((all, value, index) => (value === name ? [..
 
 const USAGE = `ask.mjs -- a question set and a state, answered by a System One model, with no harness
 
+  session                    MEASURE a normalized session (see below); the other routes just ask about a state
+
+    --file PATH                the session rows, JSONL -- receipt + messages + tool calls
+    --describe                 what the session holds, and ask nothing
+    --set NAME                 the question set, e.g. agent-helpfulness-session@1
+    --scope SCOPE              which scope of the set (default: session)
+    --segment-chars N          cut a long session; above the estimate it cuts itself
+
   --list                     the sets this repository declares
   --set NAME                 the composition, e.g. news-claim-check@2 (or skip it and use --question)
   --scope SCOPE              which scope of the set, e.g. admit, turn, session
@@ -112,6 +120,95 @@ async function readState() {
 }
 
 if (has('--help') || has('-h')) { process.stdout.write(USAGE); process.exit(0) }
+
+// ── THE SUBCOMMANDS ──────────────────────────────────────────────────────────────────────────────────────────────
+//
+// `ask.mjs` IS A MONO-WRAPPER, and which of its routes needs a harness-SHAPED world is stated rather than assumed.
+// `--list`, `--state`, `--file` and `--url` resolve nothing outside `core/`, which is why this script runs in a
+// directory with no `node_modules` at all -- a property `test/instrument-boundary.test.js` proves by walking the
+// import graph from THIS FILE and refusing a bare specifier anywhere in it.
+//
+// `session` is the one route that reads a conversation rather than a state, and it needs the session vocabulary to do
+// it. So it is reached by a DYNAMIC import, below: a static one would put `dsh/` in this file's static closure and cost
+// every other route the property above. That is the whole design constraint, and it is why the two are one file rather
+// than two -- one entry point, one credential path, one `--help`, and the split lives in WHERE the import is written.
+if (argv[0] === 'session') {
+    const { readRowsJsonl, validateRows, rowsSummary, receiptOf, exchangesOfRows, segmentsOfRows } = await import('../core/session-rows.js')
+    // The chain is the SAME one `system1_evaluate_session` judges with. A measurement is only comparable with a
+    // measurement, so this does not re-implement judging; it supplies a row-native cut and a row-native composer.
+    const { judgeSegments, segmentBudgetFor } = await import('../dsh/measure.js')
+    const { composeQuestions, askQuestions, wireTransport, validateSpecs, renderAnswerLines } = await import('../core/system1.js')
+
+    const source = flag('--file') ?? flag('--from-sqlite')
+    if (source === null) die('`session` needs --file <rows.jsonl> (or --from-sqlite <db>)')
+    const rowsText = readFileSync(resolve(source), 'utf8')
+    const parsed = readRowsJsonl(rowsText)
+
+    // RULE 3, AT THE POINT IT COSTS SOMETHING. A malformed line is reported and the run STOPS: measuring a shorter
+    // conversation than the file holds would answer every question correctly and about the wrong session, which is
+    // the one failure no later check can catch.
+    if (parsed.malformed.length > 0) {
+        for (const bad of parsed.malformed) process.stderr.write(`ask.mjs: line ${bad.line}: ${bad.reason}\n`)
+        die(`${parsed.malformed.length} malformed line(s); refusing to measure a session I could not read whole`)
+    }
+    const problems = validateRows(parsed.rows)
+    if (problems.length > 0) {
+        for (const problem of problems) process.stderr.write(`ask.mjs: ${problem}\n`)
+        die(`${problems.length} problem(s) with the session rows`)
+    }
+
+    const receipt = receiptOf(parsed.rows)
+    const summary = rowsSummary(parsed.rows)
+    const exchanges = exchangesOfRows(parsed.rows)
+    if (has('--describe')) {
+        process.stdout.write(`${receipt.harness} session ${receipt.id}  sha256 ${String(receipt.sourceSha256).slice(0, 12)}\n`)
+        process.stdout.write(`${summary.messages} message(s), ${summary.toolCalls} tool call(s), ${exchanges.length} exchange(s)\n`)
+        process.stdout.write(`${summary.reasoningChars} reasoning char(s); ${summary.shadowed} shadowed, ${summary.shadowedChars} char(s) withdrawn by compaction\n`)
+        for (const exchange of exchanges) {
+            process.stdout.write(`  exchange ${exchange.exchange}: ${exchange.asks.length} ask(s), ${exchange.answers.length} answer(s), ${exchange.shadowed} shadowed\n`)
+        }
+        process.exit(0)
+    }
+
+    const built = composeQuestions({ set: flag('--set'), scope: flag('--scope') ?? 'session', setsDir: () => SETS })
+    if (!built.ok) die(built.reason)
+    if (Array.isArray(built.problems) && built.problems.length > 0) die(built.problems[0])
+
+    const segmentChars = Number.isInteger(flag('--segment-chars')) ? Number(flag('--segment-chars')) : 57600
+    const { segmentChars: chosen, autoSegmented } = segmentBudgetFor({
+        windowChars: summary.visibleChars, askedChars: flag('--segment-chars'), stateBudgetChars: segmentChars, defaultSegmentChars: segmentChars,
+    })
+    const transport = wireTransport({ baseUrl: flag('--wire-url') ?? undefined, keyEnv: flag('--key-env') ?? undefined, timeoutMs: Number(flag('--timeout')) || undefined })
+    const judge = askQuestions(transport)
+
+    // THE ROW-NATIVE CUT AND COMPOSER. Both are supplied here and nowhere else: the judging below is the shared chain,
+    // and everything harness-shaped about reading a conversation was resolved by the time these two lines are reached.
+    const judged = await judgeSegments({
+        events: parsed.rows,
+        messages: parsed.rows.filter((row) => row.kind === 'message'),
+        segmentChars: chosen,
+        questions: built.questions,
+        budgetChars: segmentChars,
+        cut: segmentsOfRows,
+        compose: async (rows) => ({ state: rows.filter((r) => r.kind === 'message').map((r) => r.text).join('\n') }),
+        decide: (request) => judge(request),
+    })
+
+    const rendered = renderAnswerLines(judged.aggregate, {})
+    const out = {
+        session: { harness: receipt.harness, id: receipt.id, sourceSha256: receipt.sourceSha256, highWater: receipt.highWater },
+        summary, autoSegmented, segmentChars: chosen,
+        segments: judged.rows.map((row) => ({ index: row.index, messages: row.messages, chars: row.chars, stateHash: row.stateHash, ...(row.failure === undefined ? {} : { failure: row.failure }) })),
+        answers: judged.aggregate,
+    }
+    if (has('--json')) process.stdout.write(`${JSON.stringify(out, null, 2)}\n`)
+    else {
+        process.stdout.write(`${receipt.harness} session ${receipt.id} [${String(receipt.sourceSha256).slice(0, 12)}]\n`)
+        process.stdout.write(`${summary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n\n`)
+        process.stdout.write(rendered)
+    }
+    process.exit(0)
+}
 
 if (has('--list')) {
   const listed = listQuestionSets(SETS)

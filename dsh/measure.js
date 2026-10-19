@@ -77,12 +77,18 @@ export function segmentBudgetFor({ windowChars, askedChars = 0, stateBudgetChars
  * @param {(events: object[], max: number, sessionId: string) => Promise<object>} input.compose
  * @param {(request: object, options: object) => Promise<object>} input.decide
  * @param {(line: object) => void} [input.onLine]  called once per segment, for the record
+ * @param {(events: object[], messages: object[], opts: object) => object[]} [input.cut]  how to divide the subject
  * @returns {Promise<{ rows: object[], aggregate: object, ends: object, parts: object[], windowChars: number }>}
  */
 export async function judgeSegments({
     events, messages, segmentChars, questions, compose, decide, sessionId = '', signal, onLine, budgetChars,
+    // `cut` IS HOW A SUBJECT IS DIVIDED, and it is injected because the unit being judged differs by where it came
+    // from: a dsh window is cut by `segmentsOf` over its EVENTS, and a normalized session by `segmentsOfRows` over
+    // its ROWS. The judging -- compose, ask, keep the failure as a row, combine in code -- is identical for both, and
+    // that is the part this module exists to hold once. Defaulting to the dsh cut keeps every existing caller honest.
+    cut = segmentsOf,
 }) {
-    const parts = segmentsOf(events, messages, { maxChars: segmentChars })
+    const parts = cut(events, messages, { maxChars: segmentChars })
     const rows = []
     const windowChars = messages.reduce((total, message) => total + textOfEvent(message).length, 0)
     for (const part of parts) {
