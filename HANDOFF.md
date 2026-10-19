@@ -9,6 +9,43 @@ in the repository or was measured on the machine it was written on.
 
 ## 0. What changed after this page was first written
 
+**TWO CHANNELS MEASURE THE SAME SESSION, AND THEY DID NOT AGREE.** A measurement can come from the LOG (this
+repository's own producer) or from the INDEX (`dsh-session-index`'s producer, read back through
+`core/rows-sqlite.js`). They are two producers of one contract, and **nothing enforced that they agree** — which is
+how the observer and the store came to disagree about who spoke (**`F173`**), about the digest (**`F174`**), and
+about the TEXT of a message (**`F177`**).
+
+**There is now a command that measures the agreement**, over the whole corpus rather than over a fixture:
+
+```
+node scripts/check-channel-agreement.mjs --index ~/.dsh/session-index.db
+```
+
+It composes every session both ways and compares **per message and per tool call** — not the counts, because a
+field that differs can cancel out in an aggregate — plus the receipt. It prints **shapes and lengths, never values**,
+because a tool call's arguments in this corpus contain a **live Telegram bot token** in plain text. It exits 0 when
+the channels agree, 1 when they do not, and **2 when it could not read something** — a run that compared nothing is
+not a run that found agreement.
+
+**The corpus run found four more defects, and three of them were invisible to a count.** 53 sessions differed by a
+trailing space (**`F177`**). The store read a block's `thinking` field as visible text (**`F179`**). **SQLite keeps
+only the bytes before the first NUL**, so 67 messages in one session were 11 characters in the index and 100 in the
+log, and two tool-call names became empty strings (**`F180`**). And the producer answered `false` for `interrupted`
+on 278 of 282 messages that never said it (**`F181`**, found by an independent review).
+
+**THE STATE OF THE CORPUS, after the fixes: 945 of 946 sessions compose byte-identically from either channel, and
+the composed state — the number that decides whether two channels are ONE measurement — differs in ZERO.** The
+remaining one difference is a receipt field that means two different things (**`F182`**, open, and a store decision).
+
+**The rows contract now states SEVEN rules, not four**, and each one is enforced rather than described. The two
+newest are the ones a producer cannot guess: a message's text is **trimmed** (RULE 5) and a row carries **no NUL
+byte** (RULE 7). Both were found by the corpus run and neither was in anyone's head.
+
+**The instrument gate now declares the whole directory.** It named 22 of the 60 files in `core/`, so 38 files were
+outside the boundary without being outside the directory, and the coupling it declared was not the coupling that
+existed — **four files reached `dsh/` through `core/instrument-input.js` and were declared portable** (**`F178`**).
+The gate now walks the import graph, declares **50 portable and 10 host-coupled**, and fails in both directions.
+
 **The two producers disagreed about who spoke, and the observer was the one that was wrong.** `dsh/normalize.js`
 counted an ask by EVENT TYPE — every `user/message` opened an ask-group — while `dsh/exchange.js` counted it by
 `data.source.kind`, which is the only thing that separates a person from the harness. The harness speaks on the user
@@ -80,9 +117,15 @@ coupling `F110` spent a pass removing — so both call the module.
 
 The **normalized row** is one shape for every harness, and its unit is the ask-group (`exchange`), **never a native
 `turn`**. pi has no turn at all — all 44 pi messages in the surveyed corpus carried a null turn — so a per-turn
-query silently becomes a dsh-only query while looking cross-harness. Four rules are enforced by
+query silently becomes a dsh-only query while looking cross-harness. **SEVEN rules** are enforced by
 `test/session-rows.test.js`: `exchange` required and non-null, `shadowed` required, a malformed line counted rather
-than dropped, absence is `null` and never `0`.
+than dropped, absence is `null` and never `0`, the text and the reasoning are **trimmed** (RULE 5), `interrupted` is
+**present and `null` means nobody said** (RULE 6), and a row carries **no NUL byte** (RULE 7).
+
+**THE CONTRACT IS THE ONLY PLACE A RULE LIVES, and the store keeps a copy of it.** The store imports no dsh code by
+design, so "the text is trimmed", "only `reasoning` is reasoning" and "no NUL byte" are now restated there. They
+are aligned today; **a change to one is a change to the other, and nothing enforces it** — which is the case for
+extracting the shared half, and the reason to extract it before the next rule is added.
 
 Standalone routes, all of which work with no harness running:
 
@@ -139,6 +182,24 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   producer-owned source kind (a v4 log is refused without one), and across 120 real session files and 1,501
   `user/message` events, **zero** lacked a source. A fixture is a claim about what the harness emits; when it is
   simpler than the truth, it cannot fail for the truth's reasons.
+* **SQLITE KEEPS ONLY THE BYTES BEFORE THE FIRST NUL.** `node:sqlite` binds a JavaScript string with
+  NUL-terminated semantics, so a message whose text held one NUL was stored as the characters before it and
+  **nothing after it** — the other 89 characters were not shortened, they were GONE, and the row read as though the
+  model had said less (**`F180`**). The same rule emptied a tool call's name, so a call read as a call that named
+  no tool. **The tell is a text that is a PREFIX of the one it should be**, and the reason it stayed invisible for so
+  long is that the count of messages was right throughout.
+* **A GATE THAT NAMES 22 OF 60 FILES CHECKS 22 OF 60 FILES.** The instrument gate was not wrong in what it checked;
+  it was wrong in what it covered (**`F178`**). And the coupling it declared was not the coupling that existed,
+  because coupling is **transitive** — four files reached `dsh/` through `core/instrument-input.js` and were
+  declared portable, in as many words. Declare the DIRECTORY, walk the GRAPH, and fail in both directions.
+* **A COMPARISON THAT COMPARED NOTHING MUST NOT REPORT SUCCESS.** The agreement tool exited 0 on a run that read no
+  logs, because its exit code was `divergent.length === 0` and the unreadable sessions were not in that count
+  (**`F183`**). A signal that is always on is a signal nobody reads, and a signal that is always OFF is a signal
+  nobody trusts. **A tool that measures nothing has to say it measured nothing.**
+* **AN ERROR MESSAGE CAN CARRY THE CONTENT IT WAS ABOUT.** V8's `JSON.parse` message quotes a fragment of the
+  offending line — and in this corpus, a malformed tool-call line is where a live Telegram bot token sits (**`F183`**).
+  The tool prints shapes and lengths for every value it compares; the leak was in the one path that printed an
+  error's message verbatim. A tool that reads a corpus knows things; say what it knows in a shape, never in a value.
 
 ## 5. Open, and known not to be yours
 
@@ -159,8 +220,25 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 * **pi and web producers.** Both importers end in a dsh log, so `--log` measures them. If a substrate arrives that
   does NOT write a dsh log, it needs its own producer writing the same rows — not its own copy of the concept.
 * **The store is a second producer, so it needs the same rules said twice.** It imports no dsh code by design, so
-  "the ask-group opens on a human message" and "a message with no declared source is not the human" now live in it as
-  a restatement. They are aligned today; a change to one is a change to the other, and nothing enforces it.
+  "the ask-group opens on a human message", "a message with no declared source is not the human", "the text is
+  trimmed", "only `reasoning` is reasoning" and "no NUL byte" now live in it as a restatement. They are aligned
+  today; a change to one is a change to the other, and nothing enforces it. **This is the case for extracting the
+  shared half into a package, and it should be done before the next rule is added rather than after.**
+* **The receipt's `sourceBytes` means two different things, and the store has to fix it** (**`F182`**, OPEN). The log
+  route reports the DECODED length of the conversation; the index reports the ON-DISK size of a COMPRESSED log,
+  because the store's `bytes` column is doing two jobs — change detection and the receipt's evidence. The fix is a
+  second column for the decoded length, which is a `SCHEMA_VERSION` 5 → 6 change and therefore a **store decision**,
+  not a line in a tool. Until it is made, the agreement tool counts it as a NAMED difference and does not compare it.
+* **The index channel loses EVIDENCE the log channel carries, and both losses are the store's schema**
+  (**`F184`**, OPEN). 4,758 tool-call arguments are cut at the store's 4,000-character cap with no length stored
+  beside them, and 120 interruption facts have no column at all. **The reading is the same either way — the composed
+  state agrees in all 946 sessions — but the evidence around it is not.** All three gaps (`F182` and `F184`) are one
+  `SCHEMA_VERSION` 5 → 6 change with three additive columns: the decoded length beside the on-disk size, the full
+  length of the arguments beside the cap, and `interrupted` beside `shadowed`.
+* **THREE DECISIONS ARE OPEN, and they are the next work, not this work's unfinished business.** (1) Does this
+  repository own a session-log format, or does every substrate keep its own? (2) One index over all corpora, or one
+  importer per corpus into one index? (3) Where does the shared half live — which package, under which name? The
+  answers decide the pi extension and the package extraction, and they are the operator's to make.
 
 ## 6. Where to start
 
