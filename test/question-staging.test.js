@@ -114,15 +114,15 @@ test('COMPOSE AS STRINGS, then STORE, then ASK BY NAME -- nothing in the chain n
 test('a set may declare one scope, and then the caller need not name it', async () => {
   const dir = stores()
   const asked = []
-  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'single@1', scope: 'admit', question: [CHOICE] }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'single@1', scope: 'call', question: [CHOICE] }, {})
   await decider(dir, asked).execute({ state: 'text', set: 'single@1' }, {})
   assert.equal(asked.length, 1, 'one declared scope is not ambiguous, so asking for it would be ceremony')
 })
 
 test('a set that declares several scopes still has to be narrowed', async () => {
   const dir = stores()
-  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'admit', question: [CHOICE] }, {})
-  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'draft', question: [LADDER], replace: true }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'call', question: [CHOICE] }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'two@1', scope: 'result', question: [LADDER], replace: true }, {})
   await assert.rejects(
     () => decider(dir, []).execute({ state: 'text', set: 'two@1' }, {}),
     /`scope` is required/,
@@ -131,7 +131,7 @@ test('a set that declares several scopes still has to be narrowed', async () => 
 
 test('a name and an inline list together are REFUSED -- they can disagree and nothing would show it', async () => {
   const dir = stores()
-  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE] }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'call', question: [CHOICE] }, {})
   await assert.rejects(
     () => decider(dir, []).execute({ state: 'x', set: 'staged@1', questions: [{ id: 'other', type: 'noul', instructions: 'y' }] }, {}),
     /not several/,   // ONE refusal now, from the shared module, whatever pair of routes was given
@@ -140,9 +140,9 @@ test('a name and an inline list together are REFUSED -- they can disagree and no
 
 test('a stored set that does not exist, and a scope it does not declare, are named', async () => {
   const dir = stores()
-  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'admit', question: [CHOICE] }, {})
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'staged@1', scope: 'call', question: [CHOICE] }, {})
   await assert.rejects(() => decider(dir, []).execute({ state: 'x', set: 'nope@9' }, {}))
-  await assert.rejects(() => decider(dir, []).execute({ state: 'x', set: 'staged@1', scope: 'result' }, {}), /is not a scope/)
+  await assert.rejects(() => decider(dir, []).execute({ state: 'x', set: 'staged@1', scope: 'session' }, {}), /is not a scope/)
 })
 
 test('neither route given says WHICH route to take, and mentions storing first', async () => {
@@ -199,7 +199,7 @@ test('one question means the same thing whichever route carried it', async () =>
   const asked = []
   const composer = createQuestionsTool({ dir })
   // STORED, then INLINE, from the same text -- and the questions that reach the model must be identical.
-  await composer.execute({ action: 'write', set: 'same@1', scope: 'admit', question: [CHOICE] }, {})
+  await composer.execute({ action: 'write', set: 'same@1', scope: 'call', question: [CHOICE] }, {})
   await decider(dir, asked).execute({ state: 'text', set: 'same@1' }, {})
   const viaName = JSON.stringify(asked[0].questions)
   await decider(dir, asked).execute({ state: 'text', question: [CHOICE] }, {})
@@ -306,4 +306,45 @@ test('a score renders with its scale, computed from the BUILT question -- not fr
   assert.match(lines[0], /1\.85 of 2/)
   // AND A QUESTION WITH NO SCALE GETS NONE, rather than a false `of undefined`.
   assert.equal(/of undefined/.test(renderAnswerLines({ x: { type: 'noul', probability: 0.5 } }, {}).join('')), false)
+})
+
+// ── A SCOPE NAME IS A CLAIM ABOUT WHERE YOU ARE ─────────────────────────────────────────────────────
+
+test('`call` is the scope of a caller that is not a seam, and the DEFAULT when none is named', async () => {
+  const { composeQuestions } = await import('../lib/system1.js')
+  const q = ['id=x ;; type=noul ;; instructions=Is it so?']
+  assert.equal(composeQuestions({ question: q }).scope, 'call', 'no scope named means the non-seam scope, not a guess')
+  assert.equal(composeQuestions({ question: q, scope: 'call' }).scope, 'call')
+})
+
+test('composing at a SEAM scope needs the caller to BE a seam, and reading a seam-scoped set does not', async () => {
+  const { composeQuestions } = await import('../lib/system1.js')
+  const q = ['id=x ;; type=noul ;; instructions=Is it so?']
+  // NOT A SEAM, COMPOSING. `--scope draft` would be a claim about a point in somebody else's agent loop.
+  const composing = composeQuestions({ question: q, scope: 'draft' })
+  assert.equal(composing.ok, false)
+  assert.match(composing.reason, /is a SEAM scope/, 'and it says which rule was broken')
+  assert.match(composing.reason, /Use `call`/, 'and offers the scope that does not claim anything')
+  // IS A SEAM. The turn boundary passes the hook the harness gave it.
+  assert.equal(composeQuestions({ question: q, scope: 'draft', isSeam: true }).scope, 'draft')
+
+  // NOT A SEAM, READING. This is the distinction that makes the rule safe: `system1_decide` asks
+  // `news-claim-check@2` at `admit` from a tool that is not a seam, and that is CORRECT -- the set is about a
+  // seam's job and the agent is running it. The scope belongs to whoever WROTE the set.
+  const dir = stores()
+  const asked = []
+  await createQuestionsTool({ dir }).execute({ action: 'write', set: 'seam-owned@1', scope: 'admit', question: [CHOICE] }, {})
+  await decider(dir, asked).execute({ state: 'text', set: 'seam-owned@1', scope: 'admit' }, {})
+  assert.equal(asked.length, 1, 'reading a set stored at a seam scope needs no flag at all')
+})
+
+test('a set STORED at a seam scope is refused for a non-seam writer, because the name is permanent', async () => {
+  const { writeQuestionSet } = await import('../lib/system1.js')
+  const { validateSpecs } = await import('../lib/questions.js')
+  const dir = stores()
+  const specs = [{ id: 'x', type: 'noul', instructions: 'Is it so?' }]
+  assert.match(writeQuestionSet({ dir, name: 'a@1', scope: 'draft', specs, validate: validateSpecs }).reason, /is a SEAM scope/)
+  assert.equal(writeQuestionSet({ dir, name: 'b@1', scope: 'draft', specs, validate: validateSpecs, isSeam: true }).ok, true)
+  assert.equal(writeQuestionSet({ dir, name: 'c@1', scope: 'call', specs, validate: validateSpecs }).ok, true, 'and `call` always works')
+  assert.equal(writeQuestionSet({ dir, name: 'd@1', scope: 'session', specs, validate: validateSpecs }).ok, true, 'the two aggregate scopes are not seam points')
 })

@@ -143,7 +143,9 @@ test('the tool declares what it emits, and names the scopes a set may be written
   const tool = toolFor(fixture())
   assert.equal(tool.name, QUESTIONS_TOOL_NAME)
   assert.equal(tool.name, 'system1_question_sets')
-  assert.deepEqual([...WRITABLE_SCOPES].sort(), ['admit', 'assemble', 'close', 'draft', 'execute', 'post_execute', 'pre_execute', 'request', 'result', 'session', 'turn'])
+  // `call` is in this list because it is the scope a standalone writes at, and the tool publishes the
+  // list rather than holding one of its own -- so a caller can see the non-seam scope is a first-class one.
+  assert.deepEqual([...WRITABLE_SCOPES].sort(), ['admit', 'assemble', 'call', 'close', 'draft', 'execute', 'post_execute', 'pre_execute', 'request', 'result', 'session', 'turn'])
   const value = await tool.execute({ action: 'list' })
   for (const key of Object.keys(value)) {
     assert.ok(tool.output.schema.properties[key] !== undefined, key + ' is emitted and declared')

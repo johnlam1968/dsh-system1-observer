@@ -18,6 +18,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { normalize, join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * The instrument, as files.
@@ -74,6 +75,9 @@ const code = (text) => {
 }
 
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : '')
+
+/** The repository root, from this file, so the clean-room copy is made of the real tree. */
+const rootOfTest = normalize(join(dirname(fileURLToPath(import.meta.url)), '..'))
 
 test('every file in the instrument set exists, and the set is the one that was measured', () => {
   const missing = INSTRUMENT.filter((file) => !existsSync(file))
@@ -191,3 +195,32 @@ test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at a
   assert.ok([...seen].filter((f) => f.startsWith('lib/')).length >= 10, `and it is a real graph, ${[...seen].filter((f) => f.startsWith('lib/')).length} lib files`)
 })
 
+
+// THE CLEAN ROOM, EXECUTED RATHER THAN INFERRED.
+//
+// The static test above reads the import graph. This one COPIES the package to a temporary directory with no
+// `node_modules` at all and RUNS the entry point there, which is the property that is actually claimed: the standalone
+// works with nothing installed. A static walk can be fooled by a dynamic import, an export condition, or a file it
+// failed to resolve; a run cannot, and it costs one `node` process.
+//
+// `lib/host/` is left out because that IS the harness glue -- excluding it is the point, not a cheat, and the test
+// asserts it is excluded so a later edit cannot quietly depend on it.
+test('the standalone RUNS in a directory with no node_modules at all', async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { mkdtempSync, cpSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const root = mkdtempSync(join(tmpdir(), 'clean-room-'))
+  try {
+    for (const dir of ['lib', 'scripts', 'criteria']) cpSync(join(rootOfTest, dir), join(root, dir), { recursive: true })
+    rmSync(join(root, 'lib', 'host'), { recursive: true, force: true })
+    assert.equal(existsSync(join(root, 'lib', 'host')), false, 'the harness glue is what was left out')
+    assert.equal(existsSync(join(root, 'node_modules')), false, 'and nothing was installed to replace it')
+    // `--list` reads every composition and prints it. It reaches the loader, the linter, the question builder and
+    // the set reader -- the whole reading half of the instrument -- and it costs nothing.
+    const out = execFileSync(process.execPath, [join(root, 'scripts', 'ask.mjs'), '--list'], { encoding: 'utf8' })
+    assert.match(out, /set\(s\) in/, 'and it printed the sets it found')
+    assert.match(out, /news-claim-check@2/, 'including a composition this repository ships')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
