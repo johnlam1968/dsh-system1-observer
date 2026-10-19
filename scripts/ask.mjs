@@ -284,7 +284,13 @@ if (argv[0] === 'session') {
         windowChars: sessionSummary.visibleChars, askedChars: flag('--segment-chars'), stateBudgetChars: segmentChars, defaultSegmentChars: segmentChars,
     })
     const transport = wireTransport({ baseUrl: flag('--wire-url') ?? undefined, keyEnv: flag('--key-env') ?? undefined, timeoutMs: Number(flag('--timeout')) || undefined })
-    const judge = askQuestions(transport)
+    // THE JUDGE IS THE TRANSPORT'S `decide`, and it used to be `askQuestions(transport)` -- which CALLS `askQuestions`
+    // with the transport where the INPUT goes and nothing where the transport goes, so it returned a REJECTED PROMISE
+    // (an async function does not throw at the call site). Every segment then failed, the failure was written into the
+    // package as a refusal, and the measurement looked COMPLETE: a package whose `readings.json` said `n: 0` for every
+    // question and `failed: 1` for every question, and whose report said the session was unreadable. The questions are
+    // already composed above, so the judge only has to ask them of the model.
+    const judge = (request) => transport.decide(request)
 
     // THE ROW-NATIVE CUT AND COMPOSER. Both are supplied here and nowhere else: the judging below is the shared chain,
     // and everything harness-shaped about reading a conversation was resolved by the time these two lines are reached.
@@ -294,7 +300,12 @@ if (argv[0] === 'session') {
         segmentChars: chosen,
         questions: built.questions,
         budgetChars: segmentChars,
-        cut: segmentsOfRows,
+        // THE ROWS CUT, THROUGH THE CHAIN'S OWN CALLING CONVENTION. `judgeSegments` calls `cut(events, messages,
+        // { maxChars })` -- three arguments -- because that is the shape `dsh/segment.js` has, and the rows cut was
+        // passed in RAW: its SECOND argument (the messages) landed in the options slot, so `maxChars` was silently
+        // ignored and every session was cut at the default 57,600 characters whatever `--segment-chars` said. The rows
+        // themselves are the first argument either way, so the adapter is one line and it makes the budget real.
+        cut: (rows, messages, options) => segmentsOfRows(rows, options),
         compose: async (rows) => ({ state: rows.filter((r) => r.kind === 'message').map((r) => r.text).join('\n') }),
         decide: (request) => judge(request),
     })
@@ -307,13 +318,17 @@ if (argv[0] === 'session') {
 
     // `report.md` IS THE SKELETON, not prose. `buildSkeleton` fills every number and leaves the READING column blank on
     // purpose: prose cannot be derived from numbers, so a script that wrote prose here would be inventing a judgement.
+    // THE IMPORT IS HERE, NOT IN THE `--package` BRANCH, because the report is built for EVERY measurement and the
+    // branch below only decides whether it is also WRITTEN. It was inside the branch, and `buildSkeleton` was not even
+    // in the destructuring, so every measurement died on `buildSkeleton is not defined` -- the `measurements` route at
+    // the top of this file imports it and nobody compared the two.
+    const { buildPackage, buildSkeleton, cellOf, defaultPackageDir, packageId, writePackage } = await import('../core/report.js')
     const tables = [{ title: flag('--set') ?? 'the inline questions', set: flag('--set'), setHash: built.hash ?? null, questions: Object.keys(judged.aggregate) }]
     const at = new Date().toISOString()
     const report = buildSkeleton({ summary, tables, at })
 
     let written = null
     if (has('--package')) {
-        const { buildPackage, defaultPackageDir, packageId, writePackage } = await import('../core/report.js')
         const id = packageId({ at, run: null })
         const pkg = buildPackage({ id, at, report, summary, lines: [], meta: { plugin: 'ask.mjs', version: null, dsh: null } })
         const root = flag('--dir') ?? defaultPackageDir()
@@ -322,11 +337,14 @@ if (argv[0] === 'session') {
         written = { id, dir: done.dir, files: done.files }
     }
 
-    const rendered = renderAnswerLines(judged.aggregate, {})
     const out = {
         ...(written === null ? {} : { package: written }),
-        session: { harness: receipt.harness, id: receipt.id, sourceSha256: receipt.sourceSha256, highWater: receipt.highWater },
-        session: sessionSummary, measurement: summary, autoSegmented, segmentChars: chosen,
+        // ONE `session` KEY, and it carries BOTH halves. The key appeared twice in this object literal -- the receipt's
+        // identity first, the summary second -- so the second silently won and the harness, the id, the sha256 and the
+        // high-water mark were dropped from the output of a measurement. A duplicate key in an object literal is a
+        // no-op with no warning, which is why nothing said so.
+        session: { ...sessionSummary, harness: receipt.harness, id: receipt.id, sourceSha256: receipt.sourceSha256, highWater: receipt.highWater },
+        measurement: summary, autoSegmented, segmentChars: chosen,
         segments: judged.rows.map((row) => ({ index: row.index, messages: row.messages, chars: row.chars, stateHash: row.stateHash, ...(row.failure === undefined ? {} : { failure: row.failure }) })),
         answers: judged.aggregate,
     }
@@ -335,7 +353,13 @@ if (argv[0] === 'session') {
         if (written !== null) process.stdout.write(`package: ${written.dir}  (${written.files.length} file(s))\n`)
         process.stdout.write(`${receipt.harness} session ${receipt.id} [${String(receipt.sourceSha256).slice(0, 12)}]\n`)
         process.stdout.write(`${sessionSummary.messages} message(s) in ${exchanges.length} exchange(s), judged in ${judged.rows.length} segment(s)${autoSegmented ? ' (auto-segmented)' : ''}\n\n`)
-        process.stdout.write(rendered)
+        // THE NUMBERS, IN THE SHAPE THE REPORT READS, RENDERED BY THE REPORT'S OWN RENDERER. `renderAnswerLines` was
+        // used here, and it renders ANSWERS -- `{type, probability}` -- while this is an AGGREGATE over segments, so every
+        // line read "undefined (p=true)". `cellOf` is the renderer `buildSkeleton` uses for the same cells, and using it
+        // here means the terminal and the report say the same thing about the same measurement.
+        for (const question of summary.groups[0]?.questions ?? []) {
+            process.stdout.write(`  ${question.id}  ${cellOf(question)}\n`)
+        }
     }
     process.exit(0)
 }

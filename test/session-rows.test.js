@@ -138,6 +138,37 @@ test('segments are cut by TEXT SIZE and a single oversized row is its own segmen
     for (const segment of segments) assert.ok(segment.chars <= 70 || segment.messages === 1, 'no segment is over budget unless it is a single row')
 })
 
+test('EVERY SEGMENT CARRIES ITS OWN ROWS, because the chain composes each one from `part.events`', () => {
+    // THE SHAPE THE SHARED CHAIN EXPECTS. `dsh/measure.js` composes every segment from `part.events`, and the dsh cut
+    // has always returned them. The rows cut did not, so the standalone's measure route threw
+    // `Cannot read properties of undefined (reading 'filter')` on its first segment -- for a log, a rows file and an
+    // index alike -- and the unit test agreed with the implementation because it only ever drove the DSH cut.
+    const rows = good()
+    for (const row of rows) if (row.kind === 'message') row.text = row.text.padEnd(30, '.')
+    const segments = segmentsOfRows(rows, { maxChars: 70 })
+    assert.ok(segments.length > 1, 'the fixture is cut into more than one segment')
+    for (const segment of segments) {
+        assert.ok(Array.isArray(segment.events), 'a segment without rows cannot be composed')
+        assert.ok(segment.events.length > 0)
+        // AND THE WINDOW IS FROM THE FIRST COVERED MESSAGE TO THE LAST, so the tool calls BETWEEN them travel with
+        // the messages they answered -- the same reason `dsh/segment.js` widens its window.
+        const covered = segment.events.filter((r) => r.kind === 'message')
+        assert.equal(covered.length, segment.messages, 'the rows carry every message the segment counts')
+        assert.equal(covered[0].text, rows.filter((r) => r.kind === 'message')[segment.from].text, 'starting at the first')
+        assert.equal(covered.at(-1).text, rows.filter((r) => r.kind === 'message')[segment.to - 1].text, 'and ending at the last')
+    }
+    // AND THE TOOL CALLS TRAVEL. A segment that dropped them would judge the questions about what the agent DID
+    // without the record of what it did -- which is F32, the defect where the tool results never reached the judge.
+    const withCall = [
+        { kind: 'receipt', harness: 'dsh', id: 's1', source: '/logs/s1.jsonl', sourceSha256: 'ab'.repeat(32), highWater: 4 },
+        { kind: 'message', seq: 1, exchange: 0, ordinal: 1, role: 'user', type: 'text', text: 'a'.repeat(30), reasoning: null, shadowed: false },
+        { kind: 'tool_call', seq: 2, exchange: 0, callId: 'c1', name: 'bash', args: '{"cmd":"ls"}', result: null, outcome: null },
+        { kind: 'message', seq: 3, exchange: 0, ordinal: 2, role: 'assistant', type: 'text', text: 'b'.repeat(30), reasoning: null, shadowed: false },
+    ]
+    const [one] = segmentsOfRows(withCall, { maxChars: 10000 })
+    assert.deepEqual(one.events.map((r) => r.kind), ['message', 'tool_call', 'message'], 'the call between the messages is in the segment')
+})
+
 test('the vocabulary is declared, so a producer cannot invent a role', () => {
     assert.deepEqual(ROW_KINDS, ['receipt', 'message', 'tool_call', 'fact'])
     assert.ok(MESSAGE_ROLES.includes('user') && MESSAGE_ROLES.includes('assistant'))

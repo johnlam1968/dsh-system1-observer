@@ -178,6 +178,45 @@ export async function judgeOnce({ events, questions, compose, decide, sessionId 
 }
 
 /**
+ * ONE AGGREGATE, IN THE SHAPE A REPORT READS.
+ *
+ * `aggregateReadings` counts what the segments said: a median, a range, a share above the line, and the labels a
+ * choice took. `core/report.js` reads a DIFFERENT shape -- a probability block and a list of counted values -- because
+ * it was written for the TRACE's call lines, where every reading is a call. The standalone AGGREGATES, so it has to
+ * say the same thing in the shape the renderer already knows, or the report prints
+ * "read=undefined, nothing summarisable" for a measurement that has answers.
+ *
+ * THE SHAPE IS ALSO HOW THE PRIMITIVE IS READ, so it is not cosmetic: `kindOf` derives the primitive from what is
+ * present -- a probability block AND value counts is a SCORE, a probability block alone is a NOUL, value counts alone
+ * are a CHOICE. So a score carries both, a noul carries only the block, and a choice carries only the counts. Getting
+ * that wrong would print "true in 3/3" beside a score, whose level is not a probability.
+ *
+ * @param {object} entry one entry of `judged.aggregate`
+ * @returns {object} the same question, in the shape `core/report.js` reads
+ */
+function questionOf(entry) {
+    const n = entry?.n ?? 0
+    const out = { id: entry?.id ?? null, n, unreadable: entry?.unreadable ?? 0, failed: entry?.failed ?? 0 }
+    if (entry?.type === 'choice') {
+        // A CHOICE IS ITS LABELS, counted. No probability block, because a label has no probability.
+        out.values = (entry.labels ?? []).map((label) => ({ value: label.label, n: label.n }))
+        return out
+    }
+    out.probabilities = {
+        n,
+        median: entry?.median ?? null,
+        min: entry?.min ?? null,
+        max: entry?.max ?? null,
+        // THE COUNT, not the share: the report prints it beside `n`, and a share times a count is a rounding error.
+        atOrAboveHalf: Math.round((entry?.aboveHalf ?? 0) * n),
+    }
+    // A SCORE ALSO CARRIES ITS VALUES, so the primitive reads as a score and not as a noul -- a score's level is not a
+    // probability, and the report says so by not printing a share beside it.
+    if (entry?.type === 'score') out.values = (entry.readings ?? []).map((reading) => ({ value: reading.value, n: 1 }))
+    return out
+}
+
+/**
  * A measurement, in the shape a PACKAGE EXPECTS.
  *
  * It is built here rather than in the script that writes the package, because the shape is a fact about a measurement
@@ -196,7 +235,7 @@ export function measurementSummary({ receipt, session, judged, set = null, at = 
         window: { run: null, hook: 'session-review', question: set, groupBy: 'session', tail: at },
         counts: { call: judged?.rows?.length ?? 0, skip: (judged?.rows?.length ?? 0) - answered.length, mount: 1, total: judged?.rows?.length ?? 0 },
         mount: { model: firstExecuted?.model ?? null, provider: firstExecuted?.provider ?? null, probeHash: null },
-        groups: [{ questions: Object.entries(judged?.aggregate ?? {}).map(([id, entry]) => ({ id, ...entry })) }],
+        groups: [{ questions: Object.entries(judged?.aggregate ?? {}).map(([id, entry]) => questionOf({ id, ...entry })) }],
         // A REFUSAL IS CARRIED INTO THE PACKAGE. A segment that could not be judged is written as a sentence a reader
         // will see, because a package whose `n` quietly shrank reads as a smaller measurement rather than a partial one.
         refusals: (judged?.rows ?? []).filter((row) => row.failure !== undefined).map((row) => `segment ${row.index}: ${row.failure.reason}`),

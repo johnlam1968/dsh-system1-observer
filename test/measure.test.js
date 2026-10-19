@@ -12,6 +12,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { judgeSegments, judgeOnce, segmentBudgetFor, messageOf } from '../dsh/measure.js'
 import { EVENT } from '../dsh/session-adapter/lib/session-format.js'
+import { segmentsOfRows } from '../core/session-rows.js'
 
 let seq = 0
 /**
@@ -31,6 +32,32 @@ test('the segment size is the caller\'s when named, and the subject segments ITS
     assert.deepEqual(segmentBudgetFor({ windowChars: 5000, askedChars: 0, ...base }), { segmentChars: 600, autoSegmented: true })
     // SMALL ENOUGH: one call, and NOT `autoSegmented` -- nothing was cut.
     assert.deepEqual(segmentBudgetFor({ windowChars: 10, askedChars: 0, ...base }), { segmentChars: 0, autoSegmented: false })
+})
+
+test('THE ROWS CUT WORKS IN THE CHAIN, because that is the cut the standalone measures with', async () => {
+    // THE PROOF THAT WAS MISSING. Every test above drives the DEFAULT cut -- the dsh one, over dsh events. The
+    // standalone measures a NORMALIZED SESSION, so it passes `segmentsOfRows` instead, and that cut returned segments
+    // without the `events` the chain composes from. The result was a crash on the first segment of every standalone
+    // measurement -- from a log, from a rows file, from an index -- and the suite was green, because the two were wrong
+    // in the same shape: the test agreed with the implementation by never exercising the other cut.
+    const rows = [
+        { kind: 'receipt', harness: 'dsh', id: 's1', source: '/logs/s1.jsonl', sourceSha256: 'ab'.repeat(32), highWater: 4 },
+        { kind: 'message', seq: 1, exchange: 0, ordinal: 1, role: 'user', type: 'text', text: 'the ask', reasoning: null, shadowed: false },
+        { kind: 'tool_call', seq: 2, exchange: 0, callId: 'c1', name: 'bash', args: '{"cmd":"ls"}', result: null, outcome: null },
+        { kind: 'message', seq: 3, exchange: 0, ordinal: 2, role: 'assistant', type: 'text', text: 'the answer', reasoning: null, shadowed: false },
+    ]
+    const messages = rows.filter((r) => r.kind === 'message')
+    const asked = []
+    const result = await judgeSegments({
+        events: rows, messages, segmentChars: 10000,
+        questions: { q1: { type: 'noul' } },
+        cut: (all, covered, options) => segmentsOfRows(all, options),
+        compose: async (segmentRows) => ({ state: segmentRows.filter((r) => r.kind === 'message').map((r) => r.text).join('\n') }),
+        decide: async ({ state }) => { asked.push(state); return { answers: { q1: { probability: 0.5 } } } },
+    })
+    assert.equal(result.rows.length, 1, 'one segment, one row')
+    assert.deepEqual(asked, ['the ask\nthe answer'], 'and it was composed from the segment\'s own rows')
+    assert.equal(result.aggregate.q1.n, 1)
 })
 
 test('segments are judged, and a failed one is a ROW not a gap', async () => {

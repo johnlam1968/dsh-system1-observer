@@ -403,7 +403,17 @@ function kindOf(q) {
  * One question's numbers as a table cell -- bold on the fact that decides it, because a reader scanning the column is
  * looking for the one thing that matters, and `median 0.415, range 0.22..0.86` alone does not say it.
  */
-function cellOf(q, compact = false) {
+/**
+ * ONE QUESTION, AS THE READER SEES IT.
+ *
+ * EXPORTED, because there are now TWO surfaces that print a measurement's numbers -- the report's table and the
+ * standalone's terminal -- and a second renderer would be a second answer to the same question. This is the one the
+ * report uses, so the terminal and the report say the same thing about the same measurement.
+ *
+ * @param {object} q one question, in the shape a package's `readings.json` holds
+ * @returns {string} the cell, as markdown
+ */
+export function cellOf(q, compact = false) {
   const tail = (q.unreadable > 0 ? ', unreadable=' + q.unreadable : '') + (q.failed > 0 ? ', FAILED=' + q.failed : '')
   const flat = q.separates === false ? ' -- NOT SEPARATING' : ''
   const values = Array.isArray(q.values) ? q.values : []

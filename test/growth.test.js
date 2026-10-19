@@ -51,10 +51,16 @@ const SIZE_EXEMPTIONS = {
             + 'split by action is the one to make -- when a fifth action appears, not by size now.',
     },
     'core/report.js': {
-        max: 455,
+        // RAISED FROM 455 TO 465, and the gate asks for a DECISION rather than a drift. The ten lines are the export
+        // of `cellOf` -- the ONE renderer of a question's cell -- and the reason it is exported is the same reason this
+        // file exists: the package's files must agree. The standalone's terminal now prints a measurement's numbers
+        // with this renderer instead of a second one of its own, and two renderers of the same question is the defect
+        // the package exists to prevent, moved rather than fixed. The next raise should be a SPLIT, not a number.
+        max: 465,
         reason: 'a measurement package is ONE artifact whose files must agree: skeleton, numbers, interpretation, '
-            + 'manifest and the reproducible-file list. Splitting it invites the parts to disagree about the same '
-            + 'measurement, which is the defect the package exists to prevent.',
+            + 'manifest and the reproducible-file list -- and now the one renderer of a question\'s cell, so the '
+            + 'terminal and the report cannot say different things about the same measurement. Splitting it invites '
+            + 'the parts to disagree about the same measurement, which is the defect the package exists to prevent.',
     },
     'dsh/pi-session-export.js': {
         max: 606,

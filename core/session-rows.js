@@ -179,19 +179,36 @@ export function exchangesOfRows(rows) {
  * index that meant "row" would land on the receipt. This matches `dsh/segment.js`, which indexes its `messages`
  * argument the same way, and it is stated because the two are otherwise easy to read as interchangeable.
  *
+ * **EACH SEGMENT CARRIES ITS OWN ROWS**, under the key `events`, and that is not a naming whim: `dsh/measure.js`
+ * composes every segment from `part.events`, and the dsh cut has always returned them. This cut did not, so the
+ * standalone's measure route -- the one that reads a normalized session, whether it came from a log or an index --
+ * threw `Cannot read properties of undefined (reading 'filter')` on its first segment, every time. The unit test
+ * agreed with the implementation because it only ever drove the DSH cut, so the two were wrong in the same shape.
+ *
+ * The slice runs from the FIRST covered message to the LAST, so the tool calls between them travel with the messages
+ * they answered -- the same reason `dsh/segment.js` widens its window to the events between the first and the last
+ * covered message. And the window is found by IDENTITY, exactly as that module finds its own: the rows carry no
+ * index to slice by, and a window built from a field that is sometimes missing is a window nothing can verify.
+ *
  * @param {object[]} rows
  * @param {{ maxChars?: number }} [options]
- * @returns {{ index: number, from: number, to: number, messages: number, chars: number }[]}
+ * @returns {{ index: number, from: number, to: number, messages: number, chars: number, events: object[] }[]}
  */
 export function segmentsOfRows(rows, { maxChars = 57600 } = {}) {
-    const list = messagesOf(rows)
+    const all = Array.isArray(rows) ? rows : []
+    const list = messagesOf(all)
     const budget = Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : 57600
     const segments = []
     let start = 0
     let chars = 0
     const close = (end) => {
         if (end <= start) return
-        segments.push({ index: segments.length, from: start, to: end, messages: end - start, chars })
+        const first = all.indexOf(list[start])
+        const last = all.indexOf(list[end - 1])
+        segments.push({
+            index: segments.length, from: start, to: end, messages: end - start, chars,
+            events: first === -1 || last === -1 ? list.slice(start, end) : all.slice(first, last + 1),
+        })
     }
     for (let index = 0; index < list.length; index += 1) {
         const size = typeof list[index].text === 'string' ? list[index].text.length : 0
