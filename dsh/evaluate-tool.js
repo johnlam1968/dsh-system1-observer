@@ -18,7 +18,8 @@ import { isRecord } from '../core/is-record.js'
 import { resultEnvelope } from '../core/model/result-envelope.js'
 import { scoreScales } from '../core/system1.js'
 import { describeToolCut } from './tool-blocks.js'
-import { aggregateReadings, firstAndLast, segmentsOf, DEFAULT_SEGMENT_CHARS } from './segment.js'
+import { DEFAULT_SEGMENT_CHARS } from './segment.js'
+import { judgeSegments, judgeOnce, segmentBudgetFor } from './measure.js'
 import { CONTEXT, stateBudgetChars, withinStateBudget } from '../core/model/limits.js'
 import { round } from '../core/report.js'
 import { applyGroups, selectionNote } from './exchange.js'
@@ -407,57 +408,39 @@ export function createEvaluateTool({ settings, stored, liveEvents, compose, ques
       // session-level judgement. Measured on this repository's own sessions: 855,812 characters of conversation were
       // composed to 8,000 and answered anyway. THE CALLER CAN STILL CHOOSE the size, and `lastMessages` paging still
       // wins -- a window the caller narrowed on purpose is only segmented if that window is itself too big.
-      const askedChars = Number.isInteger(given.segmentChars) && given.segmentChars > 0 ? given.segmentChars : 0
+      // THE DECISION AND THE LOOP BELOW ARE NOT HERE: they are `segmentBudgetFor` and `judgeSegments` in `measure.js`.
+      // A standalone script judges a subject with the same code, and a measurement is only comparable with a
+      // measurement -- so the part that would be wrong to have twice lives once. This file keeps what makes it a TOOL:
+      // the window it read, the selection it applied, the schema it declares, and the render. It delegates the judging.
       const windowChars = messages.reduce((total, message) => total + textOfEvent(message).length, 0)
-      const autoSegmented = askedChars === 0 && windowChars > stateBudgetChars
-      const segmentChars = askedChars > 0 ? askedChars : (autoSegmented ? DEFAULT_SEGMENT_CHARS : 0)
+      const { segmentChars, autoSegmented } = segmentBudgetFor({
+        windowChars, askedChars: given.segmentChars, stateBudgetChars, defaultSegmentChars: DEFAULT_SEGMENT_CHARS,
+      })
       if (segmentChars > 0) {
-        const parts = segmentsOf(events, messages, { maxChars: segmentChars })
-        const rows = []
-        for (const part of parts) {
-          // THE SEGMENT IS COMPOSED WITH THE STATE BUDGET, NOT THE ROW'S WHOLE-SESSION CAP -- see `index.js`. The
-          // segmentation already decided the size; this is the ceiling it was measured against.
-          const piece = await compose(part.events, stateBudgetChars, sessionId)
-          if (piece?.refused === true) {
-            rows.push({ index: part.index, from: part.from, to: part.to, messages: part.messages, chars: 0, stateHash: '', failure: { reason: piece.reason } })
-            continue
-          }
-          const text = String(piece.state ?? '')
-          const hash = createHash('sha256').update(text).digest('hex').slice(0, 12)
-          const budget = withinStateBudget(text.length)
-          let reply
-          try {
-            reply = await decide({ state: text, questions: built.questions }, { signal: exec?.signal })
-          } catch (error) {
-            rows.push({ index: part.index, from: part.from, to: part.to, messages: part.messages, chars: text.length, stateHash: hash, failure: { reason: messageOf(error) } })
-            continue
-          }
-          if (reply === null || typeof reply !== 'object' || reply.kind === 'error') {
-            rows.push({ index: part.index, from: part.from, to: part.to, messages: part.messages, chars: text.length, stateHash: hash, failure: { reason: String(reply?.reason ?? 'the model returned no result') } })
-            continue
-          }
-          rows.push({
-            index: part.index, from: part.from, to: part.to, messages: part.messages,
-            chars: text.length, stateHash: hash, truncated: piece.truncated === true,
-            // A SEGMENT OVER THE ESTIMATED BUDGET IS REPORTED, NOT HIDDEN: it is the one reading most likely to be
-            // about nothing, and it is here because a single message can exceed the budget on its own.
-            ...(budget.ok === false ? { overBudget: budget.problem } : {}),
-            answers: isRecord(reply.answers) ? reply.answers : {},
-          })
+        const { rows, aggregate, ends, parts } = await judgeSegments({
+          events, messages, segmentChars, questions: built.questions,
+          compose, decide, sessionId, budgetChars: stateBudgetChars, signal: exec?.signal,
           // ONE LINE PER SEGMENT, because each IS a reading -- about that part of the session, under this hook.
-          if (typeof record === 'function') {
+          // `judgeSegments` writes a line per segment that produced an ANSWER; a segment that failed becomes a row
+          // carrying its reason and no line, which is what this path has always done. `judgeOnce` does write the
+          // failures, because there is one call and no row to carry them.
+          onLine: (line) => {
+            if (typeof record !== 'function') return
             record({
               event: 'call', hook: REVIEW_HOOK, tool: toolId,
-              subject: { source: useStored ? 'stored' : 'live', sessionId: useStored ? sessionId : '', kinds, lastMessages, offset, ...selectorEcho(evidence), messages: part.messages, total: messages.length },
-              segment: { index: part.index, from: part.from, to: part.to, of: parts.length },
-              stateHash: hash,
+              subject: {
+                source: useStored ? 'stored' : 'live', sessionId: useStored ? sessionId : '',
+                kinds, lastMessages, offset, ...selectorEcho(evidence),
+                messages: line.messages ?? 0, total: messages.length,
+              },
+              ...(line.segment === undefined ? {} : { segment: line.segment }),
+              stateHash: line.stateHash,
               questionIds: Object.keys(built.questions),
-              answers: isRecord(reply.answers) ? reply.answers : {},
+              answers: line.answers ?? {},
+              ...(line.failure === undefined ? {} : { failure: line.failure }),
             })
-          }
-        }
-        const aggregate = aggregateReadings(rows, built.questions)
-        const ends = firstAndLast(rows)
+          },
+        })
         const failed = rows.filter((row) => row.failure !== undefined).length
         return await finish({
           autoSegmented,

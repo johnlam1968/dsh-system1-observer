@@ -76,6 +76,14 @@ and this map stay, because the filesystem journal is not session-shaped.
 
 * `dsh/turn-state.js` — the state a judgement is made from, and what it keeps at both ends
 * `dsh/segment.js` — segmenting a subject that does not fit one request, and the arithmetic over the parts
+* `dsh/measure.js` — **THE CHAIN, ONCE**: decide the segment size, judge each segment, judge a whole subject in one
+  call, and combine the answers in code. `system1_evaluate_session` delegates here and a standalone script will too,
+  because a measurement is only comparable with a measurement and the part that would be wrong to have twice is the
+  judging. No `ctx`, no schema, no render: those belong to whichever surface is asking
+* `session-rows.js` — **THE NORMALIZED SESSION**, one shape for every harness: a receipt, messages, tool calls,
+  facts. The unit is the ask-group (`exchange`), never a native `turn`, because pi has no turn at all and a
+  per-turn query would silently become a dsh-only one while looking cross-harness (`F110`'s lesson, one level down).
+  `shadowed` is required, a malformed line is counted rather than dropped, and absence is `null` rather than zero
 * `dsh/tool-blocks.js` — the `TOOL CALLS` section, and what was clipped out of it
 * `redact.js` — redaction, and the rule that it applies to the trace's copy only
 * `stream.js` — the one seam that is not a decision
