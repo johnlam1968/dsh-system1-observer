@@ -1007,3 +1007,113 @@ it; (iv) the extraction of (a) into the package the shared half already establis
 
 **AND THE FIXTURE WAS NOT FIT FOR THE JOB, WHICH THE REVIEW MEASURED.** Eleven producer mutations — including the reasoning join, the defect class the whole design exists to prevent — left the suite green (**F188**), so the fixture now exercises every rule it claims to, the package derives the rows from its own log (**F191**), and the two producers resolve a message's content **by type** rather than by searching for it (**F186**), which in turn exposed **eight test fixtures** that had been built in the wrong shape and agreeing with the code (**F187**).
 
+### 14.8 The split, reviewed: what `system1-measure` is, and what it is NOT
+
+**WHY THIS SECTION EXISTS.** §14.1 named a split and §14.7 decided three things. The split itself had never been
+written down as a plan with a cut line, an order and a measured surface -- it was a shape in a discussion. This is
+that plan, and it has been through an independent review (a different model, against the real files) whose findings
+are folded in below and marked as such. **The plan of record is the one that survived the review, not the one that
+was proposed.**
+
+**THE CUT LINE IS FORMAT vs LIVE HARNESS**, not `core/` vs `dsh/`. A file belongs to the package if it speaks the
+**session-log format** -- the records a substrate writes and any other substrate must be able to read -- and stays
+with the plugin if it speaks the **harness's live event stream**. The two lines cross, and that crossing is the
+whole reason `core/` alone was not the answer: `dsh/` holds 2,297 lines of format-level business logic that a
+folder name had made look like glue.
+
+**THE PACKAGE, and its name.** `system1-measure` -- deliberately **not** `dsh-`prefixed: a harness-free package
+should not carry the harness's name on the registry, and the name is the first thing a reader sees.
+
+**AND HERE IS THE REVIEW'S BIGGEST CORRECTION, WHICH CHANGES THE PACKAGE'S CONTENTS.** The first draft of the plan
+put "the format half" of `dsh/session-adapter/lib/session-format.js` into the package and left the live events
+behind. **But the file does not split that way in practice, and the review is right.** `measure.js` imports the
+vocabulary from it, `segment.js` imports from it, and `tool-blocks.js` and `turn-state.js` are built on it. So a
+package that took "the format half" would still reach back into `dsh/` for the vocabulary -- and a package whose
+own chain reaches into the plugin is not a package. **So the vocabulary moves WHOLE: `EVENT`, `contentOf`,
+`textOfEvent` and the format's records all go in, the live events (`turn/start`, `step/*`,
+`agent/turn-stopping`, `session/event`) stay with the plugin, and `session-format.js` becomes a PURE RE-EXPORT
+LAYER** -- the plugin's half of the file is then a dozen lines that name what the package says.
+
+**AND THE ROW VOCABULARY GOES WITH IT, which the first draft had missed entirely.** `core/session-rows.js` (336
+lines) is the instrument's row reader, and **it re-implements the rules the package claims to own**:
+`withoutNuls` is byte-for-byte identical to the package's, and `ROW_KINDS`, `MESSAGE_ROLES` and `MESSAGE_TYPES`
+are identical too. Measured, not suspected. So the "said once" claim is **not yet true for the observer's core**,
+and a package that claims to own rules while another repository keeps a copy of them is worse than one that
+exposes them. The copy is there for a reason -- `core/session-rows.js` imports NOTHING, and the standalone's
+closure must have no bare specifier -- which is exactly why the rules and the row reader have to live in the
+SAME package rather than in two.
+
+**THE INVARIANT, SCOPED.** "Self-contained" means **no bare specifier** in the closure of `bin/` + the core the
+standalone measures -- `node:` builtins are unavoidable and fine. It is **not** a rule about every file in the
+package, and it should not be: a published package may take dependencies, and the moment it does, `node_modules`
+exists and the rule is void. **The review's correction, and it is the right one**: keep zero-dependency as the
+invariant of the **standalone's closure** -- the one that is measured and tested today -- and let the rest of the
+package take dependencies later if it needs to. **No build step**: the closure is small enough to ship as source.
+
+**THE RULES ARE ABSORBED; THE FIXTURE IS NOT.** The package takes `dsh-session-rows`' **rules** and exposes them
+as a subpath export, `system1-measure/rules`, so the store and the pi extension depend on ONE package and import
+only the rules module, and the package's own CLI keeps zero dependencies because the rules are inside it. The
+**fixture** stays where it is reachable but is NOT under `rules`: it carries `readFixture`, `fixtureDigest` and
+`digestOf`, which read files by path, and a consumer of `rules` should not inherit filesystem paths it never asked
+for. Co-versioning the rules with the instrument is acceptable: the rules have changed three times, not often.
+
+**THE ORDER, AND THE STEP MOST LIKELY TO BREAK SOMETHING.** Each step is a commit, and the tree is green at each
+one.
+1. **Extract the pure input shape** from `core/instrument-input.js` (99 lines, currently COUPLED because it builds
+   the point descriptor through `dsh/host-events.js` and the subjects predicate through `core/sessions.js`). The
+   pure part is ~40 lines; the dsh part is 2 bindings.
+2. **Move the chain, the producer, the format vocabulary and the row reader** into a package-shaped folder in-repo
+   (e.g. `instrument/`), fix the `windowChars` line, delete the dead `exchangesOf` import, and leave
+   `session-format.js` as a re-export layer. The dsh plugin imports it RELATIVELY for now -- one repository, one
+   copy, no behaviour change.
+3. **Absorb the rules**, and switch the store and `pi-session-log` to import them from the package. **This is the
+   step most likely to break**, and the review says why: `core/session-rows.js` holds its own copy of
+   `withoutNuls`, so the store would have two import sources for one rule until that copy is gone -- and deleting
+   it puts a bare specifier into the standalone's closure. So the copy's removal and the package's arrival must
+   land together, not in two steps.
+4. **Cut the repository and publish `0.1.0`.** Both hosts depend on it **BY NAME** -- never one by relative path
+   and the other by package, which is how two copies of a rule come to exist.
+
+**THE STANDALONE'S REAL SIZE, CORRECTED.** The plan said 15 files / 2,476 lines; that is the STATIC closure. The
+closure that includes the dynamic imports -- which is what actually runs -- is **26 files / 5,058 lines**, and it
+reaches `core/session-rows.js:83` (`readFileSync`). So the package is bigger than the plan said, and the row reader
+is in it.
+
+**THE INPUT SHAPE NEEDS A CONTRACT TEST, OR THE TWO BINDINGS WILL DRIFT.** The plan extracts ~40 pure lines and
+describes no test for them. This is the same failure as the two producers of rows (F173-F180: who spoke, the
+digest, the text, the NUL), and the fixture is the answer: a shape that both hosts build needs the same treatment
+the rules got -- a fixture, vendored, digest-pinned, that says what the shape must be.
+
+**THE TWO pi PATHS ARE A KNOWN DIFFERENCE, AND THE MOVE DOES NOT CLOSE IT.** The review is explicit and the
+measurement agrees: the dsh-shaped path and the pi-native path disagree on **8 of 260 sessions** -- every one a
+compaction the dsh-shaped path loses, so ~1,178 messages the model could no longer see read as though it had seen
+them (**F185**) -- and on the **order of messages in 22 sessions**. **Neither is caught by a rules check**, because
+each path is internally consistent: the rules cannot see a rule that was never applied. Closing this needs a
+**cross-path** check -- one session, two producers, compared -- and that is a separate piece of work from the
+extraction, and it is not a thing the extraction will fix by itself. **Record it as a known difference; do not
+pretend the move closes it.**
+
+**THE MOVE NEEDS A MIGRATION FOR THE PUBLISHED NAME.** Three consumers pin `dsh-session-rows@^0.2.x`. If the
+rules move into `system1-measure`, those ranges **stay silently on the old package** -- `npm install` does not
+follow a rename. So the old name needs a shim and a `deprecated` note, and the three consumers need their ranges
+moved deliberately.
+
+**AND ONE PRECONDITION WAS QUIETLY FALSE, WHICH THE REVIEW CAUGHT.** The plan assumed the question sets travel
+with the package. They did not travel with the PLUGIN either: `core/question-sets.js:294` resolves the default set
+directory as `../criteria` beside `core/`, and the published 0.2.1's `files` list did not carry `criteria/**` at all
+-- **measured: zero matches in the tarball, 69 entries and 488 KB missing** -- so the published CLI resolved into a
+directory that was not there. **Fixed and released as 0.2.2**, with the package-contents test pinning both that a
+set ships and that the parked sets and the authoring template do not.
+
+**AND ONE MEASUREMENT THE REVIEW GOT WRONG, ON ITS OWN EVIDENCE.** It reported that the `windowChars` defect
+needs two patches -- `measure.js:93` and `segment.js:75` -- and that fixing only the first would leave the segment
+boundaries reporting zero size. **Measured, it is one patch.** The rows cut (`segmentsOfRows`) counts
+`list[index].text.length` and is correct; the dsh cut (`segmentsOf`, `segment.js:75`) counts with `textOfEvent`,
+which is the right reader for the events it is given. Driven directly: `windowChars` = **0**, `parts[0].chars` =
+**505**, the real size = **505**. So the segment accounting was never wrong in the rows path, and the fix is one
+line at `measure.js:93`, counting from the cut's own accounting.
+
+**WHAT IS NEXT, IN DEPENDENCY ORDER, AFTER THIS SECTION.** (i) the shared package and its fixture -- DONE; (ii) the
+pi extension -- DONE; (iii) the act vocabulary, which stays undecided until a measurement asks for it; (iv) **this
+section**, in the four steps above. And after (iv): the cross-path pi check, and the `pi-system1-observer` host
+that binds the same chain, the same input shape and the same wire live.
