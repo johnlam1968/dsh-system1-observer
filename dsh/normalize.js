@@ -23,7 +23,10 @@
 import { exchangesOf } from './exchange.js'
 import { EVENT, contentOf, isHumanMessage, isMessageEvent, textOfEvent } from './session-adapter/lib/session-format.js'
 import { surfaceEvents } from './session-adapter/lib/surface.js'
-import { withoutNuls } from '../core/session-rows.js'
+// THE RULES THE PACKAGE OWNS, USED AS THE PACKAGE'S. The ask-group, the reasoning and the NUL rule are said once,
+// in `dsh-session-rows`, and this producer imports them instead of carrying its own copy: two producers that each
+// restate a rule are two producers that can disagree about it, and every one of those disagreements was silent.
+import { exchangeIndexOf, reasoningOf, withoutNuls } from 'dsh-session-rows'
 
 /** The dsh role -> the normalized role. A harness fact that has to be said once, in one place. */
 const ROLE_OF_EVENT = new Map([
@@ -52,62 +55,6 @@ function roleOfEvent(event) {
 }
 
 /**
- * The ask-group index of every event, by IDENTITY.
- *
- * DERIVED HERE, NOT TAKEN FROM `exchangesOf`, and the difference is the whole point. `exchangesOf` groups by the log's
- * own `turn`: a new turn starts a new group, and when the log carries no turn -- pi, mcode, and a dsh log written by a
- * converter that did not number them -- every event collapses into ONE group. Measured there: all 44 pi messages
- * loaded with a null turn, and a "per turn" query silently became a dsh-only query while looking cross-harness.
- *
- * An ASK-GROUP needs only one thing every harness has: a human message. Each one opens a group, and everything after it
- * belongs to that group until the next ask. Nothing here reads `turn`, so a session that has none is grouped the same
- * way as a session that has thousands.
- *
- * "A HUMAN MESSAGE" IS NOT "A `user/message`". The harness speaks on the user channel -- a goal, a skill catalogue, a
- * runtime context -- and only `data.source.kind` separates those from a person typing. Counting the event type opened
- * an ask-group for every injection: measured on one real session, 753 groups where there are 403, which is 350
- * injections counted as operator asks. `isHumanMessage` is the predicate that says who spoke, and it is the SAME one
- * `dsh/exchange.js` has always used, so the two producers cannot disagree about where a conversation turns.
- *
- * The map is keyed by object identity, not by `seq`: a window handed back by the host may carry events whose `seq` is
- * absent, and a map keyed on a field that is sometimes missing silently drops half the conversation.
- */
-function exchangeIndexOf(events) {
-    const index = new Map()
-    let ordinal = -1
-    for (const event of events) {
-        if (isHumanMessage(event)) ordinal += 1
-        // THE LEADING RUN before the first ask belongs to the first group rather than to a group of its own: a
-        // session that opens with narration has not asked anything yet, and `exchange: -1` would be a key no query
-        // knows how to select.
-        index.set(event, Math.max(ordinal, 0))
-    }
-    return index
-}
-
-/**
- * The REASONING blocks of a message, joined.
- *
- * `textOfMessage` DELIBERATELY drops them -- `session-format.js` records that whoever gives reasoning to the judge
- * decides it once, and that is not this file. So the row carries reasoning for COUNTING (`rowsSummary` reports
- * `reasoningChars`, and a session whose reasoning is unmeasured cannot be compared with one whose is), while the
- * composer that builds the judge's state reads `text` alone.
- */
-function reasoningOf(event) {
-    // THE SAME RESOLUTION AS THE TEXT'S, and by the record type: a reader that looks for the content elsewhere
-    // finds text a record does not have, and the store -- which resolves by type -- finds nothing. Two producers,
-    // two rows, for one record.
-    const content = contentOf(event)
-    if (!Array.isArray(content)) return null
-    const blocks = content
-        .filter((block) => block !== null && typeof block === 'object' && block.type === 'reasoning' && typeof block.text === 'string')
-        .map((block) => block.text)
-        .join('\n')
-        .trim()
-    return blocks === '' ? null : blocks
-}
-
-/**
  * Turn dsh events into normalized rows.
  *
  * @param {object[]} events the whole window, in order
@@ -117,6 +64,11 @@ function reasoningOf(event) {
 export function normalizeEvents(events, receipt = {}) {
     const list = Array.isArray(events) ? events : []
     const onSurface = new Set(surfaceEvents(list))
+    // THE ASK-GROUP, BY POSITION. The rule is the package's -- each human message opens a group, everything after it
+    // belongs to that group until the next ask, and the leading run belongs to the first group -- and it is returned
+    // as one index per record rather than a map, because a record's position in the stream IS its identity here: a
+    // window handed back by the host may carry records whose `seq` is absent, and a map keyed on a field that is
+    // sometimes missing silently drops half the conversation.
     const exchangeOf = exchangeIndexOf(list)
 
     // THE HARNESS NAMES ITS FORMAT TOO, and the two channels must agree on that. The reader that reads an index says
@@ -139,7 +91,7 @@ export function normalizeEvents(events, receipt = {}) {
     }]
 
     let ordinal = 0
-    for (const event of list) {
+    for (const [position, event] of list.entries()) {
         if (!isMessageEvent(event)) {
             // A TOOL CALL is not a message and is never counted as one. It is kept as its own row because it is
             // evidence: a question about what the agent DID needs it, and folding it into a message would make the
@@ -148,7 +100,7 @@ export function normalizeEvents(events, receipt = {}) {
                 rows.push({
                     kind: 'tool_call',
                     seq: event.seq ?? null,
-                    exchange: exchangeOf.get(event) ?? null,
+                    exchange: exchangeOf[position] ?? null,
                     callId: event.data?.callId ?? event.data?.id ?? null,
                     // AND THE NAME AND THE ARGUMENTS CARRY NO NUL, because the index channel would store the bytes
                     // before the first one and drop the rest -- a name became an EMPTY STRING in the index where the
@@ -164,12 +116,16 @@ export function normalizeEvents(events, receipt = {}) {
         const role = roleOfEvent(event)
         // REASONING IS ITS OWN ROW-TYPE, not a field of the text. The rule is that absence is `null`: a message with
         // no reasoning says so, and one cannot be confused with an answer that was genuinely empty.
-        const reasoning = role === 'assistant' ? reasoningOf(event) : null
+        // THE REASONING, BY THE RECORD TYPE. The content is resolved by the record's own type and then handed to the
+        // package's rule, so this producer and the store -- which resolves by type too -- cannot end up with two
+        // different reasonings for one record. A reader that looks for the content elsewhere finds text a record does
+        // not have, and two producers produce two rows for one record.
+        const reasoning = role === 'assistant' ? reasoningOf(contentOf(event)) : null
         const text = textOfEvent(event)
         rows.push({
             kind: 'message',
             seq: event.seq ?? null,
-            exchange: exchangeOf.get(event) ?? 0,
+            exchange: exchangeOf[position] ?? 0,
             ordinal: (ordinal += 1),
             role,
             type: 'text',

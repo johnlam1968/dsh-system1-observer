@@ -46,44 +46,27 @@ export const EVENT = Object.freeze({
     SESSION_EVENT: 'session/event',
 })
 
-/** The `source.kind` a DIRECT HUMAN prompt carries. The other kinds are the harness speaking on the same channel. */
-export const HUMAN_SOURCE_KIND = 'user'
+// THE SOURCE RULE -- WHO SPOKE, AND ON WHICH CHANNEL -- LIVES IN THE PACKAGE `dsh-session-rows` NOW, and this
+// module re-exports it rather than restating it.
+//
+// WHY IT MOVED AND WHY IT IS NOT DELETED. The rule is the one the whole measurement rests on: the harness speaks on
+// the user channel (a goal, a skill catalogue, a runtime context), so the event TYPE cannot say who sent a message
+// and only `data.source.kind` can. Measured on one real session of 39,098 events: **753 `user/message` events, of
+// which 403 were the human and 350 were the harness** -- a `goal` injection 233 times over, plus `tool-jobs` 21,
+// `skill-catalog` 23, `runtime-context` 19, `compact-checkpoint` 17. A selector that took the event type naively
+// would hand the judge a skill catalogue as though it were the question, and would open an ask-group for every
+// injection: the ask count inflates by 86.8%.
+//
+// It was in two places at once -- correct in `dsh/exchange.js` and wrong in the producer and the composer, which
+// asked the same question in a weaker form -- and the package is where it is said once for every producer. The
+// module is NOT deleted because the SESSION ADAPTER's vocabulary is what tells a reader which record shape it is
+// holding; this file is where that vocabulary lives, and the source rule is one of its parts.
+//
+// A MISSING SOURCE IS NOT THE HUMAN. Conservative on purpose: calling an injection the operator's input is a worse
+// error than dropping one message, and `excludedOperators` reports exactly what was dropped and why.
+import { HUMAN_SOURCE_KIND, sourceKindOf, isUserMessage, isHumanMessage } from 'dsh-session-rows'
 
-/** The `source.kind` of one event, or `''` when the event declares none. */
-export function sourceKindOf(event) {
-    return String(event?.data?.source?.kind ?? '')
-}
-
-/** Whether an event is a `user/message`, whatever its source. Says nothing about who sent it. */
-export function isUserMessage(event) {
-    return event?.type === EVENT.USER_MESSAGE
-}
-
-/**
- * Whether a `user/message` was written BY THE HUMAN.
- *
- * THE EVENT TYPE IS NOT ENOUGH, and this is the one distinction the whole measurement rests on. The harness speaks on
- * the user channel: a skill catalogue, a goal, a runtime context and an agent instruction all arrive as
- * `user/message`, and only `data.source.kind` separates them from a person typing. Measured on one real session of
- * 39,098 events: **753 `user/message` events, of which 403 were the human and 350 were the harness** -- a `goal`
- * injection 233 times over, plus `tool-jobs` 21, `skill-catalog` 23, `runtime-context` 19, `compact-checkpoint` 17.
- *
- * So a selector that took the event type naively would hand the judge a skill catalogue as though it were the
- * question, and would open an ask-group for every injection: the ask count inflates by 86.8% and the groups stop
- * meaning "a thing the human asked". The event type says which CHANNEL; this says who spoke on it.
- *
- * A MISSING SOURCE IS NOT THE HUMAN. Conservative on purpose: calling an injection the operator's input is a worse
- * error than dropping one message, and `excludedOperators` reports exactly what was dropped and why.
- *
- * It lives HERE, beside the vocabulary it reads, because it was in two places at once -- correct in `dsh/exchange.js`
- * and wrong in the producer and the composer, which asked the same question in a weaker form. One predicate, one
- * answer.
- */
-export function isHumanMessage(event) {
-    if (event === null || typeof event !== 'object') return false
-    if (!isUserMessage(event)) return false
-    return sourceKindOf(event) === HUMAN_SOURCE_KIND
-}
+export { HUMAN_SOURCE_KIND, sourceKindOf, isUserMessage, isHumanMessage }
 
 /** Whether an event is an `assistant/message`. */
 export function isAssistantMessage(event) {

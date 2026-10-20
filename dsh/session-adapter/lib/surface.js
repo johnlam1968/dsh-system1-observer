@@ -1,45 +1,26 @@
-// THE MODEL SURFACE, DERIVED FROM THE LOG'S OWN SURFACE OPS.
+// THE SURFACE RULE, AND THE RULE IS THE PACKAGE'S NOW.
 //
-// WHY THIS EXISTS. `lib/turn-state.js` searched the RAW event log for the newest message of each role, and the
-// newest message of a role is not always IN the surface. Measured with a fixture: a `replace` carried by a
-// tool/result drops an assistant message from a range and puts nothing of that role back, so the composer judged
-// text the subject never saw -- "THE SHADOWED ANSWER -- dropped from the surface" as AGENT RESPONSE.
+// This file USED TO BE the rule: it folded the log's own `surfaceOp: replace` spans and returned the records that
+// remained visible. That was the second copy of a rule that decides what a row MEANS -- a `shadowed` flag is the
+// difference between a message the model could read and one it could not, and 3,417 messages in a single dsh session
+// sat inside a replaced span. The rule now lives ONCE, in `dsh-session-rows`, and this file is the SEAM: the
+// observer's import path does not move, the session adapter keeps its vocabulary in one place, and the rule is
+// stated once for every producer that has to obey it.
 //
-// AND THE FIX IS STRONGER THAN A SWAP: once the shadowed response is gone, that turn has NO response in the
-// surface, and the composer REFUSES it rather than picking another message out of the log. Measured -- the
-// refusal is what the corrected test asserts.
+// THE FALLBACK IS UNCHANGED, and it is worth saying why. The header used to say this fold is redundant once the
+// plugin is wired to the host's `sessionQuery`, and that is still true -- but it is ALSO redundant for a second
+// reason now: the package carries the same fold, so the fallback a deployment with no `sessionQuery` relies on is
+// the package's rule, not this file's.
 //
-// THE ORDINARY CASE DOES NOT REPRODUCE THE DEFECT, which is worth keeping: when a compaction replaces a request
-// with a summary, the composer quotes the SUMMARY, because a replacement always arrives after what it replaces and
-// "newest wins" happens to agree with "surface wins". The divergence needs NEWEST != SURFACED.
+// SO THE FILE STILL NOMINATES ITSELF, and the condition is unchanged: **when the plugin is wired to it this fold is
+// redundant and should be deleted.** The package does not retire it -- the HOST AUTHORITY has to retire it, because
+// the fallback is what a deployment with no `sessionQuery` relies on, and deleting the seam before that authority
+// arrives brings back the shadowed-answer defect this file was written for. What the package retired is the SECOND
+// COPY OF THE RULE, which is the thing that could drift; what is left is the seam that says where the rule is.
 //
-// THIS FILE IS THE ADAPTER SEAM. The host answers the same question authoritatively -- `sessionQuery.readSurface`
-// returns a session's complete current surface -- and when the plugin is wired to it this fold is redundant and
-// should be deleted. Until then it is one small, pure, testable rule in one place, which is what makes that
-// deletion a one-line change rather than an archaeology exercise.
-//
-// The op shape is read from the harness's own declarations rather than inferred:
-//   surfaceOp: 'append' | { op: 'replace'; startSeq: SessionSeq; endSeq: SessionSeq }
-// Only `replace` removes anything; every other event is appended and stays.
+// AND THE RULE IS THE ONE THAT WAS HERE: read the op from the declaration rather than inferring it, treat only
+// `replace` as removing anything, keep the ranges inclusive at both ends, and let a replacement's own record survive
+// because its seq is outside its own range -- which is what makes the summary that replaces a history the surfaced
+// message rather than a casualty of its own replacement.
 
-/** The events that remain in the surface, in order. Pure; never throws; an absent op means append. */
-export function surfaceEvents(events) {
-    const list = Array.isArray(events) ? events : []
-    const replaced = []
-    for (const event of list) {
-        const op = event?.surfaceOp
-        if (op === null || typeof op !== 'object') continue
-        if (op.op !== 'replace') continue
-        if (typeof op.startSeq !== 'number' || typeof op.endSeq !== 'number') continue
-        replaced.push([op.startSeq, op.endSeq])
-    }
-    // The common case costs nothing: no replacements means the log IS the surface.
-    if (replaced.length === 0) return list
-    // A replacement's own event carries a seq OUTSIDE its range, so it survives -- which is what makes the summary
-    // the surfaced message. Ranges are inclusive at both ends, as the declaration's start/end imply.
-    return list.filter((event) => {
-        const seq = event?.seq
-        if (typeof seq !== 'number') return true
-        return !replaced.some(([start, end]) => seq >= start && seq <= end)
-    })
-}
+export { surfaceEvents } from 'dsh-session-rows'
