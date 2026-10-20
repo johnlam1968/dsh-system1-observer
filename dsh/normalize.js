@@ -21,7 +21,7 @@
 // stored log go through the same producer.
 
 import { exchangesOf } from './exchange.js'
-import { EVENT, isHumanMessage, isMessageEvent, textOfEvent } from './session-adapter/lib/session-format.js'
+import { EVENT, contentOf, isHumanMessage, isMessageEvent, textOfEvent } from './session-adapter/lib/session-format.js'
 import { surfaceEvents } from './session-adapter/lib/surface.js'
 import { withoutNuls } from '../core/session-rows.js'
 
@@ -94,7 +94,10 @@ function exchangeIndexOf(events) {
  * composer that builds the judge's state reads `text` alone.
  */
 function reasoningOf(event) {
-    const content = event?.data?.message?.content ?? event?.data?.content
+    // THE SAME RESOLUTION AS THE TEXT'S, and by the record type: a reader that looks for the content elsewhere
+    // finds text a record does not have, and the store -- which resolves by type -- finds nothing. Two producers,
+    // two rows, for one record.
+    const content = contentOf(event)
     if (!Array.isArray(content)) return null
     const blocks = content
         .filter((block) => block !== null && typeof block === 'object' && block.type === 'reasoning' && typeof block.text === 'string')

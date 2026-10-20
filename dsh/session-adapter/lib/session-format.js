@@ -133,10 +133,31 @@ export function textOfMessage(value) {
     return ''
 }
 
-/** The text of one message EVENT. BOTH SHAPES: a `user/message` carries `data.content`, an `assistant/message` `data.message.content`. */
+/**
+ * THE CONTENT OF A MESSAGE EVENT, and WHERE IT IS.
+ *
+ * **BY THE RECORD TYPE, AND NEVER A SEARCH.** A `user/message` carries `data.content`; every other message -- an
+ * `assistant/message`, a `tool/result`, a `system/message` -- carries `data.message.content`, one level deeper.
+ * That is what the harness's own types declare and what the format spec fixes, and it is not a detail: a reader
+ * that LOOKS for the content finds text a record does not have, and the store -- which resolves by type -- finds
+ * nothing. Two producers, two texts, for one record, and neither can say which is the reading.
+ *
+ * MEASURED on this host: **0 of 301 sessions** hold an `assistant/message` whose content is anywhere but
+ * `data.message.content`, and 0 hold one with no content at all. So the search never fired: it was DEAD CODE, and
+ * the divergence it could have caused was latent rather than measured. That is a receipt that the search was
+ * unnecessary, not a reason to keep it -- the day a substrate writes a record the other reader cannot parse is the
+ * day two channels disagree, and the conformance fixture now pins the resolution so that day is caught here.
+ *
+ * @param {object} event
+ * @returns {unknown} the content, or undefined when the record carries none
+ */
+export function contentOf(event) {
+    return event?.type === EVENT.USER_MESSAGE ? event?.data?.content : event?.data?.message?.content
+}
+
+/** The text of one message EVENT. The content is where the record TYPE says it is. */
 export function textOfEvent(event, separator = '') {
-    const content = event?.data?.message?.content ?? event?.data?.content
-    return textOfContent(content, separator)
+    return textOfContent(contentOf(event), separator)
 }
 
 /**

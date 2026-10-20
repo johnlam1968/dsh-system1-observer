@@ -22,7 +22,9 @@ const message = (seq, type, text) => ({
   seq,
   time: seq,
   type,
-  data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type.startsWith('user') ? { source: HUMAN } : {}) },
+  data: type.startsWith('user')
+      ? { content: [{ type: 'text', text }], ...(type.startsWith('user') ? { source: HUMAN } : {}) }
+      : { message: { role: 'assistant', content: [{ type: 'text', text }] } },
 })
 /** An assistant turn that ALSO carries a tool call, which is where the real log puts every call (529 of them measured). */
 const assistantWithCall = (seq, text, id, name, args) => ({

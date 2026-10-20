@@ -189,14 +189,59 @@ they are kept apart so that the format can be implemented by a substrate that ne
 
 ## 8. Where the rules are enforced
 
+**THE RULES LIVE IN ONE PLACE NOW, AND A FIXTURE PINS THEM.** The shared half is the published package
+[`dsh-session-rows`](https://github.com/johnlam1968/dsh-session-rows): the vocabulary, the text rules, the source
+rule, the ask-group (rule 1) and the surface (rule 2). The package ships a **conformance fixture** — a log in this
+format and the exact rows it must produce — and every repository that vendors it pins the fixture's digest, so a
+fixture that changes in one place cannot be quietly different in another.
+
 | rule | enforced by |
 |---|---|
-| trimmed text, no NUL, `interrupted` present, absence is `null` | `core/session-rows.js` (`validateRows`) — the contract, on the way out |
-| the source kind | `dsh/session-adapter/lib/session-format.js` (`isHumanMessage`) — the vocabulary |
-| no NUL on the way in | `dsh-session-index`'s `blockText` — the store's own copy of the rule, until the shared half is a package |
-| trimmed text on the way in | the same `blockText`, and the index reader trims again so a stale index cannot break the contract |
+| trimmed text, no NUL, `interrupted` present, absence is `null` | `dsh-session-rows` — `visibleText`, `reasoningOf`, `withoutNuls` — and `core/session-rows.js` (`validateRows`), which REFUSES a row that breaks them |
+| the source kind, and the ask-group | `dsh-session-rows` — `isHumanMessage`, `exchangeIndexOf` |
+| the surface, and what it withdrew | `dsh-session-rows` — `surfaceEvents` |
+| a producer that restates the rules | the fixture: `test/rows-conformance.test.js` in each repository, against the pinned digest `27bb1c0c893adb4f6b52648fdff32cb17b39022f8dbea53451ac5f84058cdb66` |
 | the two channels agree | `scripts/check-channel-agreement.mjs`, over the whole corpus — **946 of 946 sessions agree on every field today** |
+| **two implementations of the FORMAT agree** | `scripts/check-pi-channels.mjs`, over the whole pi corpus — see §9 |
 
-**The duplication in that table is the next piece of work, and it is now decided:** the shared half becomes a
-published package that owns the contract, with a conformance fixture both repositories test against, so that a change
-to one side is a change to the other by construction rather than by discipline.
+**THE FIXTURE IS NOT DECORATION, AND IT WAS NOT, AT FIRST.** An independent review measured **eleven producer
+mutations that left the whole suite green** — among them the *reasoning join*, the very defect class this design
+exists to prevent (**F179**): changing a producer's `'\n'` to `' '` passed every test. The fixture now carries two
+reasoning blocks in one message, two text blocks in one message, a human message carrying a reasoning block, a tool
+call whose name and arguments hold a NUL, a second human message, a string body with a trailing space, a stated
+`interrupted: false`, and a record whose content is not where its type says it is (**F188**). **And the package
+derives the rows from the fixture's own log**, so a fixture that has drifted from the log it describes is red in the
+package that owns it (**F191**).
+
+## 9. The second implementation, and what it found
+
+**A FORMAT IS NOT A FORMAT UNTIL A SECOND IMPLEMENTATION AGREES WITH THE FIRST.** The dsh v4 log was the first
+implementation of this specification. The second is **[`pi-session-log`](https://github.com/johnlam1968/pi-session-log)**:
+a pi extension that records a pi session in this format — from inside pi, through pi's own session manager — and
+produces the rows from it.
+
+**THE DIFFERENCE, AND IT IS NOT COSMETIC: the second implementation writes NO TURNS.** The format's rule 7 says a
+substrate "does not have to write turns, and **must not invent them**", because a turn is a dsh-shaped boundary and a
+substrate without one would otherwise read as a dsh-only session. The observer's existing pi importer converts a pi
+session into a **dsh v4 log** — with an invented `turn` and `step` for every ask — and that log is a dsh log with pi's
+words in it.
+
+**AND THE TWO DO NOT AGREE, AND THE DISAGREEMENT IS THE POINT.** Composing every pi session both ways over the live
+corpus — **260 sessions, 0 unreadable** — the composed state agrees in **252** and differs in **8**, and every one of
+the 8 is a compaction: the dsh-shaped path writes no `surfaceOp`, so **1,178 messages the model could no longer see
+read as though it had seen them**, and the summary that replaced them is absent from its rows entirely (**F185**).
+A further **22 sessions** differ in the ORDER of an injected message, because the dsh-shaped path places one at the
+head of its exchange — that is where a dsh log can put it — while the second implementation keeps the order things
+happened in.
+
+**The check is a command**, the sibling of the dsh channel check, and it is not a gate because it needs a corpus and
+a second repository on disk:
+
+```bash
+node scripts/check-pi-channels.mjs --pi-repo ../pi-session-log
+```
+
+**AND THE SECOND IMPLEMENTATION IS CHECKED AGAINST THE FIXTURE, WHICH IS THE CLAIM THE FORMAT MAKES:** a producer
+that knows nothing about dsh makes the dsh channel's rows from a dsh log, byte for byte. That is
+`pi-session-log`'s `test/conformance.test.js`, and it would fail if the pi implementation carried a dsh-shaped rule.
+

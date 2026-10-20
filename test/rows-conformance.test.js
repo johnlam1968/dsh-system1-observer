@@ -29,7 +29,7 @@ const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/session-
  * THE PINNED DIGEST, and it is the package's own: the package hashes the file NAME and then the bytes, in the order
  * it declares them, so a swapped pair or a renamed file changes it.
  */
-const PINNED_DIGEST = '0ad4b17869f237aebedee14d81aaa7b4c058af5d33df52a200a1c622ebed2372'
+const PINNED_DIGEST = '27bb1c0c893adb4f6b52648fdff32cb17b39022f8dbea53451ac5f84058cdb66'
 
 const FIXTURE_FILES = ['fixture/session.v4.jsonl', 'fixture/rows.jsonl']
 

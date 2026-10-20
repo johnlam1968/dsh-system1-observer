@@ -4,7 +4,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createEventFeed } from '../dsh/session-adapter/lib/feed.js'
 
-const ev = (seq) => ({ seq, type: 'user/message', data: { message: { role: 'user', content: [] } } })
+// THE SHAPE THE HARNESS WRITES: a `user/message` keeps its content in `data.content`.
+const ev = (seq) => ({ seq, type: 'user/message', data: { content: [] } })
 
 test('the feed holds events per session, oldest first, and hands back a copy that cannot corrupt it', () => {
   const feed = createEventFeed()

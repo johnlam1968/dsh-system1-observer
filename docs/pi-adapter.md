@@ -1,5 +1,25 @@
 # The pi adapter — a second foreign corpus, measured
 
+> **READ THIS WITH THE SECOND IMPLEMENTATION (2026-10-20), because this page describes the OLDER path and the newer
+> one disagrees with it.** Everything below is the **dsh-shaped** conversion: pi's session file → a **dsh v4 log**
+> → the observer's producer. That path is still here and still works, and it is what the table below measures.
+>
+> **The format this repository owns is not a dsh shape**, so the second implementation —
+> [`pi-session-log`](https://github.com/johnlam1968/pi-session-log) — writes the format **natively**: no invented
+> turn, no invented step, and **a `surfaceOp` for a compaction**, which this path does not write.
+>
+> **AND THAT IS NOT COSMETIC.** Composing every pi session both ways over the live corpus — **260 sessions, 0
+> unreadable** — the two agree on the composed state in **252** and differ in **8**, and every one of the 8 is a
+> compaction: **this path writes no `surfaceOp`, so 1,178 messages the model could no longer see read as though it
+> had seen them**, and the summary that replaced them is absent from its rows entirely (**`F185`**). The check is
+> `node scripts/check-pi-channels.mjs --pi-repo ../pi-session-log`, and it names this path as the wrong one.
+>
+> **THE FOUR RULES BELOW ARE STILL TRUE OF THE CONVERSION**, and the second implementation keeps the ones that are
+> about the SUBSTRATE rather than about dsh: the live branch is the leaf path; the turn is derived from the ask; an
+> ask is a `user` message and nothing else; an unresolved call is left out of the block and counted. **What the
+> second implementation drops is the turn** — because the format says a substrate must not invent one — **and what it
+> adds is the surface**, because the format says a substrate that withdraws records must say so.
+
 `docs/adapters-and-standards.md` names pi as "the cheapest second adapter": 223 sessions on this host, a familiar
 store layout, a flat JSONL log. This is that adapter, and it is the first claim in this repository measured
 **end to end through a running deployment's own tools** rather than through a script.

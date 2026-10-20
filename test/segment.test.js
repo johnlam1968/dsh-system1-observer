@@ -12,7 +12,9 @@ import { choice, noul } from '../core/model/questions.js'
 import { checkAgainst } from '../core/tool-args.js'
 import { stateBudgetChars } from '../core/model/limits.js'
 
-const message = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } } })
+const message = (seq, type, text) => ({ seq, time: seq, type, data: type.startsWith('user')
+      ? { content: [{ type: 'text', text }] }
+      : { message: { role: 'assistant', content: [{ type: 'text', text }] } } })
 const toolCall = (seq, id, name, args) => ({ seq, time: seq, type: 'tool/call', data: { callId: id, name, arguments: args } })
 const toolResult = (seq, id, text) => ({ seq, time: seq, type: 'tool/result', data: { message: { id: 'm' + seq, toolCallId: id, content: [{ type: 'text', text }] } } })
 

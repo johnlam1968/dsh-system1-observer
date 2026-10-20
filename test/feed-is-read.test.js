@@ -21,7 +21,9 @@ const accessor = (value) => ({ get: () => value })
 // Measured on this host: 180 of 1,501 `user/message` events in real sessions were the harness, not the human. A
 // fixture that omits the kind is not a human message, and the composer now reads it as one.
 const HUMAN = { kind: 'user' }
-const env = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: { message: { role: type === 'user/message' ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type === 'user/message' ? { source: HUMAN } : {}) } })
+const env = (seq, type, text) => ({ seq, time: seq, type, surfaceOp: 'append', data: type === 'user/message'
+  ? { content: [{ type: 'text', text }], source: HUMAN }
+  : { message: { role: 'assistant', content: [{ type: 'text', text }] } } })
 const SPECS = [{ id: 'a_noul', type: 'noul', instructions: 'Is this true?' }]
 
 async function run({ feedEvents }) {
@@ -73,8 +75,9 @@ test('the feed holder is per session, so another session cannot supply this one'
   const feed = createEventFeed()
   feed.record('session-a', env(1, 'user/message', 'A'))
   feed.record('session-b', env(1, 'user/message', 'B'))
-  assert.deepEqual(feed.events('session-a').map((e) => e.data.message.content[0].text), ['A'])
-  assert.deepEqual(feed.events('session-b').map((e) => e.data.message.content[0].text), ['B'])
+  // THE CONTENT IS READ WHERE THE RECORD TYPE KEEPS IT: a `user/message` keeps it in `data.content`.
+  assert.deepEqual(feed.events('session-a').map((e) => e.data.content[0].text), ['A'])
+  assert.deepEqual(feed.events('session-b').map((e) => e.data.content[0].text), ['B'])
 })
 
 // THE COMPARISON LINE IS ASSERTED, not assumed -- and this test EARNED ITS KEEP: the first version of the detector

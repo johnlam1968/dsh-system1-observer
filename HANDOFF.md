@@ -76,13 +76,59 @@ with no reading is **refused** instead of written. Recorded as **`F176`**.
 **The `web` profile has been restarted** (new process, new token) and the store's fix is live there. The `docdrift`
 profile is still down and needs the same restart before its row serves the rebuilt index — see §5.
 
+## 0b. The format, the shared half, and the SECOND implementation (2026-10-20)
+
+**THREE DECISIONS WERE ASKED AND ANSWERED ON 2026-10-19, AND ALL THREE ARE NOW BUILT.** (1) This repository owns
+the session-log **format**: **`docs/session-log-format.md`**. (2) **One index over all corpora**, with a `corpus`
+column: **`SCHEMA_VERSION` 6** in the store. (3) The shared half becomes a **published package** with a conformance
+fixture: **[`dsh-session-rows`](https://github.com/johnlam1968/dsh-session-rows)**, whose rules are the vocabulary,
+the text rules, the source rule, **the ask-group** and **the surface**.
+
+**AND THE PI EXTENSION EXISTS, WHICH IS THE SECOND IMPLEMENTATION OF THE FORMAT:**
+**[`pi-session-log`](https://github.com/johnlam1968/pi-session-log)** — a pi extension that records a pi session in
+the format **from inside pi**, writes it into the **dsh corpus's own layout** (`<root>/<cwd-slug>/<session-id>/session.v4.jsonl`,
+with pi's own slug convention) so the **same store** indexes it with no change, and produces the rows from it. It
+imports no dsh code and must not be able to: its rules come from the package, and its mapping from pi's entries to
+the format's records is its own.
+
+**THE MEASUREMENT, and it is the reason the work was worth doing.** Composing every pi session both ways — the
+**dsh-shaped** path (pi → a dsh v4 log with an invented turn and step) against the **pi-native** path (pi → the
+format, with no turn invented) — over the live corpus:
+
+```
+node scripts/check-pi-channels.mjs --pi-repo ../pi-session-log
+sessions: 260 compared, 252 agreed on the composed state, 8 diverged, 14 differed in order only, 0 unreadable
+```
+
+**THE 8 ARE COMPACTIONS, AND THE dsh-SHAPED PATH IS THE WRONG ONE** (**`F185`**): it writes no `surfaceOp`, so in
+one session **1,178 messages the model could no longer see read as though it had seen them**, and the summary that
+replaced them is absent from its rows entirely. **22 sessions differ in the ORDER** of an injected message, because
+the dsh-shaped path places one at the head of its exchange — that is where a dsh log can put it — while the native
+path keeps the order things happened in.
+
+**AND THE FIXTURE WAS NOT FIT FOR THE JOB, WHICH AN INDEPENDENT REVIEW MEASURED** (**`F188`**): eleven producer
+mutations — including the **reasoning join**, the very defect class the whole design exists to prevent — left the
+suite green. The fixture now exercises every rule it claims to, the package derives the rows from its own log
+(**`F191`**), and both producers resolve a message's content **by type** rather than by searching for it
+(**`F186`**) — which exposed **eight test fixtures** that had been built in the wrong shape and agreeing with the
+code (**`F187`**). **`F189`**: the store's conformance test named the one difference it accounted for and never
+asserted the column where it lived. **`F190`**: the package's reasoning rule returned `''` for the absence, which
+is the one value the contract forbids.
+
+**WHAT IS STILL BLOCKED, and it is the same block as before: the package is not PUBLISHED.** lan100 has no npm
+credentials (`npm whoami` → ENEEDAUTH), so neither repository can import it, and the two producers still carry their
+own copies of the rules — kept honest by the fixture, and by nothing else. **A pi extension that restated the rules
+would be the third copy**, which is the thing the extraction exists to prevent.
+
 ## 1. State
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`1f9adb5`); **906 tests**, 899 pass, 0 fail, 7 skipped |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`f89f075`**, **pushed**; 42 tests; **`SCHEMA_VERSION` 5** |
-| coverage | **97.55 / 82.41 / 91.81** against a 90 / 75 / 75 gate |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed**; **920 tests**, 920 pass, 0 fail |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **pushed**; 58 tests; **`SCHEMA_VERSION` 6** |
+| package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **pushed**; 10 tests; **NOT PUBLISHED — lan100 has no npm credentials** |
+| pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **pushed**; 43 tests; the second implementation of the format |
+| coverage | observer **97.56 / 82.62 / 91.83**, store **97.25 / 78.34 / 91.40**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100** |
 | gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
 
@@ -222,11 +268,12 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   the store disagreed about who spoke (**`F173`**). All three are fixed and the index is rebuilt.
 * **pi and web producers.** Both importers end in a dsh log, so `--log` measures them. If a substrate arrives that
   does NOT write a dsh log, it needs its own producer writing the same rows — not its own copy of the concept.
-* **The store is a second producer, so it needs the same rules said twice.** It imports no dsh code by design, so
-  "the ask-group opens on a human message", "a message with no declared source is not the human", "the text is
-  trimmed", "only `reasoning` is reasoning" and "no NUL byte" now live in it as a restatement. They are aligned
-  today; a change to one is a change to the other, and nothing enforces it. **This is the case for extracting the
-  shared half into a package, and it should be done before the next rule is added rather than after.**
+* **The store WAS a second producer, and the rules now live in a package — but the package is NOT PUBLISHED, so
+  the import has not happened.** The rules are said once, in `dsh-session-rows`, and the conformance fixture keeps
+  the copies honest in the meantime: the store, the observer and the pi extension each vendor the fixture and pin its
+  digest, and the package derives the rows from its own log, so a fixture that drifts is red in the package that owns
+  it (**`F191`**). **What is left is `npm login` on lan100, and then the import in both repositories** — and until
+  then a third producer would be a third copy of the rules, which is the thing the extraction exists to prevent.
 * **THE RECEIPT'S `sourceBytes` MEANT TWO DIFFERENT THINGS, AND IT IS FIXED** (**`F182`**). The log route reported
   the DECODED length of the conversation and the index reported the ON-DISK size of a COMPRESSED log, because the
   store's `bytes` column was doing two jobs — change detection and the receipt's evidence. `SCHEMA_VERSION` 6 gives
@@ -243,7 +290,10 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   which is now `SCHEMA_VERSION` 6's first column, and `session_index_list` filters on it. (3) **The shared half becomes
   a new small published package** that owns the contract, plus a conformance fixture both repositories test against,
   so the store stops restating the rules and starts depending on them. **The next work, in this order: the format
-  spec, the package, the pi extension.**
+  spec, the package, the pi extension.** -- **AND THE FIRST THREE ARE DONE (2026-10-20)**: the spec is
+  `docs/session-log-format.md`, the package is `dsh-session-rows`, and the pi extension is `pi-session-log`. What
+  remains is the act vocabulary (undecided until a measurement asks for it), the extraction of the instrument into
+  the package the shared half established, and **the publication**, which is one `npm login` away.
 
 ## 6. Where to start
 
@@ -256,4 +306,9 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 6. `npm test 2>&1 | grep '^✖'` when something fails; the failure message names the file and the field.
 7. `ROADMAP.md` §14.7 — **the three decisions the operator made on 2026-10-19 and what they change**, and the work
    that follows from them in dependency order.
+8. **`pi-session-log`'s `docs/measurement.md`** — the corpus, the two channels composed both ways, the 8
+   compactions the dsh-shaped path loses, and the live pi run that produced the receipt. Read it before changing the
+   pi mapping, and before writing a producer for a THIRD substrate: it says what the format costs and what it buys.
+9. **`docs/session-log-format.md` §6** — the checklist a new substrate must satisfy. It is seven points long, and
+   every one of them was bought by a measurement.
 

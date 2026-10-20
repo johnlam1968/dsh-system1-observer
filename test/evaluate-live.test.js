@@ -60,7 +60,9 @@ const message = (seq, type, text) => ({
   seq,
   time: seq,
   type,
-  data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] } },
+  data: type.startsWith('user')
+    ? { content: [{ type: 'text', text }] }
+    : { message: { role: 'assistant', content: [{ type: 'text', text }] } },
 })
 const STORED = [
   message(1, 'user/message', 'please summarise the deployment logs'),

@@ -22,7 +22,9 @@ const EXCHANGE = [
 ]
 
 // THE SCOPE: a stored session has no reaction, so it is composed as a TRANSCRIPT rather than an exchange.
-const scoped = (seq, type, text) => ({ seq, time: seq, type, data: { message: { role: type.startsWith('user') ? 'user' : 'assistant', content: [{ type: 'text', text }] }, ...(type.startsWith('user') ? { source: HUMAN } : {}) } })
+const scoped = (seq, type, text) => ({ seq, time: seq, type, data: type.startsWith('user')
+      ? { content: [{ type: 'text', text }], ...(type.startsWith('user') ? { source: HUMAN } : {}) }
+      : { message: { role: 'assistant', content: [{ type: 'text', text }] } } })
 const SESSION_FIXTURE = [
   scoped(1, 'user/message', 'please summarise the deployment logs'),
   scoped(2, 'assistant/message', 'here is the summary'),

@@ -36,7 +36,15 @@ function fakeQuery({ records = [], events = {}, titles = {}, failList = false } 
   }
 }
 
-const message = (type, text) => ({ type, seq: 1, time: 0, data: { message: { content: [{ type: 'text', text }] } } })
+// THE SHAPE THE HARNESS WRITES: a `user/message` keeps its content in `data.content` and an `assistant/message`
+// in `data.message.content`, one level deeper. The reader resolves BY TYPE, so a fixture that puts a user message's
+// content in the assistant's place measures nothing -- and it used to, because the reader used to search for it.
+const message = (type, text) => ({
+  type, seq: 1, time: 0,
+  data: type === 'user/message'
+    ? { content: [{ type: 'text', text }] }
+    : { message: { content: [{ type: 'text', text }] } },
+})
 
 test('the display reader reads the content shapes the harness writes, and nothing else', () => {
   assert.equal(displayTextOfEvent({ data: { message: { content: 'plain' } } }), 'plain')
@@ -166,7 +174,12 @@ test('a THUNK query is resolved at call time -- the idiom the registration uses,
 // end, so a page composes with `lastMessages` instead of competing with it.
 test('offset pages backwards from the newest, and says which page it read', async () => {
   const events = []
-  for (let i = 1; i <= 10; i += 1) events.push({ type: i % 2 === 0 ? 'assistant/message' : 'user/message', seq: i, time: i, data: { message: { content: [{ type: 'text', text: 'message ' + i }] } } })
+  for (let i = 1; i <= 10; i += 1) {
+    const type = i % 2 === 0 ? 'assistant/message' : 'user/message'
+    events.push({ type, seq: i, time: i, data: type === 'user/message'
+      ? { content: [{ type: 'text', text: 'message ' + i }] }
+      : { message: { content: [{ type: 'text', text: 'message ' + i }] } } })
+  }
   const tool = createSessionSubjectTool({ query: fakeQuery({ records: [record('s1')], events: { s1: events } }) })
   const newest = await tool.execute({ sessionId: 's1', lastMessages: 3 })
   assert.deepEqual(newest.messages.map((m) => m.text), ['message 8', 'message 9', 'message 10'])
@@ -202,7 +215,12 @@ test('a `subject` PREVIEW says when the composed state was CUT', async () => {
   // A preview exists to show what a judgement would see. `state: 8000 chars` with no marker reads as the whole
   // subject, and measured at the live defaults a stored judgement fits FIVE messages whole -- so a caller who cannot
   // see the cut cannot tell a page that fits from one that does not.
-  const big = Array.from({ length: 4 }, (_, i) => ({ type: i % 2 === 0 ? 'user/message' : 'assistant/message', seq: i + 1, time: i + 1, data: { message: { content: [{ type: 'text', text: 'y'.repeat(4000) }] } } }))
+  const big = Array.from({ length: 4 }, (_, i) => {
+    const type = i % 2 === 0 ? 'user/message' : 'assistant/message'
+    return { type, seq: i + 1, time: i + 1, data: type === 'user/message'
+      ? { content: [{ type: 'text', text: 'y'.repeat(4000) }] }
+      : { message: { content: [{ type: 'text', text: 'y'.repeat(4000) }] } } }
+  })
   const compose = (events) => composeTurnState({ events, scope: 'session', maxChars: 8000, toolMaxChars: 4000, tailChars: 1000 })
   const tool = createSessionSubjectTool({ query: fakeQuery({ records: [record('s1')], events: { s1: big } }), compose })
   const out = await tool.execute({ sessionId: 's1', format: 'subject', lastMessages: 0 })
