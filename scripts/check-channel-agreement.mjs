@@ -72,7 +72,7 @@ const readLog = (path) => {
 
 /** The fields a message row carries, and the ones a tool call carries. */
 const MESSAGE_FIELDS = ['seq', 'exchange', 'role', 'text', 'reasoning', 'shadowed', 'interrupted']
-const CALL_FIELDS = ['seq', 'exchange', 'callId', 'name', 'args']
+const CALL_FIELDS = ['seq', 'exchange', 'callId', 'name', 'argsChars']
 
 /**
  * HOW AN ERROR IS DESCRIBED, and when its message may be printed.
@@ -152,16 +152,17 @@ function compare(session) {
         const b = indexReceipt?.[field]
         if (JSON.stringify(a) !== JSON.stringify(b)) note(`receipt ${field}`, a, b)
     }
-    // AND THE BYTE COUNT, COUNTED SEPARATELY AND NOT COMPARED, because the two channels mean DIFFERENT THINGS by it:
-    // the log route reports the DECODED length of the conversation, and the index reports the ON-DISK size of a
-    // COMPRESSED log. One name, two facts -- a real defect in the receipt, and one this tool cannot settle by
-    // comparing, because comparing a decoded length with a compressed size measures nothing at all. It is reported, it
-    // is named, and it does NOT decide the exit code. The fix belongs to the store, which has to carry the decoded
-    // length beside the on-disk one, and that is a store-schema decision rather than a line in this tool.
+    // AND THE BYTE COUNT, COUNTED SEPARATELY AND NOT COMPARED, because the two channels mean DIFFERENT THINGS by it
+    // UNLESS THE INDEX CARRIES THE DECODED LENGTH. The store's `bytes` column is the ON-DISK size of a COMPRESSED log,
+    // while the log route reports the DECODED length of the conversation -- one name, two facts, and comparing them
+    // measures nothing. `SCHEMA_VERSION` 6 of the store added `decoded_bytes` for exactly this, and the reader prefers
+    // it, so the two receipts now name the same quantity and this line is empty. It stays because the fallback -- an
+    // index built before the column -- still means the on-disk size, and the reader NAMES that fallback in its
+    // `missing` list rather than using it quietly.
     const logBytes = logReceipt?.sourceBytes
     const indexBytes = indexReceipt?.sourceBytes
     if (JSON.stringify(logBytes) !== JSON.stringify(indexBytes)) {
-        named.set('receipt sourceBytes (decoded length vs on-disk size)', (named.get('receipt sourceBytes (decoded length vs on-disk size)') ?? 0) + 1)
+        named.set('receipt sourceBytes (the index reported the on-disk size, not the decoded length)', (named.get('receipt sourceBytes (the index reported the on-disk size, not the decoded length)') ?? 0) + 1)
     }
 
     // THE COUNTS, because a session that lost a message says so before a reader goes looking for it.
@@ -200,10 +201,25 @@ function compare(session) {
             differences.push(`tool call seq ${row.seq} is in the log and not in the index`)
             continue
         }
-        const a = [row.seq, row.exchange, row.callId, row.name, row.args]
-        const b = [other.seq, other.exchange, other.callId, other.name, other.args]
+        // THE ARGUMENTS ARE COMPARED BY THEIR LENGTH, because that is the fact both channels carry. The store keeps the
+        // first 4,000 characters of an argument and the FULL LENGTH beside it, so a capped copy and a whole one are the
+        // same call -- and the length is what the two channels can be compared on. Where the index's copy is shorter
+        // than its own declared length, that is the store's cap and it is reported as what it is, not as a disagreement.
+        const logArgs = typeof row.args === 'string' ? row.args : ''
+        const indexArgs = typeof other.args === 'string' ? other.args : ''
+        const logChars = logArgs.length
+        const indexChars = Number.isFinite(other.argsChars) ? other.argsChars : indexArgs.length
+        const a = [row.seq, row.exchange, row.callId, row.name, logChars]
+        const b = [other.seq, other.exchange, other.callId, other.name, indexChars]
         for (let i = 0; i < a.length; i += 1) {
             if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) note(`tool call ${CALL_FIELDS[i]}`, a[i], b[i])
+        }
+        if (logArgs !== indexArgs) {
+            if (indexChars > indexArgs.length) {
+                named.set('tool call args (the index keeps the first 4,000 characters and declares the full length)', (named.get('tool call args (the index keeps the first 4,000 characters and declares the full length)') ?? 0) + 1)
+            } else {
+                note('tool call args', logArgs, indexArgs)
+            }
         }
     }
     return { problem: null, differences, byField, named, messages: logMessages.length, state: stateOf(logMessages), indexState: stateOf(indexMessages) }
@@ -285,7 +301,8 @@ if (named.size > 0) {
     for (const [field, count] of [...named.entries()].sort((a, b) => b[1] - a[1])) {
         process.stdout.write(`  ${String(count).padStart(6)}  ${field}\n`)
     }
-    process.stdout.write('  (the fix belongs to the store, which has to carry the decoded length beside the on-disk one)\n')
+    process.stdout.write('  (the index keeps a CAPPED COPY of the arguments and declares the FULL LENGTH beside it, so the\n')
+    process.stdout.write('   two channels agree on the fact and differ only on how much of it the index stores.)\n')
 }
 for (const entry of divergent.slice(0, 5)) {
     process.stdout.write(`\n${entry.id}  (${entry.bytes} bytes, index high_water ${entry.highWater})\n`)

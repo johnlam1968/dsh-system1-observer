@@ -33,9 +33,12 @@ only the bytes before the first NUL**, so 67 messages in one session were 11 cha
 log, and two tool-call names became empty strings (**`F180`**). And the producer answered `false` for `interrupted`
 on 278 of 282 messages that never said it (**`F181`**, found by an independent review).
 
-**THE STATE OF THE CORPUS, after the fixes: 945 of 946 sessions compose byte-identically from either channel, and
-the composed state — the number that decides whether two channels are ONE measurement — differs in ZERO.** The
-remaining one difference is a receipt field that means two different things (**`F182`**, open, and a store decision).
+**THE STATE OF THE CORPUS, after the fixes: 946 of 946 sessions agree on EVERY FIELD, and the composed state — the
+number that decides whether two channels are ONE measurement — differs in ZERO.** The last two differences were the
+store's schema, and `SCHEMA_VERSION` 6 closed them: the decoded length beside the on-disk size, the full length of the
+tool arguments beside the cap, and the interruption fact (**`F182`**, **`F184`**). **The only thing the two channels
+still hold differently is how much of a tool call's arguments the INDEX stores** — the first 4,000 characters, with the
+full length declared beside it — and the agreement tool reports that as what it is rather than as a disagreement.
 
 **The rows contract now states SEVEN rules, not four**, and each one is enforced rather than described. The two
 newest are the ones a producer cannot guess: a message's text is **trimmed** (RULE 5) and a row carries **no NUL
@@ -224,21 +227,23 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   trimmed", "only `reasoning` is reasoning" and "no NUL byte" now live in it as a restatement. They are aligned
   today; a change to one is a change to the other, and nothing enforces it. **This is the case for extracting the
   shared half into a package, and it should be done before the next rule is added rather than after.**
-* **The receipt's `sourceBytes` means two different things, and the store has to fix it** (**`F182`**, OPEN). The log
-  route reports the DECODED length of the conversation; the index reports the ON-DISK size of a COMPRESSED log,
-  because the store's `bytes` column is doing two jobs — change detection and the receipt's evidence. The fix is a
-  second column for the decoded length, which is a `SCHEMA_VERSION` 5 → 6 change and therefore a **store decision**,
-  not a line in a tool. Until it is made, the agreement tool counts it as a NAMED difference and does not compare it.
-* **The index channel loses EVIDENCE the log channel carries, and both losses are the store's schema**
-  (**`F184`**, OPEN). 4,758 tool-call arguments are cut at the store's 4,000-character cap with no length stored
-  beside them, and 120 interruption facts have no column at all. **The reading is the same either way — the composed
-  state agrees in all 946 sessions — but the evidence around it is not.** All three gaps (`F182` and `F184`) are one
-  `SCHEMA_VERSION` 5 → 6 change with three additive columns: the decoded length beside the on-disk size, the full
-  length of the arguments beside the cap, and `interrupted` beside `shadowed`.
-* **THREE DECISIONS ARE OPEN, and they are the next work, not this work's unfinished business.** (1) Does this
-  repository own a session-log format, or does every substrate keep its own? (2) One index over all corpora, or one
-  importer per corpus into one index? (3) Where does the shared half live — which package, under which name? The
-  answers decide the pi extension and the package extraction, and they are the operator's to make.
+* **THE RECEIPT'S `sourceBytes` MEANT TWO DIFFERENT THINGS, AND IT IS FIXED** (**`F182`**). The log route reported
+  the DECODED length of the conversation and the index reported the ON-DISK size of a COMPRESSED log, because the
+  store's `bytes` column was doing two jobs — change detection and the receipt's evidence. `SCHEMA_VERSION` 6 gives
+  the store a `decoded_bytes` column beside it, and the reader prefers it; the on-disk size is the fallback for an
+  index built before the column, and that fallback is NAMED in the receipt's `missing` list rather than used quietly.
+* **THE INDEX CHANNEL LOST EVIDENCE THE LOG CHANNEL CARRIES, AND THAT IS FIXED TOO** (**`F184`**). 4,758 tool-call
+  arguments were cut at the store's 4,000-character cap with no length stored beside them, and 120 interruption facts
+  had no column at all. `SCHEMA_VERSION` 6 adds `tool_calls.args_chars` (the full length beside the cap, which the
+  store already did for tool RESULTS) and `messages.interrupted` (1, 0, or NULL — the log's own value, and NULL where
+  the log said nothing). **The reading was always the same; now the evidence is too.**
+* **THREE DECISIONS WERE ASKED AND ANSWERED, and they set the shape of the next work.** (1) **This repository owns
+  the session-log FORMAT**: a neutral spec, implemented by dsh, by pi and by any future substrate, rather than a dsh
+  log every other substrate has to be converted into. (2) **ONE index over all corpora**, with a `corpus` column —
+  which is now `SCHEMA_VERSION` 6's first column, and `session_index_list` filters on it. (3) **The shared half becomes
+  a new small published package** that owns the contract, plus a conformance fixture both repositories test against,
+  so the store stops restating the rules and starts depending on them. **The next work, in this order: the format
+  spec, the package, the pi extension.**
 
 ## 6. Where to start
 

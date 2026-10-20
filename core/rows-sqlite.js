@@ -18,7 +18,7 @@
 import { DatabaseSync } from 'node:sqlite'
 
 /** The session table's columns this reader needs, and nothing more. */
-const SESSION_COLUMNS = 'id, format, path, bytes, source_sha256, high_water, created_at, cwd'
+const SESSION_COLUMNS = ['id', 'format', 'path', 'bytes', 'source_sha256', 'high_water', 'created_at', 'cwd']
 
 /**
  * THE INDEX NAMES THE HARNESS IN ITS OWN WORD, and the contract has no such word.
@@ -65,22 +65,31 @@ export function rowsFromSqlite(path, sessionId) {
         // contract then names, instead of the reader inventing a boundary it cannot see.
         const columnsOf = (table) => new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name))
         const has = (set, name) => set.has(name)
-        const messageColumns = columnsOf('messages')
         const hasTable = (name) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name) !== undefined
         const hasTurns = hasTable('turns')
         const hasCalls = hasTable('tool_calls')
+        const messageColumns = columnsOf('messages')
+        const sessionColumns = columnsOf('sessions')
+        const callColumns = hasCalls ? columnsOf('tool_calls') : new Set()
 
-        const session = db.prepare(`SELECT ${SESSION_COLUMNS} FROM sessions WHERE id = ?`).get(sessionId)
+        // THE SESSION COLUMNS, asked for by name and only when they are THERE. `SCHEMA_VERSION` 6 of the store added
+        // `decoded_bytes` (the DECODED length of the conversation, beside the on-disk size) and `corpus` (which subject
+        // the session belongs to), and an index built before them must still be readable -- a reader that cannot read a
+        // column says so in its `missing` list rather than raising "no such column" and taking the route down.
+        const sessionColumnsToRead = SESSION_COLUMNS
+            .concat(has(sessionColumns, 'decoded_bytes') ? ['decoded_bytes'] : [])
+            .concat(has(sessionColumns, 'corpus') ? ['corpus'] : [])
+        const session = db.prepare(`SELECT ${sessionColumnsToRead.join(', ')} FROM sessions WHERE id = ?`).get(sessionId)
         if (session === undefined) {
             // A SESSION THAT IS NOT THERE IS NOT AN EMPTY SESSION. The two read identically downstream -- both produce
             // rows a measurement would find nothing in -- and one of them means the index is stale.
             return { rows: [], receipt: null, problem: `no session ${sessionId} in ${path}: the index may not have been rebuilt` }
         }
         const messages = db.prepare(
-            `SELECT seq, ${has(messageColumns, 'turn') ? 'turn' : 'NULL AS turn'}, ${has(messageColumns, 'exchange') ? 'exchange' : 'NULL AS exchange'}, role, kind, text, reasoning, shadowed FROM messages WHERE session_id = ? ORDER BY seq`,
+            `SELECT seq, ${has(messageColumns, 'turn') ? 'turn' : 'NULL AS turn'}, ${has(messageColumns, 'exchange') ? 'exchange' : 'NULL AS exchange'}, role, kind, text, reasoning, shadowed, ${has(messageColumns, 'interrupted') ? 'interrupted' : 'NULL AS interrupted'} FROM messages WHERE session_id = ? ORDER BY seq`,
         ).all(sessionId)
         const calls = hasCalls
-            ? db.prepare('SELECT seq, call_id, name, args FROM tool_calls WHERE session_id = ? ORDER BY seq').all(sessionId)
+            ? db.prepare(`SELECT seq, call_id, name, args, ${has(callColumns, 'args_chars') ? 'args_chars' : 'NULL AS args_chars'} FROM tool_calls WHERE session_id = ? ORDER BY seq`).all(sessionId)
             : []
         const turns = hasTurns ? db.prepare('SELECT ordinal FROM turns WHERE session_id = ? ORDER BY ordinal').all(sessionId) : []
 
@@ -92,10 +101,19 @@ export function rowsFromSqlite(path, sessionId) {
             harness: session.format === null || session.format === undefined ? 'unknown' : `dsh:${session.format}`,
             id: session.id,
             source: session.path,
-            sourceBytes: session.bytes ?? null,
+            // THE BYTES THAT WERE READ, which is the DECODED length of the conversation -- the same quantity the log
+            // route reports. The store's `bytes` column is the ON-DISK size of a compressed log, which is a different
+            // fact under the same name, and a receipt that means two things is a receipt that cannot be compared with
+            // another receipt (F182). So the decoded length is preferred, and the on-disk size is the fallback for an
+            // index built before the column existed -- with that fallback NAMED in `missing` below.
+            sourceBytes: Number.isFinite(session.decoded_bytes) && session.decoded_bytes > 0 ? session.decoded_bytes : (session.bytes ?? null),
             sourceSha256: session.source_sha256 ?? null,
             highWater: session.high_water ?? null,
             schemaVersion: 1,
+            // WHICH CORPUS THE SESSION BELONGS TO, when the index knows: the subject directory the harness keeps the
+            // session under, one level above the session id. One index holds every corpus, so this is a fact about a
+            // session rather than a fact about a file.
+            corpus: session.corpus ?? null,
             // WHERE THESE ROWS CAME FROM, which is not the same as where the conversation happened. A reader that
             // cannot tell the two will describe a stale index as a current conversation.
             indexedFrom: path,
@@ -104,8 +122,12 @@ export function rowsFromSqlite(path, sessionId) {
             // would produce a measurement of the wrong thing with nothing in it saying so.
             missing: [
                 ...(has(messageColumns, 'exchange') ? [] : ['messages.exchange']),
+                ...(has(messageColumns, 'interrupted') ? [] : ['messages.interrupted']),
+                ...(has(sessionColumns, 'decoded_bytes') ? [] : ['sessions.decoded_bytes (the receipt falls back to the on-disk size)']),
+                ...(has(sessionColumns, 'corpus') ? [] : ['sessions.corpus']),
                 ...(hasTurns ? [] : ['turns']),
                 ...(hasCalls ? [] : ['tool_calls']),
+                ...(has(callColumns, 'args_chars') ? [] : ['tool_calls.args_chars']),
             ],
         }
         const rows = [receipt]
@@ -131,11 +153,12 @@ export function rowsFromSqlite(path, sessionId) {
                 // refuses the one that conflates them.
                 reasoning: typeof row.reasoning !== 'string' || row.reasoning === '' ? null : row.reasoning.trim(),
                 shadowed: row.shadowed === 1,
-                // THE INDEX DOES NOT CARRY THIS, so the reader does not know it -- and `null` is how a row says "nobody
-                // told me", where `false` would be a claim that the message was not interrupted. The producer knows; the
-                // index has no column for it; and the difference between "not interrupted" and "not known" is the one
-                // the contract calls absence.
-                interrupted: null,
+                // THE INTERRUPTION FACT, when the index carries it. `SCHEMA_VERSION` 6 of the store added the column
+                // because 120 messages the log marked as interrupted read as "nobody said" here -- and "nobody said" is
+                // what an index with no column for it can honestly say. So: the value when the column is there, `null`
+                // when the log did not state it, and `null` for an index built before the column existed. `false` would
+                // be a claim from a reader that never looked, which is what this field used to be.
+                interrupted: row.interrupted === null || row.interrupted === undefined ? null : row.interrupted === 1,
             })
         }
         // A TOOL CALL BELONGS TO THE GROUP OF THE MESSAGE BEFORE IT, and the index does not store that: `tool_calls`
@@ -158,6 +181,10 @@ export function rowsFromSqlite(path, sessionId) {
                 callId: call.call_id ?? null,
                 name: call.name ?? null,
                 args: call.args ?? null,
+                // THE LENGTH OF THE ARGUMENTS, when the index carries it. The store caps the stored copy at 4,000
+                // characters, so without this a truncated argument reads as a SHORT argument -- and a reader cannot tell
+                // a small call from a cut one (F184). The length is the fact; the copy is what fits.
+                argsChars: Number.isFinite(call.args_chars) ? call.args_chars : null,
                 result: null,
                 outcome: null,
             })

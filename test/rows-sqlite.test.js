@@ -117,4 +117,47 @@ test('an index with no `exchange` column yet still reads, and its rows say what 
     const result = rowsFromSqlite(path, 's1')
     assert.equal(result.problem, null, 'an older index is readable rather than fatal')
     assert.match(validateRows(result.rows).join(' '), /exchange/, 'and its rows report the missing field instead of inventing one')
+    // AND THE NEWER COLUMNS ARE NAMED TOO, so a reader that cannot supply them says which ones they are rather than
+    // reporting a receipt whose byte count means something else (F182, F184).
+    assert.match(result.receipt.missing.join(' '), /sessions\.decoded_bytes/, 'the decoded length is named when it is absent')
+    assert.match(result.receipt.missing.join(' '), /messages\.interrupted/, 'and the interruption column is named')
+    assert.match(result.receipt.missing.join(' '), /tool_calls\.args_chars/, 'and the arguments length is named')
+})
+
+test('AN INDEX AT SCHEMA VERSION 6 SUPPLIES THE RECEIPT AND THE FACTS, and the two channels answer alike', () => {
+    // THE FOUR COLUMNS VERSION 6 ADDED, and each one closes a divergence the corpus run measured between the two
+    // channels: the receipt's byte count meant two things (F182), the tool arguments were cut with no length beside
+    // them, and 120 interruption facts had nowhere to live (F184).
+    const dir = mkdtempSync(join(tmpdir(), 'rows-v6-'))
+    const path = join(dir, 'v6.db')
+    const db = new DatabaseSync(path)
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY, format TEXT, path TEXT, bytes INTEGER, source_sha256 TEXT, high_water INTEGER, created_at INTEGER, cwd TEXT, corpus TEXT, decoded_bytes INTEGER);
+      CREATE TABLE messages(session_id TEXT, seq INTEGER, turn INTEGER, exchange INTEGER, role TEXT, kind TEXT, text TEXT, reasoning TEXT, shadowed INTEGER DEFAULT 0, interrupted INTEGER);
+      CREATE TABLE tool_calls(session_id TEXT, call_id TEXT, name TEXT, args TEXT, args_chars INTEGER, seq INTEGER);`)
+    db.prepare('INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?,?)').run('s1', 'v4', '/x.jsonl', 900, 'ab'.repeat(32), 2, null, null, '--home-john-CodingProjects-x--', 1234)
+    // ONE MESSAGE INTERRUPTED and one not: `false` would be a claim the index never checked, and `null` is the answer
+    // when the log said nothing about it.
+    db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?)').run('s1', 1, 1, 0, 'user', 'user', 'the ask', null, 0, null)
+    db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?,?,?,?)').run('s1', 2, 1, 0, 'assistant', 'assistant', 'the answer', null, 0, 1)
+    db.prepare('INSERT INTO tool_calls VALUES (?,?,?,?,?,?)').run('s1', 'c1', 'bash', 'ls', 12000, 3)
+    db.close()
+
+    const { rows, receipt, problem } = rowsFromSqlite(path, 's1')
+    assert.equal(problem, null)
+    // THE RECEIPT NAMES THE BYTES THAT WERE READ, which is the DECODED length -- the same quantity the log route
+    // reports. The on-disk size is a different fact about a different thing, and a receipt that carries it under this
+    // name disagrees with every other receipt on every session.
+    assert.equal(receipt.sourceBytes, 1234, 'the receipt carries the decoded length')
+    assert.equal(receipt.corpus, '--home-john-CodingProjects-x--', 'and the corpus the session belongs to')
+    // AND NOTHING OF VERSION 6 IS MISSING -- the four columns this reader asked for by name, and no fallback was used
+    // for any of them. (The fixture has no `turns` table, so that name is still listed: it is not a version 6 column.)
+    const v6 = receipt.missing.filter((name) => /decoded_bytes|corpus|interrupted|args_chars/.test(name))
+    assert.deepEqual(v6, [], 'and every version 6 column is read from the index rather than defaulted')
+
+    const messages = rows.filter((r) => r.kind === 'message')
+    assert.equal(messages[0].interrupted, null, 'a message that never said is null')
+    assert.equal(messages[1].interrupted, true, 'and one the model was cut off in says so')
+    // AND THE LENGTH OF THE ARGUMENTS, so a capped copy is not read as a short call.
+    const call = rows.find((r) => r.kind === 'tool_call')
+    assert.equal(call.argsChars, 12000, 'the full length of the arguments is beside the capped copy')
 })
