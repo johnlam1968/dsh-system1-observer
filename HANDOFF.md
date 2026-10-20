@@ -204,6 +204,15 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 
 ## 4. Traps that cost something, so you do not pay again
 
+* **THE LOCAL MIRROR IS A COPY AND IT DRIFTS, AND `push.sh` OVERWRITES WHOLE FILES.** Editing a mirrored
+  `package.json` and pushing it back can silently revert a change that was made on the host -- and the revert is
+  invisible until an install fails somewhere else. **Measured, and it cost a release**: the edit that added the
+  question sets to the `files` list was made in the mirror, the mirror had not been told about the dependency on
+  `dsh-session-rows` that had been added on the host by script, and pushing the mirror dropped the dependency. The
+  lockfile still named it, so `npm ci` did not object -- it simply did not install it, and eleven test files went
+  red with `Cannot find package 'dsh-session-rows' imported from .../session-format.js`. **The rule: edit the
+  authoritative copy (on the host), or sync the mirror from the host FIRST and check the diff.** The mirror is
+  useful for reading and for pushing whole files that nobody else is editing; it is not a second source of truth.
 * **A bulk rename is not a migration.** The script that moved `lib/` matched `lib/` wherever it found it, including
   `dsh-web-app/lib/startup.js` and `node/v25.3.0/lib/node_modules`, which belong to other packages. Seventeen
   third-party paths became `core/`. It took a byte-diff against a live profile to see it, and I first diagnosed the
