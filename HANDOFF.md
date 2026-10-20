@@ -249,6 +249,11 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 
 1. `AGENTS.md` — what the standing reminders mean here.
 2. `core/README.md` — the map, **enforced**: a test fails if a file is not named or a name does not exist.
-3. `docs/findings.md` — every defect with its cause and consequence. Append-only; add, do not rewrite.
-4. `npm run ci` — the whole gate. If it is green, the tree is honest.
-5. `npm test 2>&1 | grep '^✖'` when something fails; the failure message names the file and the field.
+3. `docs/session-log-format.md` — **the format this repository owns**, with the content kinds and the acts measured
+   over the live corpus. Read this before writing a producer for a new substrate.
+4. `docs/findings.md` — every defect with its cause and consequence. Append-only; add, do not rewrite.
+5. `npm run ci` — the whole gate. If it is green, the tree is honest.
+6. `npm test 2>&1 | grep '^✖'` when something fails; the failure message names the file and the field.
+7. `ROADMAP.md` §14.7 — **the three decisions the operator made on 2026-10-19 and what they change**, and the work
+   that follows from them in dependency order.
+

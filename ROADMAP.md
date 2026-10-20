@@ -958,3 +958,48 @@ consumes it** -- not this repository, not the profile's other plugins -- while t
 read, and the eight registered tools are inward (they serve the agent inside this deployment). So (c) is a leaf in
 dependency terms and an unused offer in service terms; the reuse question is answered by moving (a)'s artifacts and
 instrument tools into (a), not by making (c) consumable.
+
+### 14.7 What the operator decided on 2026-10-19, and what it changes
+
+Three questions were asked and answered, and they set the shape of the work that follows. **They are recorded here
+because a decision that is not written down is a decision the next reader has to infer.**
+
+**(1) THIS REPOSITORY OWNS THE SESSION-LOG FORMAT.** Not "the dsh log, which other substrates convert into" -- a
+neutral spec, of which the dsh v4 log is one implementation and a pi log is another. The spec is
+**`docs/session-log-format.md`**: the record grammar, the eight rules, the **content kinds** and the **acts**, each
+measured on the live corpus (946 sessions, 10,698 `user/message` records carrying **31** source kinds of which exactly
+**one** -- `user` -- means a person, 125,298 text blocks, 45,820 reasoning blocks, 84,592 tool calls). **Nothing is
+renamed**: the record names are the ones the harness writes and the ones every importer already produces, because a
+format that is only ever implemented once has never been a format.
+
+**What it changes.** §14.4 item 4 -- the pi reader -- stops being "an adapter for pi" and becomes "the second
+implementation of a format that already exists". The checklist a new substrate must satisfy is the spec's §6. **And
+the content-kind axis, which `docs/pi-seams.md` called unresolved, is now MEASURED and DECIDED**: one distinguished
+kind, an open set, and the reason the set must be open (ten of the kinds in the corpus are pi's own).
+
+**(2) ONE INDEX OVER ALL CORPORA, WITH A `corpus` COLUMN.** This is `dsh-session-index`'s `SCHEMA_VERSION` 6, and it
+is the schema change that closes the last two divergences between the two channels: the decoded length beside the
+on-disk size, the full length of the tool arguments beside the 4,000-character cap, and the interruption fact beside
+`shadowed`. **The corpus column is the segment of the sessions root above the session id** -- the subject the harness
+keeps the session under -- and `session_index_list` filters on it, so "every session of this project" is a filter
+rather than a different file to open. **Measured after the rebuild: 946 of 946 sessions agree on EVERY FIELD between
+the log channel and the index channel**, and the composed state -- what a measurement's `stateHash` is made of --
+differs in zero.
+
+**What it changes.** The store is no longer "a dsh-shaped index over dsh logs". It is an index over a format, and a
+substrate's logs enter it because they are in the format.
+
+**(3) THE SHARED HALF BECOMES A PUBLISHED PACKAGE, WITH A CONFORMANCE FIXTURE.** The rows contract, the text rules
+and `withoutNuls` stop being restated by the store and start being depended on. **A change to one side becomes a
+change to the other by construction rather than by discipline** -- which is the trap the handoff records: "the store
+is a second producer, so it needs the same rules said twice".
+
+**What it changes.** §14.1's readiness test for extracting (a) is met by the SECOND CONSUMER, and this is it: the
+store needs the contract, and the contract is what the extraction carries. **The order is therefore: the package
+first, then the pi extension** -- a pi producer that restated the rules would be the third copy of them, and the
+thing this section exists to prevent.
+
+**WHAT IS NEXT, IN DEPENDENCY ORDER.** (i) the shared package and its conformance fixture; (ii) the pi extension, as
+the second implementation of the format; (iii) the act vocabulary, which stays undecided until a measurement asks for
+it; (iv) the extraction of (a) into the package the shared half already established.
+
