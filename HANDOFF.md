@@ -272,8 +272,28 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   the import has not happened.** The rules are said once, in `dsh-session-rows`, and the conformance fixture keeps
   the copies honest in the meantime: the store, the observer and the pi extension each vendor the fixture and pin its
   digest, and the package derives the rows from its own log, so a fixture that drifts is red in the package that owns
-  it (**`F191`**). **What is left is `npm login` on lan100, and then the import in both repositories** — and until
-  then a third producer would be a third copy of the rules, which is the thing the extraction exists to prevent.
+  it (**`F191`**). **What is left is ONE publish, and then the import in both repositories** — and until then a
+  third producer would be a third copy of the rules, which is the thing the extraction exists to prevent.
+* **THE PUBLISH NEEDS A CREDENTIAL ONCE, AND THREE RUNS MEASURED WHY.** This page said the publication was
+  "one `npm login` away". It is not, and the difference cost three runs. lan100 has no npm credentials at all
+  (`npm whoami` → ENEEDAUTH), and the Mac's token is one of the 2FA-**BYPASSING** tokens npm is deprecating: the
+  registry answers a publish with `HttpErrorAuthOTP: OTP required for authentication`, because that token cannot
+  publish without a one-time password. **The repository's own release path is npm's TRUSTED PUBLISHING** — the OIDC
+  exchange the other three repositories already use, with no stored secret — and it is the right one, because npm
+  restricts **DIRECT PUBLISHING with bypass tokens in January 2027**. But trusted publishing cannot carry a **FIRST**
+  publish, and that is measured rather than assumed: `npm publish` answers **404 on PUT** and `npm stage publish`
+  answers **404 on GET**, because the trusted-publisher configuration lives **ON THE PACKAGE'S REGISTRY PAGE** and a
+  package that does not exist has no page to carry it. The two sister repositories published their 0.1.0 with a token
+  FIRST and only then could the OIDC path take over; nobody had met this before because they never needed a first
+  publish through it. **So the remaining action is ONE publish with any credential — a token, or the npm web UI — and
+  after that the workflow takes over forever, with no secret anywhere.**
+  **The workflows are BUILT, VALIDATED AND GREEN**: `dsh-session-rows/.github/workflows/publish.yml` and
+  `pi-session-log/.github/workflows/publish.yml` run the suite, then check the fixture digest the three consumers
+  pinned, then check the tarball's contents, then publish with provenance, then prove the version is INSTALLABLE
+  (a green publish is not evidence of a release — npm's trusted flow can STAGE one), then check the dist-tag, then
+  cut the GitHub Release. Two measurements shaped them: **npm 12 is what can carry a first publish**, and **npm 12
+  cannot be installed on node 25** (`engines.node: ^22.22.2 || ^24.15.0 || >=26.0.0`), so the publish runs on node 26
+  while the suite runs on node 25, where this repository measures its coverage floor.
 * **THE RECEIPT'S `sourceBytes` MEANT TWO DIFFERENT THINGS, AND IT IS FIXED** (**`F182`**). The log route reported
   the DECODED length of the conversation and the index reported the ON-DISK size of a COMPRESSED log, because the
   store's `bytes` column was doing two jobs — change detection and the receipt's evidence. `SCHEMA_VERSION` 6 gives
@@ -293,7 +313,8 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   spec, the package, the pi extension.** -- **AND THE FIRST THREE ARE DONE (2026-10-20)**: the spec is
   `docs/session-log-format.md`, the package is `dsh-session-rows`, and the pi extension is `pi-session-log`. What
   remains is the act vocabulary (undecided until a measurement asks for it), the extraction of the instrument into
-  the package the shared half established, and **the publication**, which is one `npm login` away.
+  the package the shared half established, and **the publication**, which is one credentialed publish away — measured,
+  and not by `npm login`; see §5.
 
 ## 6. Where to start
 
