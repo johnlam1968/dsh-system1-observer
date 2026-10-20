@@ -314,6 +314,30 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   cut the GitHub Release. Two measurements shaped them: **npm 12 is what can carry a first publish**, and **npm 12
   cannot be installed on node 25** (`engines.node: ^22.22.2 || ^24.15.0 || >=26.0.0`), so the publish runs on node 26
   while the suite runs on node 25, where this repository measures its coverage floor.
+* **THE RELEASE PATH NEEDS NO CREDENTIAL, AND THAT IS MEASURED RATHER THAN INTENDED.** npm is deprecating the tokens
+  that bypass 2FA — account changes in August 2026 and **DIRECT PUBLISHING in January 2027** — so a release path
+  that holds a long-lived token is a release path with an expiry date on it. The path that has no expiry is npm's
+  **TRUSTED PUBLISHING**: the job proves who it is over OIDC, npm decides whether that is allowed, and there is no
+  secret to store, leak, or rotate. **BOTH PACKAGES ARE BOUND AND BOTH HAVE PUBLISHED CREDENTIAL-FREE**:
+  `dsh-session-rows@0.2.1` and `pi-session-log@0.1.1` were published by the workflow **from the tag alone, with no
+  token anywhere**, each with a signed provenance statement and the version installable afterwards.
+  **AND THE FIRST PUBLISH IS THE ONE THAT NEEDS A CREDENTIAL**, because the trusted-publisher binding lives on the
+  package's page and a package that does not exist has no page to carry it — so `dsh-session-rows@0.2.0` and
+  `pi-session-log@0.1.0` were published with a one-time code, and every release after them needs none. **AND npm
+  creates the `0.0.0-stage` placeholder ITSELF** when a publish creates a package, which is why all four
+  repositories in this account carry one and why nobody had to bootstrap it by hand.
+  **AND TWO THINGS THE FIRST CREDENTIAL-FREE RUNS TAUGHT, both of which are now fixed in the workflows:**
+  - **THE INSTALLABILITY WINDOW WAS TOO SHORT, AND THE CHECK THAT EXISTS TO CATCH A STAGED PUBLISH CAUGHT THE
+    TIMING INSTEAD.** npm says "your package is being processed and may take a few minutes", and "a few minutes"
+    was more than three: the version was not installable at 195 seconds and WAS at 250. The window is now 20 checks
+    over ~5 minutes.
+  - **`npm stage list "<pkg>@<ver>"` IS REJECTED BY npm 12** — "Version specifiers are not supported for listing
+    staged packages" — so the list takes the package spec and not the version, and the filter on the version is done
+    by the workflow. An independent review had called that line "fine"; running it was what proved otherwise.
+  **AND A RE-RUN DURING npm's PIPELINE FAILS WITH E409** — "Cannot publish over previously staged version" — which
+  is npm saying the version is still in flight, not that the release is wrong. A re-run AFTER the version is
+  installable is green.
+
 * **THE RECEIPT'S `sourceBytes` MEANT TWO DIFFERENT THINGS, AND IT IS FIXED** (**`F182`**). The log route reported
   the DECODED length of the conversation and the index reported the ON-DISK size of a COMPRESSED log, because the
   store's `bytes` column was doing two jobs — change detection and the receipt's evidence. `SCHEMA_VERSION` 6 gives
