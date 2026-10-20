@@ -55,6 +55,19 @@ test('and ships what a user needs to run it', () => {
   // THE SKILLS SHIP, and they are user-facing: a workflow an agent can load.
   assert.ok([...paths].some((p) => p.startsWith('skills/')), 'no skill shipped')
   assert.ok([...paths].some((p) => p.startsWith('locale/')), 'no locale shipped')
+  // THE QUESTION SETS SHIP, and they were NOT shipping: `core/question-sets.js` resolves the default set directory
+  // as `../criteria` beside `core/`, so a default that names a set was looking for a directory the tarball did not
+  // carry. Measured on the published 0.2.1: `npm pack --dry-run` matched `criteria/` zero times, while shipping the
+  // three `scripts/*.mjs` entry points that resolve into it. A CLI that cannot find its own question sets is a
+  // broken CLI, and it was being published as one.
+  assert.ok([...paths].some((p) => p.startsWith('criteria/') && p.endsWith('.json')), 'no question set shipped')
+  // AND THE PARKED SETS AND THE AUTHORING TEMPLATE DO NOT: retired sets and the guide for writing one are not a
+  // set, and shipping them makes the published directory say something about the project that is not true.
+  assert.deepEqual(
+    [...paths].filter((p) => p.startsWith('criteria/_parked/') || p.startsWith('criteria/_templates/')),
+    [],
+    'the parked sets and the authoring template would be published',
+  )
 })
 
 // THE SESSION ADAPTER SHIPS IN HERE, ALL FIVE MODULES, because it is no longer a separate package. It WAS one, and the
