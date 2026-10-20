@@ -124,11 +124,11 @@ would be the third copy**, which is the thing the extraction exists to prevent.
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`523f461`); **920 tests**, 920 pass, 0 fail |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`5e720e5`**, **pushed**; 58 tests; **`SCHEMA_VERSION` 6** |
-| package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **`a29df13`**, **pushed**; 10 tests; **NOT PUBLISHED — lan100 has no npm credentials** |
-| pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **`dcb3e53`**, **pushed**; 43 tests; the second implementation of the format |
-| coverage | observer **97.56 / 82.62 / 91.83**, store **97.25 / 78.34 / 91.40**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100** |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`bc8ecda`); **920 tests**, 920 pass, 0 fail; **the rules are the package's, imported by integrity** |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`72636ea`**, **pushed**; 58 tests; **`SCHEMA_VERSION` 6**; **the rules are the package's**; **946 of 946 sessions agree on every field** |
+| package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **`bc318d9`**, **pushed**; 10 tests; **PUBLISHED — `dsh-session-rows@0.2.0`**, tarball sha1 `875854e6107a7dec5e3f9940684847d53dd4500a`, the same digest the CI build produced from the tagged commit |
+| pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **`3669714`**, **pushed**; 43 tests; **PUBLISHED — `pi-session-log@0.1.0`**, tarball sha1 `98affa86a762190b19575ee0fa96e4faa2f97360`; the second implementation of the format |
+| coverage | observer **97.55 / 82.54 / 91.77**, store **96.86 / 77.69 / 89.01**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100** |
 | gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
 
@@ -268,12 +268,30 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   the store disagreed about who spoke (**`F173`**). All three are fixed and the index is rebuilt.
 * **pi and web producers.** Both importers end in a dsh log, so `--log` measures them. If a substrate arrives that
   does NOT write a dsh log, it needs its own producer writing the same rows — not its own copy of the concept.
-* **The store WAS a second producer, and the rules now live in a package — but the package is NOT PUBLISHED, so
-  the import has not happened.** The rules are said once, in `dsh-session-rows`, and the conformance fixture keeps
-  the copies honest in the meantime: the store, the observer and the pi extension each vendor the fixture and pin its
-  digest, and the package derives the rows from its own log, so a fixture that drifts is red in the package that owns
-  it (**`F191`**). **What is left is ONE publish, and then the import in both repositories** — and until then a
-  third producer would be a third copy of the rules, which is the thing the extraction exists to prevent.
+* **The store WAS a second producer, and it no longer is: the rules are said ONCE, in `dsh-session-rows`, and ALL
+  THREE PRODUCERS IMPORT THEM.** The package is **PUBLISHED** — `dsh-session-rows@0.2.0` is on the registry, and
+  the artifact there is byte-for-byte the one the GitHub Actions build produced from the tagged commit (sha1
+  `875854e6107a7dec5e3f9940684847d53dd4500a`, verified by downloading it back and hashing it). The observer, the
+  store and the pi extension now resolve it **by integrity** from the registry, not from a sibling checkout.
+  **What each one stopped carrying:**
+  - the observer: the surface fold (45 duplicated lines), the source rule, the ask-group, the reasoning and the NUL
+    rule on the producer side;
+  - the store: the NUL rule, the visible-text rule, the reasoning rule, the "who spoke" predicate, and the surface
+    fold that decided the `shadowed` flag;
+  - the pi extension: it already imported the rules, but it had been tested against a **symlink** to a working copy
+    rather than against what a consumer installs.
+  **AND THE CONFORMANCE FIXTURE IS STILL VENDORED AND DIGEST-PINNED** by all three, because a published rule and an
+  imported rule are only the same rule if the fixture says so (**`F191`**).
+  **AND THE INSTRUMENT'S OWN `core/` IS DELIBERATELY NOT DEPENDENT.** `test/instrument-boundary.test.js` walks the
+  closure of `scripts/ask.mjs` and asserts that every file it reaches loads with **no `node_modules` at all** — no
+  bare specifier anywhere — so the standalone cannot take a dependency on a published package. That property is
+  measured and enforced, and it is why the split is where it is: the **package is the shared half for PRODUCERS**,
+  and the **standalone keeps its own copy** because it has to run with nothing installed. The package imports no dsh
+  code, so the boundary check is unaffected — it follows relative specifiers only, and a bare specifier is outside
+  the repository.
+  **AND THE MEASUREMENT IS THE WHOLE CORPUS.** After the store's refactor the index was rebuilt from scratch — every
+  session refolded, because a fold that changes has to be re-folded to be compared — and: **946 in the index, 946
+  compared, 946 agree on every field, 0 differ, and the COMPOSED STATE differs in 0 sessions.**
 * **THE PUBLISH NEEDS A CREDENTIAL ONCE, AND THREE RUNS MEASURED WHY.** This page said the publication was
   "one `npm login` away". It is not, and the difference cost three runs. lan100 has no npm credentials at all
   (`npm whoami` → ENEEDAUTH), and the Mac's token is one of the 2FA-**BYPASSING** tokens npm is deprecating: the
@@ -285,8 +303,10 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   answers **404 on GET**, because the trusted-publisher configuration lives **ON THE PACKAGE'S REGISTRY PAGE** and a
   package that does not exist has no page to carry it. The two sister repositories published their 0.1.0 with a token
   FIRST and only then could the OIDC path take over; nobody had met this before because they never needed a first
-  publish through it. **So the remaining action is ONE publish with any credential — a token, or the npm web UI — and
-  after that the workflow takes over forever, with no secret anywhere.**
+  publish through it. **So the remaining action was ONE publish with any credential — a token, or the npm web UI — and
+  after that the workflow takes over forever, with no secret anywhere. BOTH PACKAGES ARE NOW PUBLISHED:**
+  `dsh-session-rows@0.2.0` and `pi-session-log@0.1.0`, each with the tarball's sha1 verified against the one built
+  from the committed tree.**
   **The workflows are BUILT, VALIDATED AND GREEN**: `dsh-session-rows/.github/workflows/publish.yml` and
   `pi-session-log/.github/workflows/publish.yml` run the suite, then check the fixture digest the three consumers
   pinned, then check the tarball's contents, then publish with provenance, then prove the version is INSTALLABLE
@@ -313,8 +333,10 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
   spec, the package, the pi extension.** -- **AND THE FIRST THREE ARE DONE (2026-10-20)**: the spec is
   `docs/session-log-format.md`, the package is `dsh-session-rows`, and the pi extension is `pi-session-log`. What
   remains is the act vocabulary (undecided until a measurement asks for it), the extraction of the instrument into
-  the package the shared half established, and **the publication**, which is one credentialed publish away — measured,
-  and not by `npm login`; see §5.
+  the package the shared half established, and **the publication** — DONE: `dsh-session-rows@0.2.0` and
+  `pi-session-log@0.1.0` are on the registry, and the two producers import the rules rather than restate them; see
+  §5. **What is left is BINDING the trusted publisher for the two new packages on npmjs.com** — the binding lives
+  on the package's page, and a package's page does not exist until the package does.
 
 ## 6. Where to start
 
