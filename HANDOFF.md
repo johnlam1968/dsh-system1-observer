@@ -124,10 +124,10 @@ would be the third copy**, which is the thing the extraction exists to prevent.
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed**; **920 tests**, 920 pass, 0 fail |
-| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **pushed**; 58 tests; **`SCHEMA_VERSION` 6** |
-| package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **pushed**; 10 tests; **NOT PUBLISHED — lan100 has no npm credentials** |
-| pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **pushed**; 43 tests; the second implementation of the format |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`523f461`); **920 tests**, 920 pass, 0 fail |
+| store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`5e720e5`**, **pushed**; 58 tests; **`SCHEMA_VERSION` 6** |
+| package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **`a29df13`**, **pushed**; 10 tests; **NOT PUBLISHED — lan100 has no npm credentials** |
+| pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **`dcb3e53`**, **pushed**; 43 tests; the second implementation of the format |
 | coverage | observer **97.56 / 82.62 / 91.83**, store **97.25 / 78.34 / 91.40**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100** |
 | gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
