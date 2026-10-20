@@ -102,9 +102,14 @@ jobs:
           #   "Your package is being processed and may take a few minutes to become available."
           #   "+ name@version"
           # -- so only the registry, plus time, can tell them apart. A 20-second window declared a published
-          # release "staged" (F136). 13 checks over ~3 minutes covers npm's own "few minutes".
+          # release "staged" (F136). 13 checks over ~3 minutes covered npm's own "few minutes" for the SMALL
+          # packages -- and stopped covering them for THIS one, which is the biggest thing this account publishes:
+          # 166 files and 1.43 MB unpacked, because the question sets ship with it. MEASURED on 0.2.2: the publish
+          # succeeded and the version WAS on the registry, but it was not there at 195 seconds and it was there by
+          # 300 -- so the run went RED for a release that had actually landed, and the GitHub Release was never cut.
+          # 30 checks over ~7 minutes is the window this size of package needs.
           found=false
-          for attempt in $(seq 1 13); do
+          for attempt in $(seq 1 30); do
             if npm view "${name}@${ver}" version >/dev/null 2>&1; then found=true; break; fi
             sleep 15
           done
@@ -115,7 +120,7 @@ jobs:
           # MEASURED TWICE: npm's trusted-publishing flow can STAGE a release instead of publishing it -- the run
           # signs a provenance statement, the publish step exits 0, and nothing is installable. A green job is
           # then evidence of staging, not of publication.
-          echo "::error::${name}@${ver} is still not on the registry after ~3 minutes. npm accepted it and said it was 'being processed', so either the processing is unusually slow or it was STAGED; the two are indistinguishable from the CLI's output."
+          echo "::error::${name}@${ver} is still not on the registry after ~7 minutes. npm accepted it and said it was 'being processed', so either the processing is unusually slow or it was STAGED; the two are indistinguishable from the CLI's output."
           echo "::error::Approve the staged version (npm >= 12): npx npm@latest stage list && npx npm@latest stage approve <id>"
           echo "::error::Or publish directly: npmjs.com -> the package -> Trusted Publishing -> allowed action 'npm publish', then re-run this workflow."
           exit 1
