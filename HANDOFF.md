@@ -373,6 +373,10 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 
 ## 6. Where to start
 
+0. **`docs/next-session.md` — THE BRIEFING FOR WHOEVER PICKS THIS UP NEXT.** It names the four repositories, the
+   measured state, the commands that take each measurement, the split's four steps, and the traps. It is committed and
+   published, so a fresh instance can clone and read it, and it is the one document to read before the rest of this
+   page: this page is the state, that one is the starting line.
 1. `AGENTS.md` — what the standing reminders mean here.
 2. `core/README.md` — the map, **enforced**: a test fails if a file is not named or a name does not exist.
 3. `docs/session-log-format.md` — **the format this repository owns**, with the content kinds and the acts measured
