@@ -30,8 +30,8 @@
 //   1. `checkAgainst` THROWS on a bad argument; it does not return a problem.
 //   2. The runtime's enforced schema subset takes a SCALAR `type`, so a field that is absent half the time is OMITTED
 //      rather than declared as nullable.
-import { checkAgainst } from '../core/tool-args.js'
-import { describeToolCut } from './tool-blocks.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
+import { describeToolCut } from 'system1-measure/instrument/tool-blocks.js'
 import { readStoredSubject, SUBJECT_KINDS } from './session-adapter/lib/reader.js'
 import { displayTextOfEvent, isAssistantMessage } from './session-adapter/lib/session-format.js'
 

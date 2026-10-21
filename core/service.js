@@ -17,7 +17,7 @@
 // and returns its result, so there is no mutator to forget to guard. `test/service.test.js` asserts the returned
 // object is frozen and that none of its members writes, and that a full sweep leaves the trace file's bytes
 // identical -- a declaration that cannot be checked is a comment.
-import { deriveNudgeLabel } from './nudge-label.js'
+import { deriveNudgeLabel } from 'system1-measure/core/nudge-label.js'
 import { replayConfig } from './config-event.js'
 
 export const OBSERVER_SERVICE = 'system1Observer'

@@ -1,86 +1,32 @@
-// THE HARNESS'S SESSION VOCABULARY, TESTED WHERE IT LIVES -- and prevented from spreading back out.
+// THE VOCABULARY IS SAID ONCE, AND THIS TEST IS WHAT MAKES THAT TRUE.
 //
-// The two halves belong together. The first says the vocabulary reads the shapes the harness actually writes; the
-// second says it is the ONLY place in the plugin that names them. A vocabulary that is correct in one file and also
-// restated in six others is not a vocabulary, it is a coincidence -- and each restatement is somewhere a format
-// change has to be found.
-
+// The session vocabulary moved WHOLE into `system1-measure`, and the plugin's copy of it is now a pure re-export
+// layer -- one line, `export * from ...`, naming no event and declaring no rule. That layer is the ONE file in this
+// repository that is allowed to name a session event, and everything else that names one is a second spelling of it.
+//
+// WHY THE SECOND SPELLING MATTERS. A bare `'user/message'` in a file that is not the vocabulary is a file that has
+// grown a second harness: the plugin would be reading one shape in one place and writing another in another, and the
+// two would agree until the day a substrate wrote a record the other reader could not parse. A second spelling is
+// therefore not a style question; it is the failure this repository keeps recording.
+//
+// The same scan, over the same tree, is in the package's own `test/session-format.test.js` -- one per repository, each
+// exempting its own vocabulary. Two repositories, two vocabularies to keep single.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-    EVENT,
-    HUMAN_SOURCE_KIND,
-    displayTextOfEvent,
-    isAssistantMessage,
-    isMessageEvent,
-    isToolTraffic,
-    isUserMessage,
-    roleOf,
-    sourceKindOf,
-    textOfContent,
-    textOfEvent,
-    textOfMessage,
-    turnOf,
-} from '../dsh/session-adapter/lib/session-format.js'
+import { EVENT } from '../dsh/session-adapter/lib/session-format.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-
-test('the two message shapes are read, and a block without a type is not a text block', () => {
-    // `'user/message': UserMessage` -- `data` IS the message.
-    assert.equal(textOfEvent({ type: EVENT.USER_MESSAGE, data: { content: [{ type: 'text', text: 'the ask' }] } }), 'the ask')
-    assert.equal(textOfEvent({ type: EVENT.USER_MESSAGE, data: { content: 'the ask' } }), 'the ask')
-    // `'assistant/message'` declares `data.message`.
-    assert.equal(textOfEvent({ type: EVENT.ASSISTANT_MESSAGE, data: { message: { content: [{ type: 'text', text: 'the answer' }] } } }), 'the answer')
-    // A block the harness does not write is not text, and neither is a gap for one.
-    assert.equal(textOfContent([{ text: 'no type' }]), '')
-    assert.equal(textOfContent(undefined), '')
-    assert.equal(textOfContent([{ type: 'text', text: 'only' }, { type: 'text', text: 'text counts' }]), 'onlytext counts')
-    // The one caller that shows a line to a person joins them, so a reader never sees two blocks glued.
-    assert.equal(displayTextOfEvent({ data: { message: { content: [{ type: 'text', text: 'only' }, { type: 'text', text: 'text counts' }] } } }), 'only text counts')
-})
-
-test('reasoning is NOT the message, though it carries the same field name', () => {
-    const content = [{ type: 'reasoning', text: 'private thought' }, { type: 'text', text: 'said out loud' }]
-    assert.equal(textOfContent(content), 'said out loud')
-    assert.equal(textOfMessage({ content }), 'said out loud')
-})
-
-test('the human is told apart from the harness by the source the harness declares', () => {
-    const human = { type: EVENT.USER_MESSAGE, data: { source: { kind: HUMAN_SOURCE_KIND }, content: 'typed' } }
-    const injected = { type: EVENT.USER_MESSAGE, data: { source: { kind: 'skill-catalog' }, content: 'injected' } }
-    const bare = { type: EVENT.USER_MESSAGE, data: { content: 'no source' } }
-    assert.equal(sourceKindOf(human), 'user')
-    assert.equal(sourceKindOf(injected), 'skill-catalog')
-    // A MISSING SOURCE IS NOT THE HUMAN -- reading absence as consent is the error this guards.
-    assert.equal(sourceKindOf(bare), '')
-    assert.equal(isUserMessage(injected), true, 'an injected message is still a user/message')
-    assert.equal(textOfEvent(bare), 'no source', 'and its text is still readable')
-})
-
-test('the predicates separate messages from traffic, and a tool result is NOT a message', () => {
-    assert.equal(isMessageEvent({ type: EVENT.USER_MESSAGE }), true)
-    assert.equal(isMessageEvent({ type: EVENT.ASSISTANT_MESSAGE }), true)
-    assert.equal(isToolTraffic({ type: EVENT.TOOL_CALL }), true)
-    assert.equal(isToolTraffic({ type: EVENT.TOOL_RESULT }), true)
-    // Measured: a tool result arrives as a `user/message` too, which is why role is read from the type and not guessed.
-    assert.equal(isMessageEvent({ type: EVENT.TOOL_RESULT }), false)
-    assert.equal(isAssistantMessage({ type: EVENT.ASSISTANT_MESSAGE }), true)
-    assert.equal(roleOf({ type: EVENT.USER_MESSAGE }), 'user')
-    assert.equal(roleOf({ type: EVENT.ASSISTANT_MESSAGE }), 'assistant')
-    assert.equal(turnOf({ data: { turn: 12 } }), 12)
-    assert.equal(turnOf({ data: {} }), null)
-})
 
 test('the vocabulary is the ONLY place in the plugin that names a session event, and it still names them all', () => {
     const NAMES = Object.values(EVENT)
     const pattern = new RegExp(`(['"])(${NAMES.map((n) => n.replace(/[/-]/g, '\\$&')).join('|')})\\1`)
-    // THE ONE FILE ALLOWED TO NAME THEM is the one that exports `EVENT`, resolved against THIS MODULE rather than
-    // typed as a path. It used to be `import.meta.resolve('dsh-session-adapter/session-format')`, which stopped
-    // resolving when the adapter stopped being a package -- a scan that cannot name its own exemption is a scan that
-    // either throws or, worse, quietly exempts nothing.
+    // THE ONE FILE ALLOWED TO NAME THEM is the one that exports `EVENT` -- which, after the split, is the PURE
+    // RE-EXPORT LAYER at `dsh/session-adapter/lib/session-format.js`. It is resolved against THIS MODULE rather
+    // than typed as a path, for the reason the original comment gives: a scan that cannot name its own exemption is a
+    // scan that either throws or, worse, quietly exempts nothing.
     const VOCABULARY = fileURLToPath(import.meta.resolve('../dsh/session-adapter/lib/session-format.js'))
     const offenders = []
     const walk = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -90,32 +36,26 @@ test('the vocabulary is the ONLY place in the plugin that names a session event,
         const abs = join(ROOT, rel)
         if (abs === VOCABULARY) return []
         // COMMENTS ARE NOT CODE: a header may name an event to explain it, which is documentation rather than a
-        // second home. Same rule, and the same reason, as the host-inventory scan.
+        // second home.
         let code = readFileSync(abs, 'utf8')
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n')
         // AND A HOST-EVENT NAME IS NOT A RESTATEMENT. This vocabulary types what a session LOG CONTAINS
         // (`user/message`, `tool/call`, `turn/start`). The names in `ctx.on('...')` and in a node descriptor's
         // `event: '...'` are the OTHER vocabulary -- the events the host EMITS -- and they are literal on purpose:
-        // `test/host-inventory.test.js` reads those literals to check them against the `HOST_EVENTS` declaration, and
-        // `dsh/index.js` says so at the site where it does it. The two names overlap by accident, not by arrangement:
-        // the adapter observes `agent/turn-stopping` on the feed AND the row subscribes to it, which is one event with
-        // two callers and not a second spelling of it. Blanking both shapes is what lets the two guards be true at
-        // once instead of one silently cancelling the other.
+        // `test/host-inventory.test.js` reads those literals to check them against the `HOST_EVENTS` declaration.
         code = code
             .replace(/ctx\.on\(\s*'[^']*'/g, "ctx.on('EVENT'").replace(/ctx\.on\(\s*"[^"]*"/g, 'ctx.on("EVENT"')
             .replace(/event:\s*'[^']*'/g, "event: 'EVENT'").replace(/event:\s*"[^"]*"/g, 'event: "EVENT"')
         for (const line of code.split('\n')) if (pattern.test(line)) offenders.push(`${rel}: ${line.trim().slice(0, 70)}`)
         return []
     })
-    // BOTH FOLDERS, because the instrument and the adaptation are one plugin: scanning `core/` alone would leave the
-    // half that actually reads session events unchecked. `scripts/` is outside this guard and that is a stated
-    // boundary rather than an oversight -- the importers there CONSTRUCT events for a foreign transcript rather than
-    // consuming the harness's, so they are a producer of the vocabulary, not a second reader of it.
-    walk('core')
+    // BOTH FOLDERS, because the plugin and the adaptation are one plugin: scanning `dsh/` alone would leave the
+    // half that actually reads session events unchecked.
     walk('dsh')
+    walk('core')
     assert.deepEqual(offenders, [], `these name a session event outside the vocabulary: ${offenders.join(' | ')}`)
-    // And the names themselves are the harness's, not a paraphrase -- read from `core/session/src/types.ts`.
+    // And the names themselves are the harness's, not a paraphrase.
     for (const name of ['user/message', 'assistant/message', 'tool/call', 'tool/result', 'turn/start', 'turn/end']) {
         assert.ok(NAMES.includes(name), `${name} is missing from EVENT`)
     }

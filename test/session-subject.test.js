@@ -10,7 +10,7 @@ import {
 } from '../dsh/session-adapter/lib/reader.js'
 // `subjectSettings` reads THIS PLUGIN's config, so it stayed here rather than going into the adapter package.
 import { subjectSettings } from '../dsh/subject-settings.js'
-import { composeTurnState } from '../dsh/turn-state.js'
+import { composeTurnState } from 'system1-measure/instrument/turn-state.js'
 
 /** One session event in the shape the harness writes and the composer reads. */
 // A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user

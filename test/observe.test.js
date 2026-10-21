@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createObserver } from '../core/observe.js'
-import { exitCodeOf } from '../core/seams.js'
-import { labelHash } from '../core/label-hash.js'
+import { createObserver } from 'system1-measure/core/observe.js'
+import { exitCodeOf } from 'system1-measure/core/seams.js'
+import { labelHash } from 'system1-measure/core/label-hash.js'
 import { instrumentInput } from '../core/instrument-input.js'
 
 function recorder() {

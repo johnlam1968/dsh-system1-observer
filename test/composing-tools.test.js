@@ -13,9 +13,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createDecideTool } from '../core/decide-tool.js'
-import { createQuestionsTool } from '../core/questions-tool.js'
-import { createBatteryTool } from '../core/battery-tool.js'
-import { lintScope, lintSelection, MACHINE_UNCOVERED } from '../core/question-lint.js'
+import { createQuestionsTool } from 'system1-measure/core/questions-tool.js'
+import { createBatteryTool } from 'system1-measure/core/battery-tool.js'
+import { lintScope, lintSelection, MACHINE_UNCOVERED } from 'system1-measure/core/question-lint.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const rules = (result) => (result.findings ?? []).map((f) => f.rule)

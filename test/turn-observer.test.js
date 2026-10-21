@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createTurnObserver } from '../core/turn-observer.js'
 import { createTurnListener } from '../core/turn-listener.js'
-import { probeViolations } from '../core/turn-record.js'
+import { probeViolations } from 'system1-measure/core/turn-record.js'
 
 // A `user/message` CARRIES ITS SOURCE KIND, and that is what says who wrote it. The harness speaks on the user
 // channel too -- a goal, a skill catalogue -- and only `data.source.kind` separates those from a person typing.

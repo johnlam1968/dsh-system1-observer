@@ -131,12 +131,15 @@ test('the adapter modules are PURE: no host service, no event subscription, comm
 })
 
 test('the scan is RECURSIVE, so a nested file cannot hide a host call', () => {
-  const nested = jsFiles(join(ROOT, 'core')).filter((file) => file.includes(join('core', 'model')))
-  assert.ok(nested.length > 0, 'core/model holds files')
+  // THE NESTED TREE IS `dsh/session-adapter/lib/`, and it is nested for the same reason it was `core/model/`: the
+  // point of the proof is that the scan DESCENDS, and a tree that is flat cannot show a descent. `core/model/` went
+  // to `system1-measure` with the rest of the model call path.
+  const nested = jsFiles(join(ROOT, 'dsh', 'session-adapter', 'lib'))
+  assert.ok(nested.length > 0, 'dsh/session-adapter/lib holds files')
   // WHAT THIS PROVES IS THE SCAN, NOT THE ARCHITECTURE: that a `ctx.get(` in a NESTED lib file is found. It used to
   // assert that such a call existed, which made a green suite mean "the plugin still reaches a host service" -- and
   // that is precisely what stopped being true when the service route was cut. The scan is still worth proving, so the
   // witness is now a SYNTHETIC one: the real code need not contain a dynamic lookup for the recursion to matter.
-  const witness = code(read('dsh/host/index.js')) + code(read('core/model/client.js'))
+  const witness = code(read('dsh/host/index.js')) + code(read('dsh/session-adapter/lib/reader.js'))
   assert.ok(!nested.some((file) => code(read(file)).includes('ctx.get(')), 'no dynamic host lookup remains in a nested lib file -- which is what the cut was for')
 })

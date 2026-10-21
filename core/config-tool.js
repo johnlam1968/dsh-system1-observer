@@ -16,7 +16,7 @@
 //
 // READ-ONLY ACTIONS ARE FREE. `list` and `get` never call `record` and never call `write`; the test asserts that
 // too, because a tool that logged its own reads would drown the record it exists to keep honest.
-import { checkAgainst } from './tool-args.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
 import { configEvent, CONFIG_ACTIONS } from './config-event.js'
 import { readConfigValue } from '../dsh/config-value.js'
 

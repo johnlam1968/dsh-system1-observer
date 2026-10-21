@@ -6,8 +6,8 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createQuestionsTool, QUESTIONS_TOOL_NAME, validateSpecs, WRITABLE_SCOPES } from '../core/questions-tool.js'
-import { listSets, readSelectedSet } from '../core/question-sets.js'
+import { createQuestionsTool, QUESTIONS_TOOL_NAME, validateSpecs, WRITABLE_SCOPES } from 'system1-measure/core/questions-tool.js'
+import { listSets, readSelectedSet } from 'system1-measure/core/question-sets.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const noul = (id, instructions = 'is it true?') => ({ id, type: 'noul', instructions })

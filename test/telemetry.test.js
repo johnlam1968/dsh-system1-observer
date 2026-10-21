@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { REDACT_EVENT, TELEMETRY_SERVICE, attachRedactionRule } from '../core/telemetry.js'
-import { redactPolicy, sanitizeJson } from '../core/redact.js'
+import { redactPolicy, sanitizeJson } from 'system1-measure/core/redact.js'
 
 /** A context with the telemetry service present, recording what was registered. */
 function fakeCtx({ present = true } = {}) {

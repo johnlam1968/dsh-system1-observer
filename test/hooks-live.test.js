@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { registerListeners } from '../core/register.js'
-import { PROBE_SEAMS } from '../core/seams.js'
+import { PROBE_SEAMS } from 'system1-measure/core/seams.js'
 import { probeHook } from '../dsh/host-events.js'
 import { HOST_EVENT_MODES } from '../dsh/host/index.js'
 

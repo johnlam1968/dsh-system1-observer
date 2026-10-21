@@ -22,7 +22,7 @@ import { pathToFileURL } from 'node:url'
 
 import plugin from '../dsh/index.js'
 import { EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../dsh/evaluate-tool.js'
-import { probeAnswerOf, probeScore } from '../core/probe-score.js'
+import { probeAnswerOf, probeScore } from 'system1-measure/core/probe-score.js'
 
 /**
  * The real Cordis and the real tool registry, resolved the way `test/composition.test.js` resolves them.

@@ -13,7 +13,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../dsh/index.js'
-import { probeViolations } from '../core/turn-record.js'
+import { probeViolations } from 'system1-measure/core/turn-record.js'
 
 const accessor = (value) => ({ get: () => value })
 const env = (seq, type, content) => ({ seq, type, data: { message: { content } } })

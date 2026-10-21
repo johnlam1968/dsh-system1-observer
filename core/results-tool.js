@@ -30,10 +30,10 @@
 //   `mount` line is reported as context, and the gap is in `refusals`.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, packageId, questionsById, writePackage } from './report.js'
-import { checkAgainst } from './tool-args.js'
-import { answerOf, answersOf, kindOf, readTraceLines, runsOf, skipReasons, specsOf, tallyEvents, tailOf, windowOf, writerOf } from './trace-read.js'
-import { TURN_HOOK } from './questions.js'
+import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, packageId, questionsById, writePackage } from 'system1-measure/core/report.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
+import { answerOf, answersOf, kindOf, readTraceLines, runsOf, skipReasons, specsOf, tallyEvents, tailOf, windowOf, writerOf } from 'system1-measure/core/trace-read.js'
+import { TURN_HOOK } from 'system1-measure/core/questions.js'
 
 export const RESULTS_TOOL_NAME = 'system1_measurements'
 

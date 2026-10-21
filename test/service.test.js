@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createObserverService, OBSERVER_SERVICE } from '../core/service.js'
-import { readTraceWindow, runIds } from '../core/trace-report.js'
+import { readTraceWindow, runIds } from 'system1-measure/core/trace-report.js'
 
 // A path is threaded through because `runs()` takes no arguments and the reader underneath needs one --
 // the same asymmetry the real row resolves by closing over `evidence.path`.

@@ -22,7 +22,7 @@
 // would otherwise silently stop a session being observed, and this decides whether text reaches a model.
 // Both shapes are accepted, so a list written before titles existed keeps working and a hand-edit may be
 // either.
-import { isRecord } from './is-record.js'
+import { isRecord } from 'system1-measure/core/is-record.js'
 import { readConfigValue } from '../dsh/config-value.js'
 
 /** The id an entry names, from either the plain-string shape or the `{ id, title }` one. */

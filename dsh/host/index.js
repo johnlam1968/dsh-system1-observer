@@ -104,7 +104,7 @@ const HOST_EVENT_CONSTRAINTS = Object.freeze({
 export const ADAPTER_MODULES = Object.freeze([
     'dsh/host/index.js',
     'dsh/host/fs-journal.js',
-    // THE SESSION-SHAPED FIVE, and the check moved with them. They were a published package (`dsh-session-adapter`)
+    // THE SESSION-SHAPED FOUR, and the check moved with them. They were a published package (`dsh-session-adapter`)
     // because a composer inside a synchronous path cannot await a Cordis service (`F104`), so the in-band half had to
     // be IMPORTABLE -- and being importable was read as being reachable by name. It was a package with no consumer
     // outside this repository, and its `index.js` was the one IMPURE file in the set: it called `ctx.provide` and
@@ -113,8 +113,11 @@ export const ADAPTER_MODULES = Object.freeze([
     // `await`, not module resolution -- no longer applies, and this list is the WHOLE of the session adapter with no
     // exception to remember. A check with an exception is a check one edit from silently covering less.
     'dsh/session-adapter/lib/session-format.js',
-    'dsh/session-adapter/lib/surface.js',
     'dsh/session-adapter/lib/feed.js',
+    // AND `lib/surface.js` IS NOT HERE, because it is not in this repository any more: the surface FOLD -- which
+    // reads a session's events and folds them into the exchange -- is the format's half, and it moved to
+    // `system1-measure/instrument/surface.js` with everything else that speaks the format. The list is the WHOLE of
+    // what is here, and a file that is not here cannot be scanned for purity it never claimed.
     // AND THE HOST-BACKED HALF, which is pure in the sense this list means: it reaches the host through a PARAMETER
     // (`sessionQuery`), never through `ctx`, so the check can still assert it contains no host call of its own.
     'dsh/session-adapter/lib/reader.js',

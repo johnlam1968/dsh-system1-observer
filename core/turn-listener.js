@@ -10,7 +10,7 @@
 // being judged HAS CLOSED, so the questions that need the operator's next message are exactly the ones that can now
 // be answered -- `closed: true`, and none of them dropped. Judging the turn still in flight is what would need the
 // filter, and this design never does that.
-import { shouldFire, turnQuestions } from './turn-trigger.js'
+import { shouldFire, turnQuestions } from 'system1-measure/core/turn-trigger.js'
 
 /**
  * @param everyNTurns      fire every Nth turn boundary

@@ -12,8 +12,8 @@
 // with the code the test fails rather than the reader being misled. That is the failure this repository has already
 // paid for twice (a README row that named a seam-to-event map `lib/seams.js` no longer had, and a comment promising a
 // probe fallback the code never had -- `F123`).
-import { isRecord } from './is-record.js'
-import { PROBE_SEAMS, TEXTLESS_SEAMS, PROBE_QUESTION } from './seams.js'
+import { isRecord } from 'system1-measure/core/is-record.js'
+import { PROBE_SEAMS, TEXTLESS_SEAMS, PROBE_QUESTION } from 'system1-measure/core/seams.js'
 
 /** The tool's name, in the `system1_` namespace the other eight use. */
 export const EXPLAIN_TOOL_NAME = 'system1_explain'

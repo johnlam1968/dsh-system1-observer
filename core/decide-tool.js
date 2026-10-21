@@ -1,5 +1,5 @@
-import { checkAgainst } from './tool-args.js'
-import { resultEnvelope } from './model/result-envelope.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
+import { resultEnvelope } from 'system1-measure/core/model/result-envelope.js'
 // THE REPOSITORY'S OWN AGENT-FACING TOOL: ask a System One model about one state.
 //
 // WHY IT IS HERE RATHER THAN IN A SEPARATE BUNDLE. The logic a question needs -- the builders, the shape rules, the
@@ -17,10 +17,10 @@ import { resultEnvelope } from './model/result-envelope.js'
 // WHAT IT DOES NOT DO. It returns probabilities and decides nothing. No threshold, no gate, no verdict: the
 // numbers come back and the caller's own code owns what they mean. `confidence` is a spread statistic over the
 // options offered, NOT a probability that the answer is right.
-import { askQuestions } from './system1.js'
-import { readSpecs as sharedReadSpecs } from './question-request.js'
-import { questionGroup } from './instrument-shape.js'
-import { isRecord } from './is-record.js'
+import { askQuestions } from 'system1-measure/core/system1.js'
+import { readSpecs as sharedReadSpecs } from 'system1-measure/core/question-request.js'
+import { questionGroup } from 'system1-measure/core/instrument-shape.js'
+import { isRecord } from 'system1-measure/core/is-record.js'
 
 export const DECIDE_TOOL_NAME = 'system1_decide'
 

@@ -3,12 +3,12 @@
 // The runtime owns the seam names, the seam-to-event map and the per-seam text extractor; this file owns only
 // the decision about which of them this deployment calls, and the harness contract for each kind of listener.
 // Nothing here may return anything but what the loop produced.
-import { PROBE_SEAMS } from './seams.js'
+import { PROBE_SEAMS } from 'system1-measure/core/seams.js'
 import { probeHook } from '../dsh/host-events.js'
 import { probeText } from '../dsh/host-payload.js'
-import { subjectOfRequest } from './subject.js'
+import { subjectOfRequest } from 'system1-measure/core/subject.js'
 import { readConfigValue } from '../dsh/config-value.js'
-import { textOf, tee } from './stream.js'
+import { textOf, tee } from 'system1-measure/core/stream.js'
 
 /** The hooks called when a deployment names none: the user message, the reply, a tool call, a tool result. */
 export const DEFAULT_HOOKS = Object.freeze(['admit', 'draft', 'pre_execute', 'post_execute'])

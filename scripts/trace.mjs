@@ -19,8 +19,8 @@ import { readFileSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
-import { describeSubject } from '../core/subject.js'
-import { egressLines } from '../core/egress.js'
+import { describeSubject } from 'system1-measure/core/subject.js'
+import { egressLines } from 'system1-measure/core/egress.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const argv = process.argv.slice(2)

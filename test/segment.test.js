@@ -5,12 +5,12 @@
 // every rule in `dsh/segment.js` is a way that split could judge something nobody wrote.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregateReadings, segmentsOf } from '../dsh/segment.js'
+import { aggregateReadings, segmentsOf } from 'system1-measure/instrument/segment.js'
 import { createEvaluateTool, EVALUATE_TOOL_NAME, REVIEW_HOOK } from '../dsh/evaluate-tool.js'
-import { composeTurnState } from '../dsh/turn-state.js'
-import { choice, noul } from '../core/model/questions.js'
-import { checkAgainst } from '../core/tool-args.js'
-import { stateBudgetChars } from '../core/model/limits.js'
+import { composeTurnState } from 'system1-measure/instrument/turn-state.js'
+import { choice, noul } from 'system1-measure/core/model/questions.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
+import { stateBudgetChars } from 'system1-measure/core/model/limits.js'
 
 const message = (seq, type, text) => ({ seq, time: seq, type, data: type.startsWith('user')
       ? { content: [{ type: 'text', text }] }

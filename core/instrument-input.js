@@ -29,7 +29,7 @@
 // NOT A DSH MODULE, NOT A SERVICE, NOT A PLUGIN -- plain functions, so the host edge stays in `index.js`.
 import { hostPoint } from '../dsh/host-events.js'
 import { sessionObserved } from './sessions.js'
-import { instrumentShape } from './instrument-shape.js'
+import { instrumentShape } from 'system1-measure/core/instrument-shape.js'
 
 /**
  * The input object, for one firing at one point, bound to THIS harness.

@@ -27,6 +27,15 @@ export const KNOWN_SIBLING_CITATIONS = Object.freeze([
     // because the list is checked against the sites that EXIST and an entry outliving its site is a claim nobody
     // makes any more.
     { file: 'dsh/host-payload.js', path: 'docs/DSH_CORDIS_FIELD_GUIDE.md' },
+    // SEVEN POINTERS INTO THE MEASUREMENT PACKAGE, AND THEY MOVED WITH THE DOCUMENTS THEY NAME. The format's
+    // standards and the measurement's depth are the PACKAGE's subjects -- they describe what a session log is and how
+    // deep a reading goes, and neither is a fact about this plugin -- so the documents went to `system1-measure` and
+    // these citations follow them. The list is named rather than silenced, so the debt stays visible: a reader who
+    // wants the document looks in the package, and a reader who wants to know that is why finds it here.
+    { file: 'core/zeroclaw-interchange.js', path: 'docs/adapters-and-standards.md' },
+    { file: 'dsh/deepseek-web-export.js', path: 'docs/adapters-and-standards.md' },
+    { file: 'dsh/evaluate-tool.js', path: 'docs/measurement-depth.md' },
+    { file: 'dsh/pi-session-export.js', path: 'docs/adapters-and-standards.md' },
 ])
 
 /** Every file this check reads: the source halves, and the library beside them. */

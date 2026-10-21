@@ -11,8 +11,16 @@ Two things this map deliberately does **not** carry, because something else alre
   real host calls with comments stripped. A hand-written "coupled" column would be a second, drifting answer.
 * **line counts and percentages** — those move with every edit; a number here would be wrong within a week.
 
-Paths are relative to their own folder: an instrument module is named bare (`report.js`), and an adaptation module
-carries its `dsh/` prefix (`dsh/exchange.js`), which is the same name the code and the gates use.
+Paths are relative to their own folder: an instrument module is named bare (`register.js`), and an adaptation module
+carries its `dsh/` prefix (`dsh/evaluate-tool.js`), which is the same name the code and the gates use.
+
+**AND THE MEASUREMENT IS NOT IN THIS MAP, BECAUSE IT IS NOT IN THIS REPOSITORY.** The question sets, the composition,
+the chain that judges a subject in parts, the session-log format, the producer, the reader and the rules are the
+package [`system1-measure`](https://github.com/johnlam1968/system1-measure), and this repository DEPENDS on it. What is
+left here is the row's GLUE: the tools this plugin offers an agent, the settings it reads, the seam it subscribes to,
+the adaptation that binds the measurement to one harness, and the gates that hold this repository to its own rules.
+The boundary between the two halves is measured, not declared: `test/instrument-boundary.test.js` walks the import graph
+and fails a file that claims to be portable and reaches the harness.
 
 ## Nominated for retirement
 
@@ -23,16 +31,15 @@ nominates itself, fails. (Size budgets, the other half of that test, are machine
 | file | retired by | what says so |
 |---|---|---|
 | `dsh/session-adapter/lib/feed.js` | **MOVING to the session adapter (§14.6 (d)), not deleting**: its condition cannot be met where it is needed. Measured 2026-10-05 (`F104`) -- the authority is ASYNC and OPTIONAL, and the in-band path cannot await, so a deployment without `sessionQuery` would lose the answer entirely | its header: *"`readSession` for the log, `readSurface` for the surface; when the plugin is wired to that, these two modules are the ones to delete"* |
-| `dsh/session-adapter/lib/surface.js` | **WIRED, and NOT deleted, because deleting it is wrong** (`F104`): `sessionQuery.filterEvents(sessionId, [{kind:'surface', values:['current']}])` is now asked wherever a caller can await (`lib/surface-authority.js`), and this fold is the fallback for a deployment with no `sessionQuery` -- without which the shadowed-answer defect it was written for comes back. It MOVES to the session adapter with `feed.js`. **AND THE RULE ITSELF IS NOW THE PACKAGE'S** (2026-10-20): the file is a SEAM that re-exports `surfaceEvents` from `dsh-session-rows`, so the fallback relies on the package's fold and there is no second copy of the rule left to drift -- but that does not retire the file, because the HOST AUTHORITY still has to replace the fallback | its header: *"when the plugin is wired to it this fold is redundant and should be deleted"* |
 
 ## The subject: what gets measured
 
+**THE MEASUREMENT ITSELF IS IN THE PACKAGE.** The chain that judges a subject (`system1-measure/instrument/measure.js`),
+the producer that turns a dsh log into normalized rows (`instrument/normalize.js`), the row reader and the rules it
+obeys (`core/session-rows.js` and `rules/index.js`), the format's vocabulary (`instrument/session-format.js`) and the
+question machinery (`core/questions.js`, `core/question-sets.js`, `core/system1.js`) are all `system1-measure`'s. This
+repository asks it questions and shows what it says.
 
-**THE SESSION-SHAPED THREE ARE NO LONGER IN `lib/host/`.** The harness's event vocabulary (`session-format`), the surface
-fold (`surface`) and the event feed (`feed`) are the pure half of the session adapter and live in the package
-[`dsh/session-adapter/`](dsh/session-adapter/), imported by name. The reason is measured (`F104`): they must be
-**importable**, because the composer runs inside a synchronous path that cannot await a Cordis service. `fs-journal.js`
-and this map stay, because the filesystem journal is not session-shaped.
 * `dsh/session-subject-tool.js` — **the SUBJECT a judgement is composed from**: one stored session's operator and
   assistant messages, sliced by `kinds` and `lastMessages` exactly as `system1_evaluate_session` slices them,
   with `offset` to page backwards and `format: 'subject'` for the composed state. It was `lib/sessions-tool.js`
@@ -68,116 +75,48 @@ and this map stay, because the filesystem journal is not session-shaped.
   Measured rather than assumed, and the supported way in is the plugin's own escape hatch: it produces the
   `interchange v1` document the `dsh-chat-import-convert` skill documents, and nothing else. The writer half that
   needs a harness is `scripts/zeroclaw-to-interchange.mjs`.
-* `dsh/exchange.js` — G0: the human's asks and the turn's last word, and the turn is the unit the harness numbers
-* `sessions.js` — which sessions the observer watches at all
-* `subject.js` — which model produced the text being judged
-
-## Composition: what the judge is given
-
-* `dsh/turn-state.js` — the state a judgement is made from, and what it keeps at both ends
-* `dsh/segment.js` — segmenting a subject that does not fit one request, and the arithmetic over the parts
-* `dsh/normalize.js` — **THE PRODUCER**: a dsh event log turned into those rows, and the one place that knows what a
-  dsh log is. Three things are DERIVED rather than projected — the ask-group (never the log's own turn, which pi does
-  not have), `shadowed` (what the surface withheld, from the `surfaceOp: replace` spans), and the receipt's sha256
-  and high-water. A pi transcript and a web export each need their own producer writing the same rows
-* `dsh/measure.js` — **THE CHAIN, ONCE**: decide the segment size, judge each segment, judge a whole subject in one
-  call, and combine the answers in code. `system1_evaluate_session` delegates here and a standalone script will too,
-  because a measurement is only comparable with a measurement and the part that would be wrong to have twice is the
-  judging. No `ctx`, no schema, no render: those belong to whichever surface is asking
-* `rows-sqlite.js` — **THE SAME ROWS, READ OUT OF AN INDEX**: finding a session and measuring it are different
-  problems with different costs, and this answers "which sessions" where walking a directory of logs does not. Written
-  against column NAMES, and it asks the index what it HAS rather than assuming — an index built before `exchange`
-  existed reads as rows with no ask-group, which the contract refuses, instead of raising `no such column` and taking
-  the route down with it. A tool call gets its group derived from the last message at or before it, because the index
-  stores none
-* `session-rows.js` — **THE NORMALIZED SESSION**, one shape for every harness: a receipt, messages, tool calls,
-  facts. The unit is the ask-group (`exchange`), never a native `turn`, because pi has no turn at all and a
-  per-turn query would silently become a dsh-only one while looking cross-harness (`F110`'s lesson, one level down).
-  `shadowed` is required, a malformed line is counted rather than dropped, and absence is `null` rather than zero
-* `dsh/tool-blocks.js` — the `TOOL CALLS` section, and what was clipped out of it
-* `redact.js` — redaction, and the rule that it applies to the trace's copy only
-* `stream.js` — the one seam that is not a decision
-
-## The instrument: asking the decision model
-
-* `questions.js` — what the observer asks, in one place
-* `question-sets.js` — question sets as files: read them, hash them, list them
-* `seams.js` — the loop's vocabulary (nine points, what is true of each, the switch rule, the exit-code reader) and
-  the probe's one question; it names no harness event, no payload shape and no config field
-* `observe.js` — the call and the line: everything that can go wrong, covered
-* `model/limits.js` — what the backend will actually take, from the vendor's published numbers
-* `model/wire.js` — one POST, and every way it can go wrong turned into a result
-* `model/client.js` — the client of that wire
-* `model/narrow.js` — narrowing a reply to the answer type that was asked for
-* `model/questions.js` — building the questions the wire carries
-* `model/envelope.js` — one home for what crosses the transport boundary
-* `model/result-envelope.js` — where a transport puts its envelope
-* `model/escalation.js` — when a cheap model's answer is escalated
-
-## The record: what was written down
-
-* `evidence.js` — the evidence record: what was observed, what was decided, and what is missing
-* `trace-read.js` — one reader for the trace, so the views of it cannot disagree
-* `trace-report.js` — `system1_trace`: the agent-facing trace reader
-* `trace-data.js` — the same trace in a shape a renderer can draw
-* `config-event.js` — the config event, and the reader that makes it worth writing
-* `turn-record.js` — the `turn` trace line, and the acceptance check that proves it
-
-## Judgements about the instrument itself
-
-* `probe-score.js` — does the question actually separate
-* `calibrate.js` — is the confidence worth anything
-* `battery.js` — the labelled battery: the only thing that can tell a better question from a different one
-* `compare.js` — are two runs the same experiment
-* `cost.js` — what the judgement cost, and what it is not
-* `honesty.js` — what this record claims about itself, and what nobody has checked
-* `label-hash.js` — a declared label, as a hash on the line
-* `nudge-label.js` — the independent label for `operator_had_to_nudge`
-
-## Measurements made portable
-
-* `report.js` — the measurement report package: a measurement made portable, and what in it is reproducible
+* `sessions.js` — which sessions the observer watches at all, and the row's own config for that scope
 
 ## The agent-facing tools
 
-* `tool.js` — the agent's way in
+Every tool this plugin offers an agent is HERE, and every tool that measures the INSTRUMENT is the package's
+(`ROADMAP.md` §14.6 (2)): `system1_battery` and `system1_question_sets` moved to `system1-measure` with the
+question machinery they exist to expose. The rule is the subject, not the folder -- a tool that measures the
+instrument belongs with the instrument, and a tool that serves an agent inside a deployment belongs with the deployment.
+
 * `dsh/tool-definition.js` — OUR TOOL DECLARATIONS -> THE AUTHORED FORM (`defineTool`, `F107`): the one place the
   parameter map is unwrapped, which is also what retires the raw-root `additionalProperties` deviation, plus the
   recorded fact that the OUTPUT (value) schema DSL has no `required`
-* `tool-args.js` — checking a model's arguments against the tool's own declaration
-* `decide-tool.js` — `system1_decide`
-* `dsh/evaluate-tool.js` — `system1_evaluate_session`
-* `results-tool.js` — `system1_measurements`
-* `questions-tool.js` — `system1_question_sets`
-* `question-dsl.js` — one question as ONE STRING (`key=value` fields separated by ` ;; `), which is the form
-  that survives a tool-call argument: the nested arrays inside a JSON question spec do not, and four attempts to
-  send one proved it. Its inverse is exact, because a format that cannot be written back cannot be edited
-* `system1.js` — THE ONE SURFACE: `composeQuestions` (compose and lint), `listQuestionSets` (list, in
-  one shape every caller renders the same way) and `askQuestions` (load a set and call the model), plus
-  `wireTransport` for a caller that has no row to inherit a transport from. Five surfaces once answered those three
-  questions for themselves and disagreed; the facade is what stops a sixth
-* `question-request.js` — the ONE path from a question set to answers, shared by `system1_decide` and `scripts/ask.mjs`:
-  which of the three routes carried the questions (a stored set by name, DSL strings, inline JSON), and how the
-  answers read. They agreed by eye once and disagreed twice, which is the arrangement this module exists to end
-* `question-lint.js` — the authoring rules a machine can check, behind `system1_question_sets { action: 'lint' }`:
-  chiefly the rule that a question may only name state its scope actually emits, which `buildQuestions` cannot see
-  because such a spec is perfectly well-formed and perfectly unanswerable
-* `battery-tool.js` — `system1_battery`
-* `config-tool.js` — `system1_settings`
+* `decide-tool.js` — `system1_decide`: the agent's way to ask a question and get an answer, and it asks the package's
+  facade rather than the question machinery
+* `dsh/evaluate-tool.js` — `system1_evaluate_session`: the whole chain, delegated to `system1-measure`'s
+  `instrument/measure.js`, because a measurement is only comparable with a measurement and the part that would be
+  wrong to have twice is the judging
+* `results-tool.js` — `system1_measurements`: four actions over one trace, each with its own selection and render
+* `explain-tool.js` — `system1_explain`: the brief an agent reads instead of the README — what is writable LIVE (derived
+  from the schema's own `volatile` metadata, so it cannot drift), the two mount-bound fields and why, what the row is
+  set to right now, how to choose/write/validate a question set, and the cautions that make a reading trustworthy
+* `config-tool.js` — `system1_settings`: the settings tool, and it reads this row's own config to render it
 
 ## The turn path: the harness seam
 
-* `register.js` — which seams are subscribed, and the shape each one needs
+* `register.js` — which seams are subscribed, and the shape each one needs. It reaches `ctx` and the dsh payload
+  shapes, and it is one of the FIVE files in this repository that are allowed to
 * `turn-listener.js` — the turn listener, as a decision rather than an effect
-* `turn-observer.js` — the turn observation, from the listener to the line
-* `turn-trigger.js` — the trigger's decision: whether to fire, and which question set
+* `turn-observer.js` — the turn observation, from the listener to the line; the live state it composes is read
+  through the package's `instrument/turn-state.js`, so it no longer reaches the dsh side itself
+* `dsh/host-events.js` — which dsh event each point attaches to: the APPLICATION's half of the point descriptor, split out
+  of the instrument's `seams.js` so the instrument names no harness event. The nine names are LITERALS here, and the
+  ninth (`agent/turn-stopping`) is one of them: it is the host's event, and a host's event is the host's to name
+* `dsh/host-payload.js` — which ARGUMENT of a harness seam carries the text, per seam: the other half of that descriptor,
+  moved out of `seams.js` with its own measured notes on why `args[0]` was wrong at three of nine seams
 
 ## The host adapter
 
 * `dsh/host/index.js` — the host surface this plugin depends on, in one place, and how it is checked
 * `dsh/host/fs-journal.js` — what the filesystem actually did, recorded from the harness
 
-## The session adapter — five pure modules, under `dsh/`
+## The session adapter — four pure modules, under `dsh/`
 
 These answer what a session's events ARE, which of them are in the model's surface, what has been seen, and what the
 host will read back. They were a **published npm package** (`dsh/session-adapter/`) because a composer inside a
@@ -190,11 +129,16 @@ The service form went first — a row mounted in every profile to hand an object
 a set the inventory otherwise holds to containing no host call at all. The package went second, because **importable
 was never the same as packaged**: a relative import is equally importable, and the constraint was `await`.
 
-* `dsh/session-adapter/lib/session-format.js` — the harness's SESSION EVENT VOCABULARY: the names, the message shapes,
-  and the text extraction, in the one home `test/session-format.test.js` refuses to let a second spelling grow in
-* `dsh/session-adapter/lib/surface.js` — the IN-BAND surface fold: what a synchronous caller can see without asking the
-  host, and therefore what it may get wrong when no `sessionQuery` exists
-* `dsh/session-adapter/lib/surface-authority.js` — the ASYNC authority over that fold (`sessionQuery.filterEvents`),
+**AND THE FIFTH IS GONE, BECAUSE THE FORMAT IS NOT OURS.** The surface fold (`lib/surface.js`) reads a session's events
+and folds them into the exchange -- that is the FORMAT's half, and it moved to `system1-measure/instrument/surface.js`
+with the rule it implements. The fold's fallback role remains, and the host authority still has to replace it, but the
+rule itself is stated once, in the package.
+
+* `dsh/session-adapter/lib/session-format.js` — **A PURE RE-EXPORT LAYER**: the session event vocabulary is
+  `system1-measure`'s (`instrument/session-format.js`), and this file is the one line that says so, so the plugin's
+  import paths do not change when the vocabulary's address does. It names no event and declares no rule, and
+  `test/session-format.test.js` refuses to let a second spelling of an event grow anywhere else in this repository
+* `dsh/session-adapter/lib/surface-authority.js` — the ASYNC authority over the fold (`sessionQuery.filterEvents`),
   with NAMED ABSENCES (`null`, a problem sentence) rather than a throw, for a deployment with no host
 * `dsh/session-adapter/lib/feed.js` — the per-session event feed, with its window limits
 * `dsh/session-adapter/lib/reader.js` — the HOST-BACKED reads: the subject read, the session list, the window
@@ -202,30 +146,18 @@ was never the same as packaged**: a relative import is equally importable, and t
 
 ## Our own footprint
 
-* `egress.js` — what leaves the process, and where it goes
 * `telemetry.js` — the harness's own outbound telemetry, which is unredacted
-* `explain-tool.js` — `system1_explain`: the brief an agent reads instead of the README — what is writable LIVE (derived
-  from the schema's own `volatile` metadata, so it cannot drift), the two mount-bound fields and why, what the row is
-  set to right now, how to choose/write/validate a question set, and the cautions that make a reading trustworthy
-* `publish-tag.js` — the rule that refuses to publish a PRERELEASE to `latest`, because npm ignores
-  `publishConfig.tag` (measured on npm 11.8.0) and a bare `npm publish` would make the beta what `npm i` installs;
-  `scripts/check-publish-tag.mjs` is the `prepublishOnly` wrapper, tested through its exit codes
-* `dsh/config-value.js` — reading a config field, when the field may be an accessor
 * `instrument-input.js` — THE BRIDGE: the row's settings -> the instrument's one input object (`point`, `callsEnabled`,
   `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport`). The only place a plain read of a setting is
-  allowed besides `readConfigValue`, because it is where every `Volatile` is unwrapped before the instrument sees it
-* `instrument-shape.js` — THE SHAPE, WITH NO HARNESS IN IT: the pure half of the bridge, split out so a second host can
-  build the same object without carrying this harness (`ROADMAP.md` §14.8 step 1). The two host bindings -- which
-  harness event a point attaches to, and which sessions are in scope -- are PASSED IN rather than imported, and the
-  contract fixture (`test/fixtures/instrument-shape/contract.mjs`) pins what the shape must be. **THE BRIDGE IS THESE
-  TWO FILES, and it is two files because the second one holds no harness:** both read the row's settings plainly, and
-  `test/schema.test.js` names both as the legal routes
-* `dsh/host-events.js` — which dsh event each point attaches to: the APPLICATION's half of the point descriptor, split out
-  of `seams.js` so the instrument names no harness event
-* `dsh/host-payload.js` — which ARGUMENT of a harness seam carries the text, per seam: the other half of that descriptor,
-  moved out of `seams.js` with its own measured notes on why `args[0]` was wrong at three of nine seams
+  allowed besides `readConfigValue`, because it is where every `Volatile` is unwrapped before the instrument sees it.
+  **The bridge is this file and ONE in the package** (`system1-measure/core/instrument-shape.js`), and it is two files
+  because the second one holds no harness: the shape's two host bindings -- which harness event a point attaches to, and
+  which sessions are in scope -- are PASSED IN rather than imported, and the contract fixture
+  (`test/fixtures/instrument-shape/contract.mjs`) pins what the shape must be
+* `config-event.js` — the config event, and the reader that makes it worth writing
 * `config-writer.js` — the write, as a module, so the dangerous part is tested
 * `service.js` — the observer as a service, so another row can read what this one measured
+* `dsh/config-value.js` — reading a config field, when the field may be an accessor
 
 ## Gates and shared
 
@@ -233,8 +165,9 @@ was never the same as packaged**: a relative import is equally importable, and t
 * `deploy-drift.js` — the deployment's recorded decisions, and the comparison that says whether `deploy/profile/` still
   describes the machine (a check's logic, like `citations.js`, not runtime code)
 * `compat.js` — what this package was tested against, and what it merely supports
-* `is-record.js` — narrowing helpers for data that crosses a runtime boundary
+* `publish-tag.js` — the rule that refuses to publish a PRERELEASE to `latest`, because npm ignores
+  `publishConfig.tag` (measured on npm 11.8.0) and a bare `npm publish` would make the beta what `npm i` installs;
+  `scripts/check-publish-tag.mjs` is the `prepublishOnly` wrapper, tested through its exit codes
 
 * `dsh/index.js` — the ADAPTATION itself: the Cordis plugin. Every row, schema, service and tool registration this package does inside one harness, and nothing it does anywhere else
 * `dsh/client.js` — the Web UI half: the settings cards and the conversation projection the harness renders
-

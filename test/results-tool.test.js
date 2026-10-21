@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createResultsTool, MIN_N_FOR_RATE, RESULTS_TOOL_NAME, summarise, summariseQuestions } from '../core/results-tool.js'
 // THE READER, THE TALLY AND THE ANSWER EXTRACTOR NOW LIVE IN ONE PLACE, which is the point of the refactor.
-import { answerOf, readTraceLines, windowOf, writerOf } from '../core/trace-read.js'
+import { answerOf, readTraceLines, windowOf, writerOf } from 'system1-measure/core/trace-read.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const call = (over = {}) => ({

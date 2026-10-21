@@ -30,10 +30,10 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { instrumentInput } from '../core/instrument-input.js'
-import { declaredAxes, instrumentShape, questionGroup, redactionGroup } from '../core/instrument-shape.js'
+import { declaredAxes, instrumentShape, questionGroup, redactionGroup } from 'system1-measure/core/instrument-shape.js'
 import { hostPoint } from '../dsh/host-events.js'
 import { sessionObserved } from '../core/sessions.js'
-import { isRecord } from '../core/is-record.js'
+import { isRecord } from 'system1-measure/core/is-record.js'
 import { cases } from './fixtures/instrument-shape/contract.mjs'
 
 /** The vendored fixture, and the digest the contract computes for it. */

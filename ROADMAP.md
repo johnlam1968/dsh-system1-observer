@@ -1095,6 +1095,56 @@ one.
 4. **Cut the repository and publish `0.1.0`.** Both hosts depend on it **BY NAME** -- never one by relative path
    and the other by package, which is how two copies of a rule come to exist.
 
+**--- THE CUT IS DONE, 2026-10-22, AND IT WAS NOT DONE IN THE ORDER THE PLAN NAMED, BECAUSE THE PLAN'S OWN
+WARNING SAID IT WOULD NOT BE.** Steps 2, 3 and 4 were executed as ONE move into a NEW repository
+(`github.com/johnlam1968/system1-measure`), because doing step 2 in-repo and step 4 by cutting would have meant
+**two copies of every moved file** for the duration of the gap -- and the plan's own reason for step 3 ("the copy's
+removal and the package's arrival must land together, not in two steps") is the same reason, one level up. The move
+was executed by a script, not by hand, and the script carried two gates that decided the tree before it moved.
+
+**WHAT MOVED, AND HOW MUCH.** 54 source files and 34 test files, plus one test helper, into the package; **the
+observer kept 18 `core/` files and 17 `dsh/` files.** The cut line is not `core/` vs `dsh/`: the measured graph
+says only SEVEN files reach the harness at all, and 94 reach none of it, and "reaches no harness file" is not
+"harness-free" in this repository because the host is reached through a PARAMETER. The judgement was therefore made
+against what each file does, and **every moved file carries its reason in the package's `docs/cut-line.json`.**
+
+**THE PLAN'S THREE PREDICTIONS, AND WHAT ACTUALLY HAPPENED.**
+* *"the vocabulary moves WHOLE ... and `session-format.js` becomes a PURE RE-EXPORT LAYER"* -- **TRUE, and the layer
+  is load-bearing**: `dsh/session-adapter/lib/session-format.js` is now one `export *` line, the plugin's import
+  paths do not change when the vocabulary's address does, and it is the one file the observer's event-name guard
+  exempts. **AND THE FREEZE WAS NOT ENTIRELY WHOLE** (**F197**): the catalogue carried two HOST event names
+  (`agent/turn-stopping`, `session/event`) and one of them was dead, so both came out. The plan's own sentence said
+  the live events stay with the plugin; the two sentences were in tension because one frozen literal held both
+  vocabularies, and the resolution is the one that keeps the package free of a harness's words.
+* *"the rules move and the FIXTURE IS NOT under `rules`"* -- **DEVIATED, DELIBERATELY, AND THE REASON IS THE
+  DIGEST.** The rules were absorbed **verbatim** -- same bytes, same fixture, same digest
+  `27bb1c0c893adb4f6b52648fdff32cb17b39022f8dbea53451ac5f84058cdb66` -- and the fixture sits at `rules/fixture/`
+  precisely so that `readFixture()` and `fixtureDigest()` keep resolving `fixture/...` relative to the rules module
+  and the digest does not move. The plan's objection (a consumer of `rules` should not inherit filesystem paths) is
+  real and small; the cost of the alternative is a changed digest for **three** consumers, and a changed digest is a
+  broken contract for every vendored copy at once.
+* *"keep zero-dependency as the invariant of the STANDALONE'S CLOSURE ... and let the rest of the package take
+  dependencies later"* -- **KEPT STRICTER, AND THE STRICTER VERSION IS THE ONE THAT SHIPS.** The whole package
+  declares **no dependency of any kind**, the publish gate reads the TARBALL's own manifest rather than the working
+  tree, and `test/instrument-boundary.test.js` fails any module that imports a bare specifier. The plan's relaxation
+  was allowed to be possible later; it was not taken.
+
+**THE TEETH SPLIT WITH THE CODE, AND ONE OF THEM BIT.** The contract's mutations belong to the file they mutate: the
+package's script mutates the **shape** (15 mutations, 15 caught) and the observer's mutates the **bridge** (2
+mutations, 2 caught). **AND THE PACKAGE'S OWN CONTRACT TEST HAD A GAP** (**F196**): the mutation "the scope binding
+receives the RAW config, not the normalised one" survived it, because the stub binding could not see the difference
+-- 14 of 15, against the observer's 17 of 17. The package's test now asserts the binding is handed a RECORD, always.
+A contract is only as good as its witness, and a split produces two contracts.
+
+**AND ONE DEFECT THE MOVE FOUND THAT WAS NOT ABOUT THE MOVE AT ALL** (**F198**): the import rewrite landed inside
+COMMENTS. The files loaded, imported the right modules, and carried corrupted prose, and the entire suite was
+green. The fix was to BLANK comments rather than delete them, so the offsets stay true, and to add a gate that
+compares every file's import COUNT against the pristine tree. The count is the only thing that says so.
+
+**WHAT IS NOT DONE, AND IT IS ONE THING.** The npm publish. The repository is cut and pushed, the workflow is
+written and ready, and the **token on this host has no `workflow` scope** -- so it cannot create
+`.github/workflows/publish.yml`, and neither can the API. The file is one file and the steps are in the handoff.
+
 **THE STANDALONE'S REAL SIZE, CORRECTED.** The plan said 15 files / 2,476 lines; that is the STATIC closure. The
 closure that includes the dynamic imports -- which is what actually runs -- is **26 files / 5,058 lines**, and it
 reaches `core/session-rows.js:83` (`readFileSync`). So the package is bigger than the plan said, and the row reader

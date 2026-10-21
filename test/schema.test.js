@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import { DEFAULT_HOOKS } from '../core/register.js'
-import { DEFAULT_MAX_FIELD_CHARS } from '../core/observe.js'
-import { DEFAULT_WIRE_URL } from '../core/model/wire.js'
+import { DEFAULT_MAX_FIELD_CHARS } from 'system1-measure/core/observe.js'
+import { DEFAULT_WIRE_URL } from 'system1-measure/core/model/wire.js'
 import assert from 'node:assert/strict'
 import { Config } from '../dsh/index.js'
-import { PROBE_SEAMS } from '../core/seams.js'
-import { QUESTION_SCOPES, TURN_HOOK } from '../core/questions.js'
+import { PROBE_SEAMS } from 'system1-measure/core/seams.js'
+import { QUESTION_SCOPES, TURN_HOOK } from 'system1-measure/core/questions.js'
 
 // WHY THIS EXISTS: the settings host projects a form onto this schema before every read and every write
 // (`dsh-settings` `volatileForm` + `projectForm`), and that projection has two silent behaviours that this
@@ -182,7 +182,15 @@ test('every volatile setting is read somewhere, or is named in the exception lis
   // row's own settings; the shape half maps them into the instrument's groups. A scan that named only the first would
   // have reported every group field unread -- the same class of mistake as the one above, and it would have been
   // SILENT, because the scan's answer was "nothing reads these" rather than "this file moved".
-  const bridge = ['core/instrument-input.js', 'core/instrument-shape.js']
+  // AND IT IS ONE FILE NOW. The shape half moved to `system1-measure/core/instrument-shape.js` with the rest of the
+  // measurement, and it reads no setting: it MAPS settings into the instrument's groups, and mapping is not
+  // reading. The binding half, which reads this row's own settings, is here.
+  // THE BRIDGE IS TWO FILES, AND THEY ARE IN TWO REPOSITORIES. The binding half reads the row's own settings; the
+  // shape half -- the package's `core/instrument-shape.js` -- MAPS them into the instrument's groups, and mapping a
+  // setting IS reading it. A scan that named only the first would have reported every group field unread -- the same
+  // class of mistake as the one above, and it would have been SILENT, because the scan's answer was "nothing reads
+  // these" rather than "this file moved".
+  const bridge = ['core/instrument-input.js', 'node_modules/system1-measure/core/instrument-shape.js']
     .map((file) => readFileSync(file, 'utf8')).join('\n')
   const isRead = (field) => readSomewhere(field) || new RegExp('\\.' + field + '\\b').test(bridge)
   // THE EXCEPTIONS, each with the reason it needs none: these are read as objects through `plainConfig`, which

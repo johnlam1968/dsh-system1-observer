@@ -40,13 +40,13 @@ test('and ships what a user needs to run it', () => {
     'dsh/index.js', // the plugin entry
     'dsh/client.js', // the settings card and the session menu
     'dsh/host/index.js', // the host adapter the entry imports -- ONE level down, which a list of entries would miss
-    'dsh/exchange.js', // a dsh runtime module, to prove the folder is covered and not just its two entry points
+    'dsh/evaluate-tool.js', // a dsh runtime module, to prove the folder is covered and not just its two entry points
     'cordis.patch.yml', // the bundle patch that mounts the row
     'install.sh', // the documented installer
     'README.md', // npm shows this; it is the user manual
     'LICENSE',
     'icon.svg',
-    'core/seams.js', // a runtime module, to prove core/ is not being filtered away
+    'core/register.js', // a runtime module, to prove core/ is not being filtered away
     'scripts/trace.mjs', // the terminal reader the README documents
     'scripts/session-index.mjs', // the documented store entry point
   ]) {
@@ -60,14 +60,13 @@ test('and ships what a user needs to run it', () => {
   // carry. Measured on the published 0.2.1: `npm pack --dry-run` matched `criteria/` zero times, while shipping the
   // three `scripts/*.mjs` entry points that resolve into it. A CLI that cannot find its own question sets is a
   // broken CLI, and it was being published as one.
-  assert.ok([...paths].some((p) => p.startsWith('criteria/') && p.endsWith('.json')), 'no question set shipped')
-  // AND THE PARKED SETS AND THE AUTHORING TEMPLATE DO NOT: retired sets and the guide for writing one are not a
-  // set, and shipping them makes the published directory say something about the project that is not true.
-  assert.deepEqual(
-    [...paths].filter((p) => p.startsWith('criteria/_parked/') || p.startsWith('criteria/_templates/')),
-    [],
-    'the parked sets and the authoring template would be published',
-  )
+  // THE QUESTION SETS DO NOT SHIP HERE, BECAUSE THEY ARE NOT HERE ANY MORE. They are the measurement's, and the
+  // measurement is `system1-measure` -- which ships them, and whose `core/question-sets.js` resolves the default set
+  // directory as `../criteria` beside its own `core/`. The bug this check was written for (the published 0.2.1
+  // matched `criteria/` zero times while shipping the entry points that resolve into it) CANNOT HAPPEN HERE, because
+  // this tarball carries no entry point that resolves into it -- and asserting the absence is stronger than
+  // asserting the presence would be: a copy that crept back in would be caught.
+  assert.deepEqual([...paths].filter((p) => p.startsWith('criteria/')), [], 'the question sets are the package\'s, and this tarball must not carry a copy')
 })
 
 // THE SESSION ADAPTER SHIPS IN HERE, ALL FIVE MODULES, because it is no longer a separate package. It WAS one, and the
@@ -78,7 +77,9 @@ test('and ships what a user needs to run it', () => {
 // stops at the folder boundary and ships an entry point whose fifteen imports cannot resolve.
 test('the session adapter ships in here, and nothing resolves it by name any more', () => {
   const paths = new Set(packed())
-  for (const module of ['session-format', 'surface', 'surface-authority', 'feed', 'reader']) {
+  // FOUR, not five: the surface FOLD is the format's half and it moved to `system1-measure` with the rule it
+  // implements. The layer that re-exports the vocabulary stays, because the plugin's import paths depend on it.
+  for (const module of ['session-format', 'surface-authority', 'feed', 'reader']) {
     assert.ok(paths.has(`dsh/session-adapter/lib/${module}.js`), `dsh/session-adapter/lib/${module}.js is missing from the package`)
   }
   // AND THE NAME IS GONE FROM BOTH SIDES OF THE BOUNDARY. A surviving `dependencies` entry would make npm install a

@@ -1,4 +1,4 @@
-import { resultEnvelope } from './model/result-envelope.js'
+import { resultEnvelope } from 'system1-measure/core/model/result-envelope.js'
 // THE TURN MEASUREMENT, END TO END, as one orchestrator over the modules that each do one thing.
 //
 // WHY AN ORCHESTRATOR RATHER THAN THE WIRING ITSELF. The chain is six steps -- count, compose, decide, ask, record,
@@ -14,8 +14,8 @@ import { resultEnvelope } from './model/result-envelope.js'
 // AND A FAILED JUDGEMENT WRITES NO CALL LINE. A line is a measurement; a backend that did not answer produced none,
 // and a line with empty answers would be filed as though it were one. The failure is returned so the caller can
 // record a skip with the same reason vocabulary the observation path already uses.
-import { composeTurnState } from '../dsh/turn-state.js'
-import { turnLine } from './turn-record.js'
+import { composeTurnState } from 'system1-measure/instrument/turn-state.js'
+import { turnLine } from 'system1-measure/core/turn-record.js'
 
 /**
  * @param listener   the turn listener: counts boundaries and decides whether to fire

@@ -16,10 +16,10 @@ import { join } from 'node:path'
 import { apply, resolveTracePath } from '../dsh/index.js'
 import { plainConfig, readConfigValue } from '../dsh/config-value.js'
 import { readHooks } from '../core/register.js'
-import { buildQuestions } from '../core/questions.js'
-import { createObserver } from '../core/observe.js'
+import { buildQuestions } from 'system1-measure/core/questions.js'
+import { createObserver } from 'system1-measure/core/observe.js'
 import { instrumentInput } from '../core/instrument-input.js'
-import { questionGroup } from '../core/instrument-shape.js'
+import { questionGroup } from 'system1-measure/core/instrument-shape.js'
 
 const accessor = (value) => ({ get: () => value })
 const fakeCtx = () => {

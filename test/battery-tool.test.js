@@ -6,8 +6,8 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createBatteryTool, BATTERY_TOOL_NAME } from '../core/battery-tool.js'
-import { checkAgainst } from '../core/tool-args.js'
+import { createBatteryTool, BATTERY_TOOL_NAME } from 'system1-measure/core/battery-tool.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 /** A criteria directory with one session set of two questions, and a battery directory with one matching battery. */

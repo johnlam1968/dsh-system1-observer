@@ -53,62 +53,30 @@ import { fileURLToPath } from 'node:url'
  * call path, probe calibration, batteries, cost, redaction and the record's own shape. Everything that binds a row,
  * mounts a listener, or offers a tool is the application, and several of those files are equally pure but are not
  * counted here because they exist only to serve this repository's row.
+ *
+ * IT WAS FIFTY-FIVE, AND THE FORTY-TWO THAT LEFT ARE THE PACKAGE'S. `ROADMAP.md` §14.8's cut moved the measurement's
+ * own machinery into `system1-measure`: the question sets, the composition, the chain, the format, the producer, the
+ * reader and the rules. What is left here is the row's GLUE -- the settings tool, the seam subscription, the session
+ * scope, the harness's own telemetry, and the tools this plugin offers an agent.
+ *
+ * AND THE MEANING OF "PORTABLE" CHANGED WITH IT. A file on this list now depends on node builtins, on itself, and on
+ * `system1-measure` -- which is the portable half, and the reason these files are portable rather than merely pure.
+ * The rule that says so is the one below, and it was widened to name the package rather than to keep a rule that no
+ * longer described the tree.
  */
 export const INSTRUMENT = Object.freeze([
-  'core/battery-tool.js',
-  'core/battery.js',
-  'core/calibrate.js',
   'core/citations.js',
-  'core/compare.js',
   'core/compat.js',
   'core/config-event.js',
   'core/config-writer.js',
-  'core/cost.js',
   'core/decide-tool.js',
   'core/deploy-drift.js',
-  'core/egress.js',
-  'core/evidence.js',
   'core/explain-tool.js',
-  'core/honesty.js',
-  'core/instrument-shape.js',
-  'core/is-record.js',
-  'core/label-hash.js',
-  'core/model/client.js',
-  'core/model/envelope.js',
-  'core/model/escalation.js',
-  'core/model/limits.js',
-  'core/model/narrow.js',
-  'core/model/questions.js',
-  'core/model/result-envelope.js',
-  'core/model/wire.js',
-  'core/nudge-label.js',
-  'core/observe.js',
-  'core/probe-score.js',
   'core/publish-tag.js',
-  'core/question-dsl.js',
-  'core/question-lint.js',
-  'core/question-request.js',
-  'core/question-sets.js',
-  'core/questions-tool.js',
-  'core/questions.js',
-  'core/redact.js',
-  'core/report.js',
   'core/results-tool.js',
-  'core/rows-sqlite.js',
-  'core/seams.js',
   'core/service.js',
-  'core/session-rows.js',
-  'core/stream.js',
-  'core/subject.js',
-  'core/system1.js',
-  'core/tool-args.js',
-  'core/tool.js',
-  'core/trace-data.js',
-  'core/trace-read.js',
-  'core/trace-report.js',
   'core/turn-listener.js',
-  'core/turn-record.js',
-  'core/turn-trigger.js',
+  'core/turn-observer.js',
   'core/zeroclaw-interchange.js',
 ])
 
@@ -139,11 +107,10 @@ export const HOST_COUPLED = Object.freeze({
   'core/register.js': 'the seam subscription, so it reaches `ctx` and the dsh payload shapes',
   'core/sessions.js': "the session scope, and it reads this row's own config for the scope it may read",
   'core/telemetry.js': "the harness's OWN outbound telemetry, and mounting it reaches `ctx`",
-  'core/turn-observer.js': 'the live composer, and the live state it composes is dsh-shaped',
 })
 
 /** How many files may be coupled to the dsh side. Raising this is a decision, and the reason lives above. */
-export const HOST_COUPLED_MAX = 6
+export const HOST_COUPLED_MAX = 5
 
 /**
  * COMMENTS ARE PROSE and are stripped before the scan, because a module that DOCUMENTS a config reader does not call
@@ -301,9 +268,11 @@ const rootOfTest = normalize(join(dirname(fileURLToPath(import.meta.url)), '..')
 test('every file in the instrument set exists, and the set is the one that was measured', () => {
   const missing = INSTRUMENT.filter((file) => !existsSync(file))
   assert.deepEqual(missing, [], 'the instrument set names files that are not there: ' + missing.join(', '))
-  // A SET THAT SHRANK SILENTLY IS THE FAILURE THIS PAIR EXISTS FOR. 55 is not a target; it is what the boundary was
-  // measured at, so a file moving out of it has to be a change somebody made on purpose (`F110`).
-  assert.equal(INSTRUMENT.length, 55, 'the instrument set changed size: say so in docs/findings.md and update this list')
+  // A SET THAT SHRANK SILENTLY IS THE FAILURE THIS PAIR EXISTS FOR. 13 is not a target; it is what the boundary was
+  // measured at, so a file moving out of it has to be a change somebody made on purpose (`F110`). The forty-two that
+  // left went to `system1-measure`, which is a change somebody made on purpose -- and it is recorded in
+  // `docs/findings.md` and in `ROADMAP.md` §14.8.
+  assert.equal(INSTRUMENT.length, 13, 'the instrument set changed size: say so in docs/findings.md and update this list')
 })
 
 /**
@@ -373,16 +342,19 @@ test('no instrument file imports, or calls, a config reader', () => {
   assert.deepEqual(offenders, [], 'the instrument reads this plugin\'s config:\n  ' + offenders.join('\n  '))
 })
 
-test('no instrument file imports anything but node builtins and itself', () => {
+test('no instrument file imports anything but node builtins, itself and the package', () => {
   const offenders = []
   for (const file of INSTRUMENT) {
-    const external = importsOf(file).filter((specifier) => !specifier.startsWith('.') && !specifier.startsWith('node:'))
+    const external = importsOf(file).filter((specifier) =>
+      !specifier.startsWith('.') && !specifier.startsWith('node:') && !specifier.startsWith('system1-measure/'))
     for (const specifier of new Set(external)) offenders.push(file + ' imports ' + specifier)
   }
-  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION: a module that imports the session adapter (as `core/seams.js`
-  // once did, for one event name) or `@deepseek-ai/...` cannot leave this repository, and the session adapter is
-  // DSH-shaped even though it is ours.
-  assert.deepEqual(offenders, [], 'the instrument depends on something outside node:\n  ' + offenders.join('\n  '))
+  // THIS IS THE EXTRACTION CLAIM IN ONE ASSERTION, AND THE CLAIM CHANGED WITH THE CUT. It used to read "nothing but
+  // node builtins and itself", because the portable half lived HERE and the session adapter -- which is DSH-shaped
+  // even though it is ours -- was the one thing that could not leave. Now the portable half is `system1-measure`, so
+  // the rule names it: a file on this list may reach the package, and may reach nothing else. A module that imports
+  // `@deepseek-ai/...` or any other third party is still refused, and the refusal is the same assertion.
+  assert.deepEqual(offenders, [], 'the instrument depends on something outside node and the package:\n  ' + offenders.join('\n  '))
 })
 
 /**
@@ -458,86 +430,15 @@ test('the instrument has NO host edge: it reaches a model over HTTP and nothing 
   assert.deepEqual(reaching, [], 'the instrument reaches the host again:\n  ' + reaching.join('\n  '))
 })
 
-// THE STANDALONE'S OWN BOUNDARY, DERIVED RATHER THAN DECLARED.
+// THE STANDALONE'S OWN BOUNDARY BELONGS TO THE PACKAGE, AND SAYING SO IS THE POINT.
 //
-// `INSTRUMENT` above is a list somebody chose, and it is 50 files that predate the facade. Proved by injection: adding
-// `import { liveConfig } from './config-value.js'` to `core/system1.js` -- the module `scripts/ask.mjs` composes every
-// question through -- left all five boundary tests GREEN, because that file is not on the list. Only the clean-room
-// run caught it, and it did, by dying on the import. A boundary enforced by a hand-kept list is a boundary that is
-// true until someone adds a module.
+// There were two tests here that walked the import graph from `scripts/ask.mjs` and asserted that everything it
+// reaches loads with no `node_modules` at all, and that the standalone RUNS in a clean room with nothing installed.
+// Both were the strongest claims this repository made, and both are now THE PACKAGE'S claims: `scripts/ask.mjs` is
+// `bin/ask.mjs` in `system1-measure`, and `system1-measure/test/instrument-boundary.test.js` proves the same two
+// properties about the same entry point.
 //
-// So this derives the real one: walk the import graph from `scripts/ask.mjs` and assert that every file it reaches can
-// be loaded with no `node_modules` at all -- no bare specifier anywhere in the closure, and nothing under `core/host/`.
-// That is the property the standalone actually has, and it is measured from the entry point rather than asserted
-// about a list.
-test('everything `scripts/ask.mjs` reaches is loadable with no node_modules at all', () => {
-  const seen = new Set()
-  const bare = []
-  const queue = ['scripts/ask.mjs']
-  while (queue.length > 0) {
-    const file = queue.pop()
-    if (seen.has(file)) continue
-    seen.add(file)
-    const source = read(file)
-    for (const match of source.matchAll(/from\s+'([^']+)'/g)) {
-      const specifier = match[1]
-      if (specifier.startsWith('node:')) continue
-      if (!specifier.startsWith('.')) { bare.push(file + ' imports ' + specifier); continue }
-      const resolved = normalize(join(dirname(file), specifier))
-      if (existsSync(resolved)) queue.push(resolved)
-      else bare.push(file + ' imports ' + specifier + ' (which does not exist)')
-    }
-  }
-  assert.deepEqual(bare, [], 'the standalone cannot be loaded without installing something:\n  ' + bare.join('\n  '))
-
-  // AND THE CLOSURE IS CHECKED SEMANTICALLY, not just for bare specifiers. A FIRST attempt at this test only flagged
-  // NON-RELATIVE imports, and it stayed green with `import { liveConfig } from './config-value.js'` injected into
-  // `core/system1.js` -- a relative path to a file that exists, so the walk simply followed it and called the closure
-  // portable. Syntax cannot tell harness glue from a helper; the RULES the declared boundary already uses can, and
-  // they are applied here to the DERIVED set rather than to a hand-kept list.
-  const glue = []
-  for (const file of seen) {
-    const source = code(read(file))
-    if (/from\s+'[^']*config-value\.js'/.test(source)) glue.push(file + ' imports config-value.js')
-    if (/\b(readConfigValue|plainConfig|liveConfig)\s*\(/.test(source)) glue.push(file + ' calls a config reader')
-    if (file.includes('core/host/')) glue.push(file + ' is host glue')
-    if (/from\s+'[^']*host-events\.js'/.test(source)) glue.push(file + ' imports host-events.js')
-  }
-  assert.deepEqual(glue, [], 'the standalone reaches harness glue:\n  ' + glue.join('\n  '))
-
-  // AND THE CLOSURE IS NOT VACUOUS -- a graph that resolved to nothing would pass every assertion above.
-  assert.ok(seen.has('core/system1.js'), 'the closure really does reach the facade')
-  assert.ok([...seen].filter((f) => f.startsWith('core/')).length >= 10, `and it is a real graph, ${[...seen].filter((f) => f.startsWith('core/')).length} core files`)
-})
-
-
-// THE CLEAN ROOM, EXECUTED RATHER THAN INFERRED.
-//
-// The static test above reads the import graph. This one COPIES the package to a temporary directory with no
-// `node_modules` at all and RUNS the entry point there, which is the property that is actually claimed: the standalone
-// works with nothing installed. A static walk can be fooled by a dynamic import, an export condition, or a file it
-// failed to resolve; a run cannot, and it costs one `node` process.
-//
-// `core/host/` is left out because that IS the harness glue -- excluding it is the point, not a cheat, and the test
-// asserts it is excluded so a later edit cannot quietly depend on it.
-test('the standalone RUNS in a directory with no node_modules at all', async () => {
-  const { execFileSync } = await import('node:child_process')
-  const { mkdtempSync, cpSync, rmSync } = await import('node:fs')
-  const { tmpdir } = await import('node:os')
-  const root = mkdtempSync(join(tmpdir(), 'clean-room-'))
-  try {
-    // `dsh/` IS NOT COPIED AT ALL. An earlier version copied it and removed only `dsh/host`, which passed -- and proved
-    // less, because the adaptation was still lying there for a core file to reach. Copying the instrument ALONE is the
-    // claim: if `core/` needs the harness for anything, this dies.
-    for (const dir of ['core', 'scripts', 'criteria']) cpSync(join(rootOfTest, dir), join(root, dir), { recursive: true })
-    assert.equal(existsSync(join(root, 'dsh')), false, 'the dsh adaptation was not copied, so nothing can reach it')
-    assert.equal(existsSync(join(root, 'node_modules')), false, 'and nothing was installed to replace it')
-    // `--list` reads every composition and prints it. It reaches the loader, the linter, the question builder and
-    // the set reader -- the whole reading half of the instrument -- and it costs nothing.
-    const out = execFileSync(process.execPath, [join(root, 'scripts', 'ask.mjs'), '--list'], { encoding: 'utf8' })
-    assert.match(out, /set\(s\) in/, 'and it printed the sets it found')
-    assert.match(out, /news-claim-check@2/, 'including a composition this repository ships')
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
+// A TEST THAT LIVES IN THE WRONG REPOSITORY IS A TEST NOBODY RUNS. A copy here would be a second copy of a claim
+// about a file that is not in this tree -- and it would rot the moment the package's entry point moved, which is
+// exactly the kind of quiet rot this repository keeps recording. The rule is: the claim is checked where the claim
+// is.

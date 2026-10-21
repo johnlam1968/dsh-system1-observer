@@ -433,7 +433,7 @@ test('the tool-name literals in the card match their modules, because a mismatch
   // The seat's key domain is open and "a typo never renders": the generic row appears and nothing says why. Both names
   // are therefore pinned to the modules that declare them.
   const { readFileSync } = await import('node:fs')
-  const { TRACE_TOOL_NAME } = await import('../core/tool.js')
+  const { TRACE_TOOL_NAME } = await import('system1-measure/core/tool.js')
   const { EVALUATE_TOOL_NAME } = await import('../dsh/evaluate-tool.js')
   const source = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
   assert.ok(source.includes("const TRACE_TOOL_NAME = '" + TRACE_TOOL_NAME + "'"), 'the trace tool name')

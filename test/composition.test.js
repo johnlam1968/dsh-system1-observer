@@ -30,7 +30,7 @@ import { pathToFileURL } from 'node:url'
 import { createServer } from 'node:http'
 
 import plugin from '../dsh/index.js'
-import { TRACE_TOOL_NAME } from '../core/tool.js'
+import { TRACE_TOOL_NAME } from 'system1-measure/core/tool.js'
 import { CONFIG_TOOL_NAME } from '../core/config-tool.js'
 import { DECIDE_TOOL_NAME } from '../core/decide-tool.js'
 import { OBSERVER_SERVICE } from '../core/service.js'

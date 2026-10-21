@@ -258,8 +258,10 @@ const FACTS = {
   indexLines: locOf('index.js'),
   clientLines: locOf('client.js'),
   testFiles: countIn('test', '.test.js'),
-  criteriaSets: countRecursive('criteria', '.json'),
-  criteriaDirs: filesIn('criteria').filter((e) => e.isDirectory()).length,
+  // THE SETS SHIP WITH THE PACKAGE NOW, so the count is of the PACKAGE's directory -- a number read off a
+  // directory this repository no longer has would be a number read off nothing.
+  criteriaSets: countRecursive('node_modules/system1-measure/criteria', '.json'),
+  criteriaDirs: filesIn('node_modules/system1-measure/criteria').filter((e) => e.isDirectory()).length,
 }
 
 // ---------------------------------------------------------------- content
@@ -318,7 +320,7 @@ const INSTRUMENT = {
     { type: 'item', name: 'core/seams.js', desc: 'the nine points as ONE table (id, textless, tool) — the loop\'s vocabulary, naming no harness event, payload or config field' },
     { type: 'item', name: 'core/questions.js', desc: 'what the observer asks, in one place; the fireable hooks and the scopes' },
     { type: 'item', name: 'core/question-sets.js', desc: 'sets as files: read them, hash them, list them' },
-    { type: 'sub', label: 'criteria/ — THE SETS THAT SHIP' },
+    { type: 'sub', label: 'system1-measure/criteria/ — THE SETS THAT SHIP' },
     { type: 'chips', items: [
       { label: 'agent-helpfulness-seams@1' }, { label: 'human-conduct-session@1' },
       { label: 'human-input-clarity@1' }, { label: 'helpfulness-set@2' },

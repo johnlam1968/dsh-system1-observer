@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../dsh/index.js'
-import { PROBE_SEAMS } from '../core/seams.js'
+import { PROBE_SEAMS } from 'system1-measure/core/seams.js'
 
 // WHY THIS EXISTS: the observer's first live mount wrote 209 `error` lines reading "decide is not a function"
 // and no `call` lines at all. Both model factories return a CLIENT object, and `apply` assigned it to `decide`

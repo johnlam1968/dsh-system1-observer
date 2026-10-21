@@ -55,7 +55,11 @@ test('the map names every lib file, and every name in it exists', () => {
     assert.deepEqual(missing, [], `undeclared in core/README.md: ${missing.join(', ')}`)
     assert.deepEqual(phantom, [], `named in core/README.md but absent: ${phantom.join(', ')}`)
     assert.equal(declared.length, unique.length, 'a file named twice makes the map longer than the code it maps')
-    assert.ok(files.length > 40, 'the scan found suspiciously few files, so it is probably not recursing')
+    // THE FLOOR IS A FLOOR, and it is lower than it was because the tree is: the measurement moved to
+    // `system1-measure` and this repository kept the glue. What the floor protects is the RECURSION, so the
+    // assertion below says that directly rather than through a number that happens to be near.
+    assert.ok(files.length > 25, 'the scan found suspiciously few files, so it is probably not recursing')
+    assert.ok(files.some((f) => f.startsWith('dsh/session-adapter/lib/')), 'the scan reaches the modules nested two folders down')
 })
 
 test('the map says which file owns which tool name, and the tool names are real', () => {

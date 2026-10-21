@@ -19,7 +19,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createTraceTool, TRACE_TOOL_NAME } from '../core/tool.js'
+import { createTraceTool, TRACE_TOOL_NAME } from 'system1-measure/core/tool.js'
 import { createConfigTool } from '../core/config-tool.js'
 import { createDecideTool, DECIDE_TOOL_NAME, TOOL_HOOK } from '../core/decide-tool.js'
 import { assertValidOutput } from './tool-output-validated.js'

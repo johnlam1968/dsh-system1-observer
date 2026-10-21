@@ -46,96 +46,6 @@ const CONTRACT_TEST = 'test/instrument-shape.test.js'
  */
 const MUTATIONS = [
     {
-        name: 'the calls switch is INVERTED (absence means OFF instead of ON)',
-        file: 'core/instrument-shape.js',
-        from: 'callsEnabled: source.callsEnabled !== false,',
-        to: 'callsEnabled: source.callsEnabled === false,',
-    },
-    {
-        name: 'the calls switch uses LOOSE `!=`, so a zero switch turns the observer OFF',
-        file: 'core/instrument-shape.js',
-        from: 'callsEnabled: source.callsEnabled !== false,',
-        to: 'callsEnabled: source.callsEnabled != false,',
-    },
-    {
-        name: 'an UNDECLARED axis becomes an empty one (the key is always there)',
-        file: 'core/instrument-shape.js',
-        from: '...(harness === \'\' ? {} : { harnessHash: harness }),',
-        to: '...(harness === \'\' ? { harnessHash: harness } : { harnessHash: harness }),',
-    },
-    {
-        name: 'the LABELS are hashed from the operator label only',
-        file: 'core/instrument-shape.js',
-        from: 'const harness = labelHash(source.harnessLabel)',
-        to: 'const harness = labelHash(source.operatorLabel)',
-    },
-    {
-        name: 'the LABELS are hashed to a different length (the digest is cut to eight)',
-        file: 'core/instrument-shape.js',
-        from: 'const harness = labelHash(source.harnessLabel)',
-        to: 'const harness = labelHash(source.harnessLabel).slice(0, 8)',
-    },
-    {
-        name: 'the per-seam SWITCH is ignored (every seam is on)',
-        file: 'core/instrument-shape.js',
-        from: 'point: describePoint(point, seamCallsEnabled(source.seamEnabled, point)),',
-        to: 'point: describePoint(point, true),',
-    },
-    {
-        name: 'the per-seam SWITCH is read for a HARDCODED point',
-        file: 'core/instrument-shape.js',
-        from: 'point: describePoint(point, seamCallsEnabled(source.seamEnabled, point)),',
-        to: 'point: describePoint(point, seamCallsEnabled(source.seamEnabled, \'draft\')),',
-    },
-    {
-        name: 'the SCOPE gate fails OPEN (every session is observed)',
-        file: 'core/instrument-shape.js',
-        from: 'subjects: { observed: (agentId) => observed(source, agentId) },',
-        to: 'subjects: { observed: () => true },',
-    },
-    {
-        name: 'the SCOPE binding receives the RAW config, not the normalised one',
-        file: 'core/instrument-shape.js',
-        from: 'subjects: { observed: (agentId) => observed(source, agentId) },',
-        to: 'subjects: { observed: (agentId) => observed(config, agentId) },',
-    },
-    {
-        name: 'the `isRecord` GUARD is dropped (a config that is not a record throws instead of being answered)',
-        file: 'core/instrument-shape.js',
-        from: 'const source = isRecord(config) ? config : {}\n  return {\n    // THE POINT IS RESOLVED HERE',
-        to: 'const source = config\n  return {\n    // THE POINT IS RESOLVED HERE',
-    },
-    {
-        name: 'the provider and the model use `||`, so an empty string becomes `null`',
-        file: 'core/instrument-shape.js',
-        from: 'provider: source.provider ?? null, model: source.model ?? null }',
-        to: 'provider: source.provider || null, model: source.model || null }',
-    },
-    {
-        name: 'the TRANSPORT KIND is dropped',
-        file: 'core/instrument-shape.js',
-        from: 'transport: { kind: transport,',
-        to: 'transport: { kind: undefined,',
-    },
-    {
-        name: 'the TRANSPORT DEFAULT is dropped (a caller that names none gets no kind at all)',
-        file: 'core/instrument-shape.js',
-        from: 'export function instrumentShape(config, { point, transport = \'service\', describePoint, observed } = {}) {',
-        to: 'export function instrumentShape(config, { point, transport, describePoint, observed } = {}) {',
-    },
-    {
-        name: 'the SET LOCATION is dropped from the question group',
-        file: 'core/instrument-shape.js',
-        from: 'sets: { dir: source.questionSetsDir, name: source.questionSet },',
-        to: 'sets: {},',
-    },
-    {
-        name: 'the two LIMITS are swapped (the field cap becomes the tail)',
-        file: 'core/instrument-shape.js',
-        from: 'limits: { maxFieldChars: source.maxFieldChars, tailChars: source.tailChars },',
-        to: 'limits: { maxFieldChars: source.tailChars, tailChars: source.maxFieldChars },',
-    },
-    {
         name: 'BRIDGE: the two host bindings are SWAPPED',
         file: 'core/instrument-input.js',
         from: 'describePoint: hostPoint,\n    observed: sessionObserved,',
@@ -179,9 +89,10 @@ try {
     // says the copy is a working tree, and a copy that cannot run is not a copy that can fail.
     for (const dir of ['core', 'dsh', 'test']) cpSync(join(ROOT, dir), join(room, dir), { recursive: true })
     cpSync(join(ROOT, 'package.json'), join(room, 'package.json'))
-    // AND `node_modules` IS LINKED, because the contract test reaches the published `dsh-session-rows` through the
-    // dsh event names, and a copy that cannot resolve it is a copy that fails for the wrong reason. A LINK and not a
-    // copy, because the copy is thrown away and the modules are not what is under test.
+    // AND `node_modules` IS LINKED, because the seam test reaches the SHAPE through the published package, and a copy
+    // that cannot resolve it is a copy that fails for the wrong reason. A LINK and not a copy, because the copy is
+    // thrown away and the modules are not what is under test. The link is never WRITTEN to: the mutations below touch
+    // the bridge, which is this repository's own file.
     symlinkSync(join(ROOT, 'node_modules'), join(room, 'node_modules'))
 
     const originals = new Map()
@@ -220,9 +131,9 @@ try {
 
     // AND THE TREE IS STILL THE TREE. The copy is thrown away, but the claim that the repository was not modified is
     // worth making with a measurement rather than with an assurance.
-    const digest = createHash('sha256').update(readFileSync(join(ROOT, 'core/instrument-shape.js'))).digest('hex')
+    const digest = createHash('sha256').update(readFileSync(join(ROOT, 'core/instrument-input.js'))).digest('hex')
     console.log(`\ncheck:contract-teeth -- ${MUTATIONS.length - survived} of ${MUTATIONS.length} mutations caught.`)
-    console.log(`check:contract-teeth -- the repository's core/instrument-shape.js was never written to (sha256 ${digest.slice(0, 12)}).`)
+    console.log(`check:contract-teeth -- the repository's core/instrument-input.js was never written to (sha256 ${digest.slice(0, 12)}).`)
     if (survived > 0) {
         console.error(`check:contract-teeth -- FAILED: ${survived} mutation(s) left the contract test green, so it cannot see that defect.`)
         process.exit(1)

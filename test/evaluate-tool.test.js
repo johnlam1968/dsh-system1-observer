@@ -7,12 +7,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EVALUATE_TOOL_NAME, REVIEW_HOOK, createEvaluateTool } from '../dsh/evaluate-tool.js'
-import { composeTurnState } from '../dsh/turn-state.js'
-import { probeFingerprint, probeScore } from '../core/probe-score.js'
-import { PROBE_QUESTION } from '../core/seams.js'
-import { noul } from '../core/model/questions.js'
-import { stateBudgetChars } from '../core/model/limits.js'
-import { checkAgainst } from '../core/tool-args.js'
+import { composeTurnState } from 'system1-measure/instrument/turn-state.js'
+import { probeFingerprint, probeScore } from 'system1-measure/core/probe-score.js'
+import { PROBE_QUESTION } from 'system1-measure/core/seams.js'
+import { noul } from 'system1-measure/core/model/questions.js'
+import { stateBudgetChars } from 'system1-measure/core/model/limits.js'
+import { checkAgainst } from 'system1-measure/core/tool-args.js'
 import { assertValidOutput } from './tool-output-validated.js'
 
 const message = (seq, type, text) => ({

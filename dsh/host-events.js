@@ -9,8 +9,7 @@
 // IT IS ALSO THE ONLY VALIDATION. `probeHook` asks the instrument whether the id exists (`pointOf`, which throws on
 // an unknown one) and then looks up the event, so a point cannot be declared here and missing there, or the reverse:
 // one list of ids, one map of events, and a mismatch refuses by name.
-import { EVENT } from './session-adapter/lib/session-format.js'
-import { pointOf } from '../core/seams.js'
+import { pointOf } from 'system1-measure/core/seams.js'
 
 /**
  * The event each point attaches to, in the order the points are declared.
@@ -27,7 +26,11 @@ export const HOST_EVENTS = Object.freeze({
   execute: 'tools/execute',
   post_execute: 'tools/post-execute',
   result: 'tools/result',
-  close: EVENT.AGENT_TURN_STOPPING,
+  // THE NINTH IS A LITERAL FOR THE SAME REASON THE OTHER EIGHT ARE: these are dsh's event names, and dsh's
+  // event names are not the format's vocabulary. `EVENT.AGENT_TURN_STOPPING` used to supply this one, and the
+  // catalogue had to carry a HOST event name so that a HOST binding could be written -- which put the harness's
+  // vocabulary in the package that is supposed to have none of it.
+  close: 'agent/turn-stopping',
 })
 
 /**

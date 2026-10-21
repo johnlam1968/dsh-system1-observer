@@ -11,10 +11,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseQuestion, parseQuestions, formatQuestion, SEPARATOR } from '../core/question-dsl.js'
-import { buildQuestions } from '../core/questions.js'
+import { parseQuestion, parseQuestions, formatQuestion, SEPARATOR } from 'system1-measure/core/question-dsl.js'
+import { buildQuestions } from 'system1-measure/core/questions.js'
 import { createDecideTool } from '../core/decide-tool.js'
-import { createQuestionsTool } from '../core/questions-tool.js'
+import { createQuestionsTool } from 'system1-measure/core/questions-tool.js'
 
 const CHOICE = [
   'id=admit_relation',
@@ -174,24 +174,19 @@ test('`lint` reads the same DSL, so a set is checked in the form it was written'
 
 // ── ONE IMPLEMENTATION, TWO CALLERS ───────────────────────────────────────────────────────────────────
 
-test('the tool and the script resolve questions through the SAME module, and say so', async () => {
+test('the tool resolves questions through the PACKAGE\'s facade, and says so', async () => {
   const { readFileSync } = await import('node:fs')
   const tool = readFileSync(new URL('../core/decide-tool.js', import.meta.url), 'utf8')
-  const script = readFileSync(new URL('../scripts/ask.mjs', import.meta.url), 'utf8')
-  // THE TEST THAT PREVENTS THE DRIFT, rather than describing it after the fact. Both files agreed by eye once and
-  // disagreed twice -- the tool took `questions` while the script took a set, and the DSL reached only one of them.
-  assert.match(tool, /from '\.\/system1\.js'/, 'the tool must go through the facade')
-  assert.match(script, /from '\.\.\/core\/system1\.js'/, 'and the script must too')
-  // AND NEITHER MAY REACH PAST IT for anything about questions: `question-request` is the facade's own primitive.
+  // THE TEST THAT PREVENTS THE DRIFT, rather than describing it after the fact. The tool and the standalone used to
+  // be two callers of one facade, they agreed by eye once and disagreed twice -- the tool took `questions` while the
+  // script took a set, and the DSL reached only one of them.
+  //
+  // AND THE FACADE IS THE PACKAGE'S NOW, so the drift this test watches for is a CROSS-REPOSITORY one: this tool and
+  // `system1-measure`'s `bin/ask.mjs` must both resolve questions through the SAME module, and each side proves its
+  // own half -- the package's `test/question-staging.test.js` asserts the script's.
+  assert.match(tool, /from 'system1-measure\/core\/system1\.js'/, 'the tool must go through the package\'s facade')
+  // AND IT MAY NOT REACH PAST IT for anything about questions: `question-request` is the facade's own primitive.
   assert.equal(/question-request\.js'/.test(tool.replace(/sharedReadSpecs/g, '')), true, 'the tool keeps only the re-export')
-  // THE CODE, NOT THE PROSE. The script's header names these modules to explain WHY it needs no dependency, and a
-  // substring test over the whole file would read that explanation as a violation of it.
-  const scriptCode = script.split('\n').filter((line) => !line.trimStart().startsWith('//')).join('\n')
-  assert.equal(/question-lint|question-dsl|question-sets|question-request/.test(scriptCode), false, 'the standalone has no question code of its own')
-  // NEITHER MAY GO TO THE MODEL ITS OWN WAY. The standalone used to build its client from `core/model/client.js`
-  // directly; it now asks the facade for one, so the credential and the endpoint are decided in the same place for
-  // every surface -- which is the thing a second call site would quietly get wrong.
-  assert.match(script, /wireTransport/, 'the standalone gets its transport from the facade too')
 })
 
 test('one question means the same thing whichever route carried it', async () => {
@@ -219,15 +214,15 @@ test('both routes given is one refusal, and it names them', async () => {
 test('every surface that resolves questions goes through the facade, and a new one cannot join without it', async () => {
   const { readdirSync, readFileSync } = await import('node:fs')
   // THE SURFACES THE OPERATOR NAMED, and the rule each one breaks by reimplementing.
+  // THE SURFACES THAT ARE STILL HERE. `system1_battery` and the standalone moved to `system1-measure` with the
+  // question machinery they exist to expose, and the package checks its own.
   const surfaces = {
     'system1_decide (the agent tool)': 'core/decide-tool.js',
-    'system1_battery': 'core/battery-tool.js',
     'the row, for session measurement': 'dsh/index.js',
-    'the standalone script': 'scripts/ask.mjs',
   }
   for (const [name, file] of Object.entries(surfaces)) {
     const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8')
-    assert.match(source, /system1\.js'/, `${name} must reach questions through core/system1.js`)
+    assert.match(source, /system1\.js'/, `${name} must reach questions through the package's facade`)
   }
 
   // AND THE SEAL: a module that builds, loads or lints questions WITHOUT importing the facade is not a surface
@@ -239,7 +234,10 @@ test('every surface that resolves questions goes through the facade, and a new o
   ))
   const everyFile = [...walk('core'), ...walk('dsh')]
   // KEYED BY THE NAME AFTER ITS FOLDER, so the exemption is the module rather than the folder it happens to sit in.
-  const façade = new Set(['system1.js', 'question-request.js', 'questions.js', 'question-dsl.js', 'question-lint.js', 'question-sets.js'])
+  // THE FAÇADE IS THE PACKAGE'S, so no file in THIS repository is the façade. The set is empty on purpose: a file
+  // here that reaches questions at all must reach them THROUGH the package's `system1.js`, and the regex below is
+  // what says so.
+  const façade = new Set()
   // THE CODE, NOT THE COMMENTS. `instrument-input.js` names `buildQuestions` only to explain that the SET LOCATION
   // travels with the questions because the builder reads it -- and a substring test over prose reports an honest
   // explanation as a violation, which is how a seal like this gets switched off.
@@ -250,7 +248,11 @@ test('every surface that resolves questions goes through the facade, and a new o
     // THROUGH THE FACADE, WHATEVER FOLDER THE CALLER IS IN: the instrument's own modules sit beside it, and the
     // adaptation one level up reaches it as `../core/system1.js`. Matching only the sibling form would have reported
     // the row -- the surface this seal exists to protect -- as a bypasser, which is the guard failing backwards.
-    return reaches && !/from '\.\.?\/(core\/)?system1\.js'/.test(source)
+    // THE FACADE, WHICHEVER REPOSITORY IT LIVES IN: this repository's callers import it as
+    // `system1-measure/core/system1.js`, and the package's own as `../core/system1.js`. Matching only the sibling
+    // form would have reported the row -- the surface this seal exists to protect -- as a bypasser, which is the
+    // guard failing backwards.
+    return reaches && !/from '(\.\.\/core\/|system1-measure\/core\/)system1\.js'/.test(source)
   })
   assert.deepEqual(bypasses, [], `these modules reach questions without the facade: ${bypasses.join(', ')}`)
 })
@@ -298,8 +300,8 @@ test('the row hands every tool a sets directory that RESOLVES -- the wiring is t
 // ── A SCORE IS AN EXPECTED VALUE, NOT A LEVEL ──────────────────────────────────────────────────────────
 
 test('a score renders with its scale, computed from the BUILT question -- not from a spec that was never loaded', async () => {
-  const { resolveQuestions, renderAnswerLines } = await import('../core/question-request.js')
-  const { scoreScales } = await import('../core/system1.js')
+  const { resolveQuestions, renderAnswerLines } = await import('system1-measure/core/question-request.js')
+  const { scoreScales } = await import('system1-measure/core/system1.js')
   const LADDER_QUESTION = ['id=graded ;; type=score ;; instructions=How well? ;; level=no ;; level=partly ;; level=yes']
   // THROUGH THE REAL LOADER. The stub in `evaluate-tool.test.js` feeds a question in the SPEC shape, where `levels`
   // is present, and it agreed with itself for a year: `scoreScales` read `levels` while the loader produces `criteria`,
@@ -319,14 +321,14 @@ test('a score renders with its scale, computed from the BUILT question -- not fr
 // ── A SCOPE NAME IS A CLAIM ABOUT WHERE YOU ARE ─────────────────────────────────────────────────────
 
 test('`call` is the scope of a caller that is not a seam, and the DEFAULT when none is named', async () => {
-  const { composeQuestions } = await import('../core/system1.js')
+  const { composeQuestions } = await import('system1-measure/core/system1.js')
   const q = ['id=x ;; type=noul ;; instructions=Is it so?']
   assert.equal(composeQuestions({ question: q }).scope, 'call', 'no scope named means the non-seam scope, not a guess')
   assert.equal(composeQuestions({ question: q, scope: 'call' }).scope, 'call')
 })
 
 test('composing at a SEAM scope needs the caller to BE a seam, and reading a seam-scoped set does not', async () => {
-  const { composeQuestions } = await import('../core/system1.js')
+  const { composeQuestions } = await import('system1-measure/core/system1.js')
   const q = ['id=x ;; type=noul ;; instructions=Is it so?']
   // NOT A SEAM, COMPOSING. `--scope draft` would be a claim about a point in somebody else's agent loop.
   const composing = composeQuestions({ question: q, scope: 'draft' })
@@ -347,8 +349,8 @@ test('composing at a SEAM scope needs the caller to BE a seam, and reading a sea
 })
 
 test('a set STORED at a seam scope is refused for a non-seam writer, because the name is permanent', async () => {
-  const { writeQuestionSet } = await import('../core/system1.js')
-  const { validateSpecs } = await import('../core/questions.js')
+  const { writeQuestionSet } = await import('system1-measure/core/system1.js')
+  const { validateSpecs } = await import('system1-measure/core/questions.js')
   const dir = stores()
   const specs = [{ id: 'x', type: 'noul', instructions: 'Is it so?' }]
   assert.match(writeQuestionSet({ dir, name: 'a@1', scope: 'draft', specs, validate: validateSpecs }).reason, /is a SEAM scope/)

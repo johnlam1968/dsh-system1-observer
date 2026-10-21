@@ -42,7 +42,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { eventsOf, parseSession } from '../dsh/pi-session-export.js'
-import { normalizeEvents } from '../dsh/normalize.js'
+import { normalizeEvents } from 'system1-measure/instrument/normalize.js'
 
 const argv = process.argv.slice(2)
 const flag = (name, fallback = null) => {

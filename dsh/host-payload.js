@@ -9,7 +9,7 @@
 // IT IS ALSO WHERE A SILENT '' WOULD COME FROM, and the notes below are the measurements that put that failure down:
 // an empty excerpt cannot be told from a seam whose payload is empty, so every way of failing says which way it
 // failed, and an inapplicable point returns '' on purpose for the caller to refuse on.
-import { isRecord } from '../core/is-record.js'
+import { isRecord } from 'system1-measure/core/is-record.js'
 
 // WHICH ARGUMENT CARRIES THE TEXT, PER SEAM. The first is right for most of them and WRONG for the
 // three that do not receive a plain payload, and every one of those three was measured wrong on the

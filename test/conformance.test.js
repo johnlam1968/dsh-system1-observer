@@ -23,7 +23,7 @@ import { DEFAULT_MAX_PATHS, DEFAULT_MAX_PER_PATH } from '../dsh/host/fs-journal.
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { createTraceTool } from '../core/tool.js'
+import { createTraceTool } from 'system1-measure/core/tool.js'
 import { createConfigTool } from '../core/config-tool.js'
 import { createDecideTool } from '../core/decide-tool.js'
 
@@ -148,7 +148,10 @@ test('events: every catalogue name this plugin relies on appears in the sources'
   // THE ROW, THE INSTRUMENT'S POINT TABLE, AND THE APPLICATION'S EVENT MAP. The event names used to live in
   // `core/seams.js`; they moved to `dsh/host-events.js` so the instrument names no harness event at all (F110), and a
   // scan that did not follow them would report every one of them missing.
-  const sources = read('dsh/index.js') + read('core/seams.js') + read('dsh/host-events.js')
+  // `core/seams.js` IS NOT HERE ANY MORE: the loop's vocabulary is the measurement's, and it moved to
+  // `system1-measure/core/seams.js`. The catalogue is still checked -- it is checked against the package's copy,
+  // because a name the plugin relies on has to be a name the package declares.
+  const sources = read('dsh/index.js') + read('node_modules/system1-measure/core/seams.js') + read('dsh/host-events.js')
   for (const name of Object.keys(HOST_EVENT_MODES)) {
     assert.ok(sources.includes(`'${name}'`), `${name} is in the checksum but nowhere in the row, the point table or the event map`)
   }
@@ -189,8 +192,11 @@ test('every tool takes the caller\'s `exec`, so a cancellation can be honoured',
   // because the obligation lives in each tool\'s own `execute` and nothing required one. This names the signature;
   // the behavioural assertions live in each tool\'s test file, because a tool that takes `exec` and ignores it would
   // pass this scan.
+  // THE SCAN COVERS THIS REPOSITORY ONLY, and the count is what it is here: four tool files. The other four -- the
+  // battery, the questions, and the two the measurement owns -- are `system1-measure`'s, and the package checks its
+  // own. A count that spans two repositories would be a count neither of them can move without breaking.
   const tools = ['core', 'dsh'].flatMap((dir) => readdirSync(dir).filter((name) => name === 'tool.js' || name.endsWith('-tool.js')).map((name) => dir + '/' + name))
-  assert.ok(tools.length >= 8, 'the scan found fewer tool files than the row registers')
+  assert.ok(tools.length >= 4, 'the scan found fewer tool files than the row registers')
   const offenders = tools.filter((name) => !/async execute\(args, exec\)/.test(read(name)))
   assert.deepEqual(offenders, [], 'these tools cannot see exec.signal: ' + offenders.join(', '))
 })

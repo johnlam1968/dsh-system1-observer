@@ -29,7 +29,10 @@ test('the definition is the shape the registry requires', () => {
 
 test('a set file is passed as it is written, with no conversion', async () => {
   // A SCOPE FILE HOLDS ITS OWN SPEC LIST, so the file IS the question array -- no key to unwrap.
-  const set = JSON.parse(readFileSync(new URL('../criteria/helpfulness-set@2/turn.json', import.meta.url), 'utf8'))
+  // THE SET IS THE PACKAGE'S, and it is read from there: the question sets moved to `system1-measure` with the
+  // question machinery, and this test wants the SHIPPED corpus -- so a copy in this repository would be a
+  // second copy that could drift from the one the tool actually loads.
+  const set = JSON.parse(readFileSync(new URL('../node_modules/system1-measure/criteria/helpfulness-set@2/turn.json', import.meta.url), 'utf8'))
   const { calls, decide } = stub({ kind: 'answers', answers: { request_addressed: { status: 'ok' } }, envelope: { executed: { provider: 'typesafe' } } })
   const tool = createDecideTool({ decide })
   const out = await tool.execute({ state: 'OPERATOR REQUEST: find plugins', questions: set })
@@ -149,7 +152,7 @@ test('a call through the tool records a line naming the tool and its questions',
   assert.deepEqual(lines[0].questionIds, ['asked', 'ladder'])
   assert.deepEqual(lines[0].executed, { provider: 'typesafe' })
   assert.equal(lines[0].durationMs, 812.5)
-  const { probeViolations } = await import('../core/turn-record.js')
+  const { probeViolations } = await import('system1-measure/core/turn-record.js')
   assert.deepEqual(probeViolations(lines), [], 'the line satisfies the acceptance check it could otherwise violate')
 })
 
@@ -259,6 +262,6 @@ test('a signal aborted DURING the call is recorded, not silently absorbed', asyn
   assert.equal(out.failure, undefined, 'the answer the backend already produced is not thrown away')
   assert.equal(lines.length, 1)
   assert.equal(lines[0].cancelled, true, 'a cancellation the transport could not act on is visible in the record')
-  const { probeViolations } = await import('../core/turn-record.js')
+  const { probeViolations } = await import('system1-measure/core/turn-record.js')
   assert.deepEqual(probeViolations(lines), [], 'and the extra field does not break the acceptance check')
 })

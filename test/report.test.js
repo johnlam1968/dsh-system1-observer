@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from 'node:os'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from '../core/report.js'
+import { attachInterpretation, buildPackage, buildSkeleton, defaultPackageDir, hashOf, INTERPRETATION_FILE, PACKAGE_FILES, packageId, writePackage } from 'system1-measure/core/report.js'
 import { createResultsTool, summarise } from '../core/results-tool.js'
 import { packageVersion } from '../dsh/index.js'
 
