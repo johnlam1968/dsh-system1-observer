@@ -61,7 +61,15 @@ test('the publish workflow keeps the promises a release depends on', () => {
   // AND IT MUST RETRY: the registry is eventually consistent, so a single check a second after publishing can
   // report a staged release that merely lagged.
   // AND THE WINDOW MUST COVER npm's OWN "few minutes": 20 seconds declared a published release staged (F136).
-  assert.match(yamlText, /for attempt in \$\(seq 1 13\)/, 'the installability check must wait minutes, not seconds')
+  // THE WINDOW IS A FLOOR IN MINUTES, NOT A LITERAL COUNT. The promise is that the check waits MINUTES rather than
+  // seconds -- 20 seconds once declared a published release "staged" (F136) -- and pinning the exact number made
+  // the window impossible to widen when a measurement said it was too narrow. It was: this package is now the
+  // biggest one this account publishes (166 files and 1.43 MB unpacked, because the question sets ship with it),
+  // and MEASURED on 0.2.2 the version was NOT on the registry at 195 seconds and WAS at 300 -- so a window pinned to
+  // 13 checks reported a failure for a release that had actually landed, and the GitHub Release was never cut.
+  const checks = Number(yamlText.match(/for attempt in \$\(seq 1 (\d+)\)/)?.[1] ?? 0)
+  const seconds = checks * 15
+  assert.ok(seconds >= 300, `the installability check waits ${seconds} second(s); it must cover npm's own "few minutes"`)
   // THE TAG CHECK MUST KNOW npm'S FIRST-RELEASE RULE: a brand-new package gets `latest` on its first version even
   // with `--tag beta` (measured), so the guard warns while every version is a prerelease and fails once a stable
   // version exists to point `latest` at. Both branches are asserted, because a guard that only fails would fail on
