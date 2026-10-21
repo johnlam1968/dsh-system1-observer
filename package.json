@@ -39,9 +39,10 @@
     "check:citations": "node scripts/check-citations.mjs",
     "coverage": "node --experimental-test-coverage --test --test-coverage-include='core/*.js' --test-coverage-include='dsh/*.js' --test-coverage-include='core/model/*.js' --test-coverage-include='dsh/host/*.js' --test-coverage-include='dsh/session-adapter/lib/*.js' --test-coverage-include='dsh/session-adapter/index.js' --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=75 test/*.test.js",
     "check:compat": "node scripts/check-compat.mjs",
+    "check:contract-teeth": "node scripts/check-contract-teeth.mjs",
     "check:composition": "node scripts/check-composition.mjs",
     "check:deploy": "node scripts/check-deploy.mjs",
-    "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:composition && npm run check:deploy",
+    "ci": "npm test && npm run coverage && npm run check:citations && npm run check:compat && npm run check:contract-teeth && npm run check:composition && npm run check:deploy",
     "ask": "node scripts/ask.mjs"
   },
   "dependencies": {

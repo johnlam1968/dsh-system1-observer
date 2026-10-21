@@ -120,21 +120,62 @@ credentials (`npm whoami` → ENEEDAUTH), so neither repository can import it, a
 own copies of the rules — kept honest by the fixture, and by nothing else. **A pi extension that restated the rules
 would be the third copy**, which is the thing the extraction exists to prevent.
 
+## 0c. The split's FIRST STEP, and the number it moved (2026-10-21)
+
+**`ROADMAP.md` §14.8 STEP 1 IS DONE: the input shape is pure, and it has a contract.** The shape — `point`,
+`callsEnabled`, `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport` — was built in
+`core/instrument-input.js` and read in the instrument, and the file was COUPLED for two reasons: the point descriptor
+is the harness's event names, and the session scope reads this row's own config. **Both are the HOST's to supply, so
+both are supplied as BINDINGS** and the pure shape moved to `core/instrument-shape.js`. A second host — a pi
+extension — now binds at those two functions and reaches no harness event at all.
+
+**AND THE NUMBER THE MOVE WAS SUPPOSED TO MOVE, MOVED: the `core/` dsh surface is 6 files, not 10.** Four files —
+`core/battery-tool.js`, `core/decide-tool.js`, `core/turn-trigger.js`, `core/turn-listener.js` — were coupled for
+ONE reason, which was that they imported `core/instrument-input.js` for `questionGroup` and that file reached
+`dsh/host-events.js`. They reach no harness event now, so they are **PROMOTED** to the instrument list (50 → 55) and
+the coupled list shrank (10 → 6). **The gate said so itself:** *"core/battery-tool.js is declared coupled but breaks
+no rule: promote it to the instrument list instead of leaving the excuse."* A list that keeps an excuse that no
+longer holds has stopped being a measurement.
+
+**AND THE CONTRACT EXISTS, AND IT HAS TEETH (F192).** `test/fixtures/instrument-shape/contract.mjs` is a vendored,
+digest-pinned fixture — digest `a1a45d16ca9f645677fd07315d3af95f9499c20b32c1d7b2765087225c30299a`, over the file NAME
+as well as its bytes — and **it is a `.mjs` and not JSON, because the shape distinguishes a key that is ABSENT from a
+key that is PRESENT AND HOLDS NOTHING, and JSON has no `undefined`.** The comparison is `deepStrictEqual`, which is
+the only comparison that tells the two apart. **AND THE TEETH ARE A GATE, NOT A PARAGRAPH:**
+`scripts/check-contract-teeth.mjs` mutates the shape **and the bridge**, seventeen ways, **in a copy of the tree**, and
+fails if any mutation leaves the contract green — **17 of 17 caught** — and it is in `npm run ci`.
+
+**AND AN INDEPENDENT REVIEW MEASURED THAT THE FIRST VERSION OF THAT CONTRACT MISSED SIX OF THE RULES IT WAS ABOUT
+(F193),** which is the more useful half of the review: a contract that has never been shown to fail is a description
+of a test, and the first version of this one would have been. The six were the scope binding receiving the raw
+config, `||` for `??` on the provider, `!=` for `!==` on the calls switch, the per-seam switch read for a hardcoded
+point, the `isRecord` guard dropped, and the bridge's transport default dropped. **The fixture has eleven cases now
+and the script seventeen mutations, and the script REFUSES a mutation whose target text is not unique** — because the
+first version of the script changed the WRONG function and reported a false alarm, which is the **F183** shape one
+level down. It also separates a BROKEN copy from a catch, because a tree that cannot load scores red for the wrong
+reason.
+
+**AND ONE THING THE STEP DOES NOT DO: the shape is bindable IN THIS REPOSITORY, not from another one.** A second
+repository can only import a package, and the shape is not published under a name a pi extension could name — that is
+`ROADMAP.md` §14.8 step 4, and **do not add a subpath export to get around it**: publishing a harness-free API under
+the harness's name is the naming problem the plan names.
+
 ## 1. State
 
 | | |
 |---|---|
-| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`bc8ecda`); **920 tests**, 920 pass, 0 fail; **the rules are the package's, imported by integrity** |
+| this repo `dsh-system1-observer` | branch **`composing-tools`**, **pushed** (`bc8ecda`); **931 tests**, 930 pass, 0 fail, 1 skipped; **the rules are the package's, imported by integrity**; **the input shape has a contract** |
 | store `dsh-session-index` (`~/CodingProjects/dsh-session-index`, GitHub `johnlam1968/dsh-session-index`) | **`72636ea`**, **pushed**; 58 tests; **`SCHEMA_VERSION` 6**; **the rules are the package's**; **946 of 946 sessions agree on every field** |
 | package `dsh-session-rows` (`~/CodingProjects/dsh-session-rows`, GitHub `johnlam1968/dsh-session-rows`) | **`bc318d9`**, **pushed**; 10 tests; **PUBLISHED — `dsh-session-rows@0.2.0`**, tarball sha1 `875854e6107a7dec5e3f9940684847d53dd4500a`, the same digest the CI build produced from the tagged commit |
 | pi extension `pi-session-log` (`~/CodingProjects/pi-session-log`, GitHub `johnlam1968/pi-session-log`) | **`3669714`**, **pushed**; 43 tests; **PUBLISHED — `pi-session-log@0.1.0`**, tarball sha1 `98affa86a762190b19575ee0fa96e4faa2f97360`; the second implementation of the format |
-| coverage | observer **97.55 / 82.54 / 91.77**, store **96.86 / 77.69 / 89.01**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100** |
-| gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:composition` (composes **201 rows**), `check:deploy` |
+| coverage | observer **97.55 / 82.4-82.7 / 91.77** (measured on Node 22.19.0; the line this repository measures on is **25.3.0**), store **96.86 / 77.69 / 89.01**, package **100 / 93.22 / 100**, pi **99.78 / 76.61 / 100**. **THE BRANCH FIGURE IS A RANGE, NOT A VALUE** — the coverage report is not reproducible (**`F194`**), so a coverage number quoted anywhere in this repository is a run and not a measurement |
+| gates | `test`, `coverage`, `check:citations`, `check:compat`, `check:contract-teeth` (**17 of 17** mutations caught), `check:composition` (composes **201 rows**), `check:deploy` |
 | topology | `core/` the instrument · `dsh/` the adaptation to ONE harness · `dsh/session-adapter/` five pure modules. **`lib/` is gone** |
 
-**ALL SIX GATES RUN HEADLESSLY.** `check:composition` shells out to `dsh --profile <p> --dump-config`, and
-`check:deploy` reads profile files. You do not need the Web UI, a running harness, or a browser to verify anything
-in this repository — which is what makes it workable from a machine that is not the one the harness runs on.
+**ALL SEVEN GATES RUN HEADLESSLY.** `check:composition` shells out to `dsh --profile <p> --dump-config`, and
+`check:deploy` reads profile files. `check:contract-teeth` copies the tree and mutates the shape in the copy. You do not
+need the Web UI, a running harness, or a browser to verify anything in this repository — which is what makes it
+workable from a machine that is not the one the harness runs on.
 
 ## 2. The folder split, and how it was decided
 
@@ -261,6 +302,30 @@ is the **skeleton**, numbers filled and the reading column blank, because prose 
 
 ## 5. Open, and known not to be yours
 
+* **THE COVERAGE REPORT IS NOT REPRODUCIBLE, and it is not this change's doing.** The branch figure moves on every
+  run of the same tree — measured on the unchanged baseline at 82.18 / 82.50 / 82.32 / 82.54 / 82.62 — while line and
+  function coverage are stable. **`F194`**: `node --experimental-test-coverage` sets `NODE_V8_COVERAGE` to a
+  directory and **child processes inherit it**, and this suite spawns children; a child whose coverage file has not
+  landed by the time the parent collects is simply not counted. Removing the child-spawning test files makes
+  `core/model/narrow.js` stable, which is the measurement that names the mechanism. **The fix is its own commit** —
+  the spawning tests have to set `NODE_V8_COVERAGE` for their children deliberately. Until then, **every coverage
+  number in this repository is a range and not a value.**
+* **A SECOND HOST CAN BIND AT THE SHAPE IN-REPOSITORY, AND CANNOT YET FROM ANOTHER REPOSITORY.** The shape is pure and
+  the two host bindings are passed in, so a pi extension binds at two functions — but a separate repository can only
+  import a PACKAGE, and the shape is not published under a name a pi extension could name. `ROADMAP.md` §14.8 step 4
+  is what fixes that (`system1-measure`, deliberately not `dsh-`prefixed). **Do not add a subpath export to
+  `package.json` to get around it**: publishing a harness-free API under the harness's name is the naming problem the
+  plan names, and it is what the migration in step 4 then has to undo.
+* **THE CONTRACT FIXTURE HAS TO TRAVEL WITH THE PACKAGE, and it does not yet.** It is at
+  `test/fixtures/instrument-shape/contract.mjs`, and the `files` allowlist does not carry `test/` — correctly, because
+  a test fixture is not a runtime file. But a consumer that vendors the contract needs the fixture itself, exactly as
+  `dsh-session-rows` ships its own. **Decide where it lives when the package is cut, and move the digest and the
+  allowlist in the same commit** — a fixture that travels without its digest protects nothing.
+* **TEN COMMENTS STILL NAME `lib/instrument-input.js`, WHICH HAS NOT EXISTED SINCE THE FOLDER SPLIT.** They are in
+  `core/observe.js` (3), `core/questions.js` (2), `core/redact.js`, `core/seams.js` (2), `core/system1.js` and
+  `dsh/index.js`. The one in `core/turn-trigger.js` was fixed by this change, because that file was already being
+  touched — and **a bulk rename is not a migration** (`F172`), so the rest is a decision somebody makes on purpose
+  rather than a `sed` somebody runs.
 * **`check:deploy` against the `web` profile is RED**, and was red before this work. The live profile has drifted from
   `deploy/profile/` (`superpowers-dsh`, `dsh-chat-import`, `dsh-quota` live-only; `@local/dshso-mcp`,
   `dsh-speech-funasr-http`, `system1-bridge` recorded-only). **Against `docdrift`, which the repository specifies, it

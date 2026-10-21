@@ -1062,6 +1062,27 @@ one.
 1. **Extract the pure input shape** from `core/instrument-input.js` (99 lines, currently COUPLED because it builds
    the point descriptor through `dsh/host-events.js` and the subjects predicate through `core/sessions.js`). The
    pure part is ~40 lines; the dsh part is 2 bindings.
+   **--- DONE, 2026-10-21.** The pure shape is `core/instrument-shape.js` and the bridge is 2 bindings and a call. The
+   shape moved WHOLE -- `questionGroup`, `redactionGroup` and `declaredAxes` with it -- and **they are not re-exported
+   from the bridge**, because one rule with two import paths is how a second copy of a rule comes to exist. The two
+   host bindings are **passed in** (`describePoint`, `observed`), so a second host binds at them and nowhere else.
+   **AND THE MEASUREMENT THE MOVE WAS SUPPOSED TO UNLOCK: the `core/` dsh surface is 6 files, not 10.** Four files --
+   `core/battery-tool.js`, `core/decide-tool.js`, `core/turn-trigger.js` and `core/turn-listener.js` -- were coupled
+   for ONE reason, which was that they imported `core/instrument-input.js` for `questionGroup` and that file reached
+   `dsh/host-events.js`. They reach no harness event now, so they are **PROMOTED** to the instrument list (50 -> 55)
+   and the coupled list shrank (10 -> 6). The gate said so itself: *"core/battery-tool.js is declared coupled but
+   breaks no rule: promote it to the instrument list instead of leaving the excuse"*.
+   **AND THE CONTRACT TEST THE PLAN ASKED FOR EXISTS, and it has teeth.** `test/fixtures/instrument-shape/contract.mjs`
+   is a vendored, digest-pinned fixture -- digest `a1a45d16ca9f645677fd07315d3af95f9499c20b32c1d7b2765087225c30299a`,
+   over the file NAME as well as its bytes -- and it is a **`.mjs` and not JSON**, because the shape distinguishes a
+   key that is ABSENT from a key that is PRESENT AND HOLDS NOTHING, and JSON has no `undefined` (**F192**). The
+   comparison is `deepStrictEqual`, which is the only comparison that tells the two apart. **AND THE TEETH ARE A
+   GATE:** `scripts/check-contract-teeth.mjs` mutates the shape AND the bridge, seventeen ways, in a COPY of the tree,
+   and fails if any mutation leaves the contract green -- **17 of 17 caught** -- and it is in `npm run ci`.
+   **AND AN INDEPENDENT REVIEW MEASURED THAT THE FIRST VERSION OF THAT CONTRACT MISSED SIX OF THE RULES IT WAS ABOUT**
+   (**F193**), which is why the fixture has eleven cases and the script seventeen mutations, and why the script now
+   refuses a mutation whose target text is not unique -- the first version of it changed the WRONG function and
+   reported a false alarm.
 2. **Move the chain, the producer, the format vocabulary and the row reader** into a package-shaped folder in-repo
    (e.g. `instrument/`), fix the `windowChars` line, delete the dead `exchangesOf` import, and leave
    `session-format.js` as a re-export layer. The dsh plugin imports it RELATIVELY for now -- one repository, one
@@ -1083,6 +1104,14 @@ is in it.
 describes no test for them. This is the same failure as the two producers of rows (F173-F180: who spoke, the
 digest, the text, the NUL), and the fixture is the answer: a shape that both hosts build needs the same treatment
 the rules got -- a fixture, vendored, digest-pinned, that says what the shape must be.
+**--- DONE, 2026-10-21.** The fixture is `test/fixtures/instrument-shape/contract.mjs` and the finding is **F192**.
+Two things about it are worth keeping, because they are the two ways a contract like this goes wrong. **IT IS A
+`.mjs` AND NOT JSON**, because the shape distinguishes a key that is ABSENT from a key that is PRESENT AND HOLDS
+NOTHING and JSON has no `undefined` -- a sentinel string cannot say that, and can collide with a real value. **AND
+THE TEETH ARE A GATE**: `scripts/check-contract-teeth.mjs` mutates the shape eight ways in a COPY of the tree and
+fails if any mutation leaves the contract green. It caught its own false positive on the first run -- the copy had no
+`package.json`, so every mutation "broke" a tree that was already broken -- and it now refuses to run unless the
+untouched copy is GREEN.
 
 **THE TWO pi PATHS ARE A KNOWN DIFFERENCE, AND THE MOVE DOES NOT CLOSE IT.** The review is explicit and the
 measurement agrees: the dsh-shaped path and the pi-native path disagree on **8 of 260 sessions** -- every one a
@@ -1115,5 +1144,7 @@ line at `measure.js:93`, counting from the cut's own accounting.
 
 **WHAT IS NEXT, IN DEPENDENCY ORDER, AFTER THIS SECTION.** (i) the shared package and its fixture -- DONE; (ii) the
 pi extension -- DONE; (iii) the act vocabulary, which stays undecided until a measurement asks for it; (iv) **this
-section**, in the four steps above. And after (iv): the cross-path pi check, and the `pi-system1-observer` host
-that binds the same chain, the same input shape and the same wire live.
+section**, in the four steps above -- **STEP 1 DONE (2026-10-21), and step 2 is next: move the chain, the producer, the
+format vocabulary and the row reader into a package-shaped folder in-repo, fix the `windowChars` line, delete the dead
+`exchangesOf` import, and leave `session-format.js` as a re-export layer.** And after (iv): the cross-path pi check,
+and the `pi-system1-observer` host that binds the same chain, the same input shape and the same wire live.

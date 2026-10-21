@@ -28,7 +28,7 @@ import { buildQuestions, hasSpecs, probeOf, readQuestionConfig, TURN_HOOK } from
 import { setSettings } from './question-sets.js'
 import { composeQuestions } from './system1.js'
 import { isProbeQuestion } from './probe-score.js'
-import { questionGroup } from './instrument-input.js'
+import { questionGroup } from './instrument-shape.js'
 
 /** Whether this turn boundary is the Nth, and the measurement is switched on. */
 export function shouldFire({ turn, everyNTurns, enabled = true } = {}) {
@@ -50,7 +50,7 @@ export function shouldFire({ turn, everyNTurns, enabled = true } = {}) {
  */
 export function turnQuestions({ config, closed = false, needsNextMessage = [] } = {}) {
     // THE SET IS RESOLVED BEFORE THE DECISION, and the two ways of having nothing to ask are kept apart. The row's
-    // config becomes the instrument's question group first (`lib/instrument-input.js`), because the functions below
+    // config becomes the instrument's question group first (`core/instrument-shape.js`), because the functions below
     // read the instrument's own object rather than a row.
     const group = questionGroup(config)
     const settings = setSettings(group.sets)

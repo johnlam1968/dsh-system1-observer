@@ -172,12 +172,18 @@ test('every volatile setting is read somewhere, or is named in the exception lis
   // THE PATTERN IS DELIBERATELY NARROW: the field name must appear INSIDE a `readConfigValue(...)` call, because the
   // name alone appears in the schema itself and a loose scan would pass on the very definition it polices.
   const readSomewhere = (field) => new RegExp('readConfigValue\\([^\\n]*\\.' + field + '\\b').test(source)
-  // THE SECOND LEGAL ROUTE, AND IT IS ONE NAMED FILE. `core/instrument-input.js` is the bridge that turns the row into
+  // THE SECOND LEGAL ROUTE, AND IT IS TWO NAMED FILES. `core/instrument-input.js` is the bridge that turns the row into
   // the instrument's input object, so the settings IT reads are plain by construction (it is handed `plainConfig`),
   // and a scan that knew only `readConfigValue` reported every one of them unread -- measured: seven fields, all of
   // them read, on the first run after the instrument stopped unwrapping its own config (`F110`). The bridge is NAMED
   // rather than "any file": a read that appears anywhere else is still a failure.
-  const bridge = readFileSync('core/instrument-input.js', 'utf8')
+  //
+  // AND IT IS TWO FILES SINCE THE PURE SHAPE WAS SPLIT OUT (`ROADMAP.md` §14.8 step 1). The binding half reads the
+  // row's own settings; the shape half maps them into the instrument's groups. A scan that named only the first would
+  // have reported every group field unread -- the same class of mistake as the one above, and it would have been
+  // SILENT, because the scan's answer was "nothing reads these" rather than "this file moved".
+  const bridge = ['core/instrument-input.js', 'core/instrument-shape.js']
+    .map((file) => readFileSync(file, 'utf8')).join('\n')
   const isRead = (field) => readSomewhere(field) || new RegExp('\\.' + field + '\\b').test(bridge)
   // THE EXCEPTIONS, each with the reason it needs none: these are read as objects through `plainConfig`, which
   // unwraps every volatile accessor at once. Asserted volatile below, so the list cannot outlive its members.

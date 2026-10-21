@@ -11,7 +11,7 @@
 // `cost.js`, which read four and one fields. Measured before the conversion: 23 files / 4,274 lines, of which SIX
 // files / 1,796 lines read the row (`F110`). After it: zero.
 //
-// THE SET WAS 22 FILES AND THE DIRECTORY IS 60, AND THE GAP WAS THE PROBLEM. `core/` holds the instrument, and it also
+// THE SET WAS 22 FILES AND THE DIRECTORY IS 61, AND THE GAP WAS THE PROBLEM. `core/` holds the instrument, and it also
 // holds the application, the tools, the readers and the report -- and only 22 of the 60 were checked, so a `dsh/`
 // import could appear in any of the other 38 with nothing failing. The boundary is now declared over the WHOLE
 // directory, in two lists, and a file that moves between them has to be a change somebody made on purpose.
@@ -20,8 +20,14 @@
 // so `core/battery-tool.js`, `core/decide-tool.js`, `core/turn-listener.js` and `core/turn-trigger.js` were declared
 // PORTABLE while reaching `dsh/host-events.js` THROUGH `core/instrument-input.js` -- and the portable list said so in
 // as many words, which is how a claim like that survives. The walk follows the graph, so the coupled list is the
-// TRANSITIVE closure: **10 of the 60 files are coupled to the dsh side and 50 are portable**, and those ten are the
-// whole dsh surface of `core/`. A pi extension -- or any other host -- binds at those ten and nowhere else.
+// TRANSITIVE closure: **6 of the 61 files are coupled to the dsh side and 55 are portable**, and those six are the
+// whole dsh surface of `core/`. A pi extension -- or any other host -- binds at those six and nowhere else.
+//
+// AND THE FOUR THAT ARE NOT IN THAT SIX WERE NOT ALWAYS PORTABLE. They were declared COUPLED for one reason -- they
+// imported `core/instrument-input.js` for `questionGroup`, and that file reached `dsh/host-events.js` -- and the pure
+// shape moved to `core/instrument-shape.js` on 2026-10-21 (`ROADMAP.md` §14.8 step 1), so they reach no harness event
+// at all. A file that has become portable is PROMOTED, and a list that keeps an excuse that no longer holds is a
+// list that has stopped being a measurement.
 //
 // THREE MORE HOLES, all found by a review that read the code rather than the intent:
 //
@@ -49,6 +55,7 @@ import { fileURLToPath } from 'node:url'
  * counted here because they exist only to serve this repository's row.
  */
 export const INSTRUMENT = Object.freeze([
+  'core/battery-tool.js',
   'core/battery.js',
   'core/calibrate.js',
   'core/citations.js',
@@ -57,11 +64,13 @@ export const INSTRUMENT = Object.freeze([
   'core/config-event.js',
   'core/config-writer.js',
   'core/cost.js',
+  'core/decide-tool.js',
   'core/deploy-drift.js',
   'core/egress.js',
   'core/evidence.js',
   'core/explain-tool.js',
   'core/honesty.js',
+  'core/instrument-shape.js',
   'core/is-record.js',
   'core/label-hash.js',
   'core/model/client.js',
@@ -97,36 +106,44 @@ export const INSTRUMENT = Object.freeze([
   'core/trace-data.js',
   'core/trace-read.js',
   'core/trace-report.js',
+  'core/turn-listener.js',
   'core/turn-record.js',
+  'core/turn-trigger.js',
   'core/zeroclaw-interchange.js',
 ])
 
 /**
  * The `core/` files that are COUPLED to this harness, and why each one is.
  *
- * THESE TEN ARE THE WHOLE DSH SURFACE OF `core/`, and that is the number that matters for a second host: everything
- * else in the directory is already portable, so a pi extension -- or any other harness -- binds at these ten and
- * nowhere else. Four of them reach the harness THROUGH another core file, which is why the walk follows the graph.
+ * THESE SIX ARE THE WHOLE DSH SURFACE OF `core/`, and that is the number that matters for a second host: everything
+ * else in the directory is already portable, so a pi extension -- or any other harness -- binds at these six and
+ * nowhere else. **EACH OF THE SIX ESCAPES DIRECTLY** -- `config-tool.js` and `sessions.js` to `dsh/config-value.js`,
+ * `instrument-input.js` to `dsh/host-events.js`, `register.js` to three dsh files, `turn-observer.js` to
+ * `dsh/turn-state.js`, and `telemetry.js` by reaching `ctx` -- so none of them needs another core file to get there.
+ * That was NOT true of the list before: four of the ten reached `dsh/host-events.js` only THROUGH
+ * `core/instrument-input.js`, which is why the walk follows the graph at all.
+ *
+ * IT WAS TEN, AND THE FOUR THAT LEFT ARE THE POINT OF `ROADMAP.md` §14.8 STEP 1. `core/battery-tool.js`,
+ * `core/decide-tool.js`, `core/turn-trigger.js` and `core/turn-listener.js` were coupled for ONE reason: they
+ * imported `core/instrument-input.js` for `questionGroup`, and that file imported `dsh/host-events.js` to build the
+ * point descriptor. The pure shape moved to `core/instrument-shape.js` and the two host bindings are now passed IN,
+ * so those four reach no harness event at all -- and this list is not allowed to keep an excuse that no longer holds.
  *
  * THE LIST IS PINNED. A coupled file may be ADDED here only by changing the count below, which is the same discipline
  * `test/growth.test.js` uses for a size budget: raising a limit is a deliberate act this file exists to force, and a
  * file that has become portable is PROMOTED to the instrument list rather than left carrying an excuse.
  */
 export const HOST_COUPLED = Object.freeze({
-  'core/battery-tool.js': 'the battery tool, and it reaches the host event names THROUGH core/instrument-input.js',
   'core/config-tool.js': "the settings tool, and it reads this row's own config to render it",
-  'core/decide-tool.js': 'the decide tool, and it reaches the host event names THROUGH core/instrument-input.js',
   'core/instrument-input.js': "the point descriptor, and the point CARRIES the host event name (dsh/host-events.js)",
   'core/register.js': 'the seam subscription, so it reaches `ctx` and the dsh payload shapes',
   'core/sessions.js': "the session scope, and it reads this row's own config for the scope it may read",
   'core/telemetry.js': "the harness's OWN outbound telemetry, and mounting it reaches `ctx`",
-  'core/turn-listener.js': 'the turn listener, and it reaches the host event names THROUGH core/instrument-input.js',
   'core/turn-observer.js': 'the live composer, and the live state it composes is dsh-shaped',
-  'core/turn-trigger.js': 'the turn trigger, and it reaches the host event names THROUGH core/instrument-input.js',
 })
 
 /** How many files may be coupled to the dsh side. Raising this is a decision, and the reason lives above. */
-export const HOST_COUPLED_MAX = 10
+export const HOST_COUPLED_MAX = 6
 
 /**
  * COMMENTS ARE PROSE and are stripped before the scan, because a module that DOCUMENTS a config reader does not call
@@ -284,9 +301,9 @@ const rootOfTest = normalize(join(dirname(fileURLToPath(import.meta.url)), '..')
 test('every file in the instrument set exists, and the set is the one that was measured', () => {
   const missing = INSTRUMENT.filter((file) => !existsSync(file))
   assert.deepEqual(missing, [], 'the instrument set names files that are not there: ' + missing.join(', '))
-  // A SET THAT SHRANK SILENTLY IS THE FAILURE THIS PAIR EXISTS FOR. 50 is not a target; it is what the boundary was
+  // A SET THAT SHRANK SILENTLY IS THE FAILURE THIS PAIR EXISTS FOR. 55 is not a target; it is what the boundary was
   // measured at, so a file moving out of it has to be a change somebody made on purpose (`F110`).
-  assert.equal(INSTRUMENT.length, 50, 'the instrument set changed size: say so in docs/findings.md and update this list')
+  assert.equal(INSTRUMENT.length, 55, 'the instrument set changed size: say so in docs/findings.md and update this list')
 })
 
 /**

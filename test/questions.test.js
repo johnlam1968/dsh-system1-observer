@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildQuestions, questionCap, configuredQuestionIds, hasSpecs, readQuestionConfig } from '../core/questions.js'
-import { questionGroup } from '../core/instrument-input.js'
+import { questionGroup } from '../core/instrument-shape.js'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

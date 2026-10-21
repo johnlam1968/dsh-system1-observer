@@ -19,7 +19,7 @@ import { resultEnvelope } from './model/result-envelope.js'
 // options offered, NOT a probability that the answer is right.
 import { askQuestions } from './system1.js'
 import { readSpecs as sharedReadSpecs } from './question-request.js'
-import { questionGroup } from './instrument-input.js'
+import { questionGroup } from './instrument-shape.js'
 import { isRecord } from './is-record.js'
 
 export const DECIDE_TOOL_NAME = 'system1_decide'

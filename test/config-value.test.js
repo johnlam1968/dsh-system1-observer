@@ -18,7 +18,8 @@ import { plainConfig, readConfigValue } from '../dsh/config-value.js'
 import { readHooks } from '../core/register.js'
 import { buildQuestions } from '../core/questions.js'
 import { createObserver } from '../core/observe.js'
-import { instrumentInput, questionGroup } from '../core/instrument-input.js'
+import { instrumentInput } from '../core/instrument-input.js'
+import { questionGroup } from '../core/instrument-shape.js'
 
 const accessor = (value) => ({ get: () => value })
 const fakeCtx = () => {
@@ -73,9 +74,11 @@ test('the mount-bound fields are unwrapped where they are used', () => {
 })
 
 test('the call-time fields are unwrapped where the INPUT is built', () => {
-  // THE UNWRAP MOVED, AND IT MOVED TO ONE PLACE. These fields used to be unwrapped inside the instrument, which is
-  // why the instrument could not be extracted; now `core/instrument-input.js` is the only bridge, and the test asserts
-  // the same property one step earlier: a Cordis accessor handed to the ROW reaches the instrument as a value.
+  // THE UNWRAP MOVED, AND IT MOVED TO THE BRIDGE. These fields used to be unwrapped inside the instrument, which is
+  // why the instrument could not be extracted; now the bridge is the only place, and it is TWO files since the pure
+  // shape was split out -- `core/instrument-input.js` binds the harness and `core/instrument-shape.js` holds the
+  // shape, and BOTH read the settings plainly. The test asserts the same property one step earlier: a Cordis
+  // accessor handed to the ROW reaches the instrument as a value.
   const group = (raw) => questionGroup(plainConfig(raw))
   const questions = buildQuestions(group({ question: accessor('  Does this look complete?  ') }), 'admit').questions
   assert.equal(questions.probe.type, 'noul')

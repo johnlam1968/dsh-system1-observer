@@ -41,7 +41,7 @@ The six items of the agreed plan are **done, measured, committed and pushed**. W
 
 ## The state, measured
 
-- **All four gates green.** observer 920/920 (97.55 / 82.54 / 91.77) · store 58/58 (96.86 / 77.69 / 89.01) ·
+- **All four gates green.** observer 931/931 (97.55 / 82.4-82.7 / 91.77 — the branch figure is a RANGE, not a value: the coverage report is not reproducible, **F194**) · store 58/58 (96.86 / 77.69 / 89.01) ·
   package 10/10 (100 / 93.22 / 100) · pi 43/43 (99.78 / 76.61 / 100).
 - **The two channels agree on the whole corpus**: 946 sessions in the index, 946 compared, **946 agree on every
   field, 0 differ, and the composed state differs in 0 sessions.** The one named difference is the one the contract
@@ -69,6 +69,9 @@ The six items of the agreed plan are **done, measured, committed and pushed**. W
     # the two pi paths (needs the pi corpus and the second repository on disk)
     node scripts/check-pi-channels.mjs --pi-repo ~/CodingProjects/pi-session-log
 
+    # the input shape's contract, and the proof that it can fail (2 seconds, and it is in `npm run ci`)
+    node scripts/check-contract-teeth.mjs
+
 ## The split, in four steps
 
 The plan of record is `ROADMAP.md` §14.8. In short:
@@ -76,6 +79,16 @@ The plan of record is `ROADMAP.md` §14.8. In short:
 1. **Extract the pure input-object shape** from the coupled `core/instrument-input.js` — the shape both hosts bind at
    — and give it a **contract test**, so the dsh builder and a future pi builder cannot drift the way the two
    producers of rows drifted (F173–F180: who spoke, the digest, the text, the NUL).
+   **--- DONE, 2026-10-21.** The pure shape is `core/instrument-shape.js`; the bridge keeps the two host bindings and
+   passes them in. The contract is a vendored, digest-pinned fixture
+   (`test/fixtures/instrument-shape/contract.mjs`, eleven cases) with a `deepStrictEqual` comparison, and the teeth
+   are a gate (`scripts/check-contract-teeth.mjs`, **17 of 17 mutations caught**, in `npm run ci`). **The measurement
+   the move was supposed to unlock: the `core/` dsh surface is 6 files, not 10** — four files were coupled only
+   through `core/instrument-input.js` and are now portable. **And an INDEPENDENT REVIEW measured that the first
+   version of the contract missed six of the rules it was about** (**F193**), so the review is part of the method here
+   and not an afterthought. Findings **F192** and **F193**. Details in `ROADMAP.md` §14.8 and `docs/findings.md`.
+   **One thing the step does NOT do, and it is not a bug: the shape is bindable IN THIS REPOSITORY, not from another
+   one** — a separate repository can only import a package, and that is step 4.
 2. **Move the chain, the producer, the format vocabulary and the row reader** into a package-shaped folder in-repo;
    fix the `windowChars` line; delete the dead `exchangesOf` import; leave the session-format module as a re-export
    layer. The plugin imports it relatively for now — one repository, one copy, no behaviour change.
@@ -114,6 +127,12 @@ rules check cannot see a rule that was never applied: each path is internally co
 - The **act vocabulary** stays undecided until a measurement asks for it.
 - The `docdrift` profile service is dead on the host (pre-existing, unrelated).
 - The npm token on the workstation is no longer needed for publishing and could be deleted.
+- **THE CONTRACT FIXTURE HAS TO TRAVEL WITH THE PACKAGE, and it does not yet.** It lives at
+  `test/fixtures/instrument-shape/contract.mjs`, and `package.json`'s `files` allowlist does not carry `test/`
+  — correctly, because a test fixture is not a runtime file. But the moment the repository is cut into
+  `system1-measure` (step 4), a consumer that vendors the contract needs the fixture itself, exactly as
+  `dsh-session-rows` ships its own. **Decide where it lives when the package is cut, and update the digest and
+  the allowlist in the same commit** — a fixture that travels without its digest protects nothing.
 
 ## Read next
 

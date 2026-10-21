@@ -27,7 +27,7 @@ import { join } from 'node:path'
 import { existsSync, writeFileSync } from 'node:fs'
 import { BATTERY_SUFFIX, listBatteries, readBatteryFile, scoreBattery, checkBattery, MIN_CASES } from './battery.js'
 import { composeQuestions } from './system1.js'
-import { questionGroup } from './instrument-input.js'
+import { questionGroup } from './instrument-shape.js'
 
 export const BATTERY_TOOL_NAME = 'system1_battery'
 

@@ -85,7 +85,12 @@ const SIZE_EXEMPTIONS = {
     // prevent, found by the reorganisation rather than by growth: a budget that does not cover a file is not a budget.
     // They are declared here because their size is a real decision about what an ENTRY POINT IS, not an accumulation.
     'dsh/index.js': {
-        max: 1426,
+        max: 1427,
+        // RAISED FROM 1426 TO 1427, and the gate asks to be a DECISION rather than a drift. The one line is the
+        // INPUT BRIDGE being split: `core/instrument-input.js` kept the two host bindings and `core/instrument-shape.js`
+        // took the shape, so one import line became two (`ROADMAP.md` §14.8 step 1). A line was not added to say
+        // something new -- the file says one more thing than it did, and it says it by naming where the shape now
+        // lives. The next raise should be the split, not a number.
         reason: 'the Cordis plugin entry: every row, schema, service and tool registration this package performs '
             + 'inside ONE harness, and nothing it performs anywhere else. The cut worth making is by LIFECYCLE -- '
             + 'registration, then the question plumbing, then the session tools -- and it should be made when a second '

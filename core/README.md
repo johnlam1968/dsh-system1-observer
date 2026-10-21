@@ -214,6 +214,12 @@ was never the same as packaged**: a relative import is equally importable, and t
 * `instrument-input.js` — THE BRIDGE: the row's settings -> the instrument's one input object (`point`, `callsEnabled`,
   `subjects`, `axes`, `questions`, `limits`, `redaction`, `transport`). The only place a plain read of a setting is
   allowed besides `readConfigValue`, because it is where every `Volatile` is unwrapped before the instrument sees it
+* `instrument-shape.js` — THE SHAPE, WITH NO HARNESS IN IT: the pure half of the bridge, split out so a second host can
+  build the same object without carrying this harness (`ROADMAP.md` §14.8 step 1). The two host bindings -- which
+  harness event a point attaches to, and which sessions are in scope -- are PASSED IN rather than imported, and the
+  contract fixture (`test/fixtures/instrument-shape/contract.mjs`) pins what the shape must be. **THE BRIDGE IS THESE
+  TWO FILES, and it is two files because the second one holds no harness:** both read the row's settings plainly, and
+  `test/schema.test.js` names both as the legal routes
 * `dsh/host-events.js` — which dsh event each point attaches to: the APPLICATION's half of the point descriptor, split out
   of `seams.js` so the instrument names no harness event
 * `dsh/host-payload.js` — which ARGUMENT of a harness seam carries the text, per seam: the other half of that descriptor,

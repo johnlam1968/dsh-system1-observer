@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledSetsDir, SET_SUFFIX, listSets, readSelectedSet, readSetFile, setHash, setSettings } from '../core/question-sets.js'
 import { plainConfig } from '../dsh/config-value.js'
-import { questionGroup } from '../core/instrument-input.js'
+import { questionGroup } from '../core/instrument-shape.js'
 import { QUESTION_SCOPES, buildQuestions } from '../core/questions.js'
 
 const dirWith = (files) => {

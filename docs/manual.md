@@ -155,7 +155,7 @@ under `lib/`:
 | `core/seams.js` | the instrument's own vocabulary: the nine point ids, what is true of each, the switch rule, the exit-code reader and the probe question. It names **no** harness event and reads **no** config |
 | `dsh/host-events.js` | which dsh event each point attaches to, and the point as the input object carries it |
 | `dsh/host-payload.js` | which ARGUMENT of a harness seam carries the text, per seam — the two files above are the application's half of the point descriptor (`F110`, `F111`) |
-| `core/instrument-input.js` | the ONE bridge from the row's settings to the instrument's input object, and the only place a `Volatile` is unwrapped for it |
+| `core/instrument-input.js` | the bridge from the row's settings to the instrument's input object, and the only place a `Volatile` is unwrapped for it — with `core/instrument-shape.js`, the pure half that holds no harness and takes the two host bindings as arguments |
 | `core/evidence.js` | the evidence record — one JSON object per line, best-effort |
 | `core/model/` | the two decision-model transports and the answer readers behind them |
 | `core/is-record.js` | the property-check narrowing those modules share |
