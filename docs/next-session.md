@@ -151,6 +151,11 @@ rules check cannot see a rule that was never applied: each path is internally co
   `system1-measure/.github/workflows/publish.yml`, and the sibling `dsh-session-rows` has the same workflow with the
   name and two gates changed), then push the `v0.1.0` tag. The FIRST publish needs one one-time code, because the
   trusted-publisher binding lives on the package's own registry page and a package that does not exist has no page.
+- **THE CONTRACT FIXTURE NOW TRAVELS WITH THE PACKAGE, and it is published.** `system1-measure/contract` carries the
+  input shape's fixture and its digest, because a fixture a second host cannot read pins nothing outside the
+  repository that wrote it — and the observer's own vendored copy is cross-checked against the package's, so the two
+  readers of one contract are proven to be reading one contract. The digest did not move:
+  `a1a45d16ca9f645677fd07315d3af95f9499c20b32c1d7b2765087225c30299a`.
 - **THE OLD NAME IS STILL PUBLISHED.** `dsh-session-rows@0.2.1` is on npm and still resolves, and it is now a
   **deprecated shim** over `system1-measure/rules`. The three consumers' ranges must move deliberately — `npm install`
   does not follow a rename — and the shim's own release is what makes the move safe.

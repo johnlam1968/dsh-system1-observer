@@ -91,8 +91,7 @@ happens, and what it does not ship, is the maintainer's runbook, kept off-reposi
 | [the chart](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/architecture.png) | the whole row in one picture: the data path from the loop to the trace, the nine tools, the repository around it |
 | [manual](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/manual.md) | the reference: hooks, every setting, the trace, mounting, the measured claims and the unverified ones |
 | [docs/settings.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/settings.md) | every setting: what it does, what it costs, why it exists |
-| [docs/measurement-depth.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/measurement-depth.md) | what evidence a judgement gets (G0–G4) |
-| [docs/question-suitability.md](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/question-suitability.md) | which question type fits which evidence |
+| **[the measurement](https://github.com/johnlam1968/system1-measure)** | the package this row depends on: the question sets, the chain, the format, the rules — harness-free, usable alone. [extending guide](https://github.com/johnlam1968/system1-measure/blob/master/docs/extending.md) · [G0–G4](https://github.com/johnlam1968/system1-measure/blob/master/docs/measurement-depth.md) · [question types](https://github.com/johnlam1968/system1-measure/blob/master/docs/question-suitability.md) |
 | [case study](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/case-study-readme-review.md) | two agents, one rubric and this page's own redesign, measured — the method, the numbers and the mistakes |
 
 ## Licence

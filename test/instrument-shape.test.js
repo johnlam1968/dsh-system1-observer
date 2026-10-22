@@ -35,6 +35,7 @@ import { hostPoint } from '../dsh/host-events.js'
 import { sessionObserved } from '../core/sessions.js'
 import { isRecord } from 'system1-measure/core/is-record.js'
 import { cases } from './fixtures/instrument-shape/contract.mjs'
+import { FIXTURE_DIGEST as PACKAGED_DIGEST } from 'system1-measure/contract'
 
 /** The vendored fixture, and the digest the contract computes for it. */
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/instrument-shape')
@@ -86,6 +87,11 @@ const optionsOf = (one) => (one.transport === undefined
 test('THE VENDORED FIXTURE IS THE CONTRACT, and the digest says so', () => {
     assert.equal(digestOf(FIXTURE), PINNED_DIGEST,
         'the vendored fixture is not the one the contract pins; update it and the digest together')
+    // AND THE PACKAGE PUBLISHES THE SAME NUMBER, because a second host reads THAT and not this file. The contract
+    // now TRAVELS with the package -- it is published as `system1-measure/contract` -- and this copy is the vendor's,
+    // so the two digests are the proof that one contract is being read from two places.
+    assert.equal(PACKAGED_DIGEST, PINNED_DIGEST,
+        'the digest the package publishes is not the one this repository vendored; a second host would be told a wrong number')
 })
 
 test('THE DSH BUILDER PRODUCES THE CONTRACT\'S SHAPE, case by case', () => {
