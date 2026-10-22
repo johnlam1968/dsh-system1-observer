@@ -393,3 +393,65 @@ nothing would have said so if it stopped. It is checked now.
 host; and the one-line description is a **form** requirement, which this document already records as a CHOICE rather
 than a measured defect -- it is adopted in the package for the reason this document gives (one string, one source of
 truth, for the npm description and the GitHub description), and not because a specification requires the form.
+
+## The measurement, 2026-10-22: the shipped front page did NOT reproduce the record
+
+The section above says, of the retired `docs/npm-readme.md`: *"the README IS that page now, and the file no longer
+exists, but the measurement below stands as it was taken"*. **On 2026-10-22 that sentence was measured, and it is
+false** — the README that shipped is not the page that was measured.
+
+**THE MEASUREMENT IS REPEATABLE, and the script that repeats it is in this repository**: `scripts/judge-readme.mjs`
+takes a page, reads these twelve specs out of THIS FILE (it does not carry a second copy -- a second copy is a second
+instrument), asks them through the measurement package's own `wireTransport`, prints a table, and names the revision
+that answered. `node scripts/judge-readme.mjs` judges the front page; `node scripts/judge-readme.mjs some/page.md
+--runs 3` judges any page and prices the noise.
+
+**THE MEASUREMENT**, with the twelve questions above, read out of this file, asked through the package's own
+`wireTransport` (`https://openrouter.ai/api/v1/systemone`), model `typesafe/jev-1.13-20260917` — the same revision
+this document names — two runs per cell, and every number below is a reading, not an estimate:
+
+| question | the retired proposal page (79 lines) | the README as it shipped (99 lines) | the README after the fix (91 lines) |
+|---|---|---|---|
+| `primary_audience` | a_first_time_visitor 0.96 / 0.97 | a_first_time_visitor 0.73 | **a_first_time_visitor 0.84 / 0.85** |
+| `install_present` | 0.89 | 0.88 | 0.85 / 0.87 |
+| `usage_example_present` | 0.99 | 0.99 | 0.99 |
+| `licence_stated` | 0.96 | 0.96 | 0.97 |
+| `help_or_contributing_path` | 0.99 | 0.99 | **0.99** |
+| `getting_started_scope` | 0.89 / 0.90 | 0.89 | 0.87 / 0.88 |
+| **`internal_plumbing_present`** | **0.35 / 0.36** | **0.92** | **0.52 / 0.54** |
+| `first_screen_sufficient` | 0.82 / 0.83 | 0.81 | 0.82 |
+| `audience_fit` (of 4) | 3.21 / 3.23 | 3.01 / 3.02 | 3.02 / 3.04 |
+| `front_page_quality` (of 4) | 3.24 / 3.25 | 3.38 / 3.40 | 3.35 |
+
+**THE RETIRED PAGE REPRODUCES, EXACTLY.** Every one of its figures matches this document's own record — 0.35, 0.99,
+3.22, 3.26, 0.94 — on the same model revision, sixteen days later, within-cell variance 0.01–0.02. **The instrument is
+stable and the record is sound.** What did not hold is the sentence that said the README had become that page.
+
+**AND THE DIFFERENCE WAS FOUND BY ABLATION, one passage at a time.** The page that shipped read **0.92** on
+`internal_plumbing_present` — and the cause was two passages that only someone working ON the project would need:
+
+| removed from the shipped README | the reading |
+|---|---|
+| nothing (the shipped page) | 0.92 |
+| the operator's own brief at the top | 0.93 — **it is innocent, and it stays** |
+| the name of the gate file in one sentence | 0.92 — masked, and worth knowing why |
+| **the `npm run ci` block naming the six gates** | **0.76** |
+| **and the pointer to the defect register** | **0.56 / 0.60** |
+| and the gate file's name out of the one sentence that had it | **0.52 / 0.54** |
+
+**AND ONE ABLATION REFUSED TO BE DONE.** Removing the whole *"This page is short on purpose"* paragraph took the
+plumbing reading to 0.45 — and `getting_started_scope` from 0.88 to **0.69** and `states_what_it_is` from 0.89 to
+**0.77**. It is load-bearing: it is the signpost to the manual. **A reading that improves one number and damages two
+others is not an improvement**, and the paragraph stayed.
+
+**WHAT IS NOW TRUE, AND WHAT IS STILL NOT.** The shipped front page reads **0.53** on internal plumbing, against the
+retired page's 0.35 — the residual is the opening paragraphs, which carry what the project IS, and the operator's
+brief, which is the operator's. **The 0.35 is not reproduced and is not claimed to be.** The package's own front page
+(`system1-measure`) measures **0.18** on the same instrument.
+
+**AND THE GATE, WHICH IS THE PART THAT LASTS.** `test/readme.test.js` now holds the front page to the thing the
+measurement was about: **no CI command, no internal gate's file name, no pointer to the defect register**. Its teeth
+are shown by ablation — three mutations, three caught, the restored tree green. **AND THE HELP-PATH GATE WAS CAUGHT
+BEING WEAKER THAN IT LOOKED**: it matched `/issues/`, and it PASSED a page whose issues link had been deleted, because
+the word appears elsewhere on the page. It now matches the **LINK**. A gate that checks a word is not a gate on the
+thing — which is this document's own lesson, applied to its own gate.

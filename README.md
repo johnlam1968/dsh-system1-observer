@@ -17,7 +17,7 @@ you choose — and writes every call, every skip and every answer to a JSONL tra
 `enforcement: "declarative", verified: false`. Its product is evidence about the decision model's replies at each point
 of the loop, not judgements about the session it is observing.
 
-**This page is short on purpose**: it is capped at 100 lines by `test/readme.test.js`, and the reference material —
+**This page is short on purpose**: it is capped at 100 lines by a test, and the reference material —
 every setting, the seams, the trace, and the measured claims **with the ones that are not verified** — is in the
 [manual](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/manual.md).
 
@@ -59,7 +59,6 @@ Nine tools in all: `system1_explain`, `system1_settings`, `system1_decide`, `sys
 - **The trace**: `~/.dsh/logs/system1-observer.jsonl` — one line per call, per skip and per start-up, read by the
   `system1_trace` tool, the trace card, or `scripts/trace.mjs`.
 - **The settings card** on the Plugins page: every live-writable setting, and "…" → **Observe this session**.
-- **A written record**: the [register](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/findings.md)
   notes every problem this instrument has had and the measurement that found it.
 
 ## Before you trust a reading
@@ -71,18 +70,11 @@ Nine tools in all: `system1_explain`, `system1_settings`, `system1_decide`, `sys
 
 `system1_explain` prints these in full, derived from the running row.
 
-## Working on it
-
-```bash
-npm run ci    # the six gates in order: test, coverage, citations, compat, composition, deploy
-```
-
-The rules this repository holds itself to, each with the measurement that produced it, are in the [conventions](https://github.com/johnlam1968/dsh-system1-observer/blob/master/docs/conventions.md).
-
 ## Questions, and contributing
 
-Ask in [GitHub issues](https://github.com/johnlam1968/dsh-system1-observer/issues); pull requests are welcome. How a release
-happens, and what it does not ship, is the maintainer's runbook, kept off-repository with the other notes.
+Ask in [GitHub issues](https://github.com/johnlam1968/dsh-system1-observer/issues); pull requests are welcome. To work on
+it, start with [contributing](https://github.com/johnlam1968/dsh-system1-observer/blob/master/CONTRIBUTING.md): the gates
+to run, the rules this repository holds itself to, and the written record of what it has got wrong so far.
 
 ## Documentation
 

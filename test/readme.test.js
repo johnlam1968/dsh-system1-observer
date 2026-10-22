@@ -56,8 +56,36 @@ test('the README says where to ask for help', () => {
   // the first landing page, and 0.99 once a paragraph and an issues link were there. It is the one line that moved a
   // question by a large, repeatable margin, and the ablation showed the MARGIN was the paragraph and the link rather
   // than the heading. So it is a gate and not a hope: the standard's biggest lever, enforced.
-  assert.match(readme, /issues/, 'the README must say where to ask for help: a reader who cannot ask is stuck')
-  assert.match(readme, /contribut/i, 'the README must say how to contribute')
+  // THE LINK, NOT THE WORD. The first version of this check matched /issues/ and /contribut/i, and it PASSED a page
+  // whose issues link had been deleted -- because the heading still said "contributing" and the word "issues" still
+  // appeared elsewhere. A gate that checks a WORD is not a gate on the THING, and the ablation that found it is the
+  // one that matters: the paragraph and the LINK are what moved the reading from 0.11 to 0.99.
+  assert.match(readme, /https:\/\/github\.com\/[^)\s]+\/issues/, 'the README must link to the issue tracker: a reader who cannot ask is stuck')
+  assert.match(readme, /pull requests? are welcome|\]\([^)]*CONTRIBUTING[^)]*\)/i,
+        'the README must say how to contribute -- a heading alone is not a way to contribute')
+})
+
+test('the front page names no internal gate, no CI command, and no defect register', () => {
+  // MEASURED, 2026-10-22, and this is the gate the earlier one was missing. The page was measured with the twelve
+  // questions and read as INTERNAL PLUMBING at 0.92 -- while the retired proposal page, measured on the same model
+  // revision days later, read 0.35. The difference was two passages that only someone working ON this project
+  // would need: a `npm run ci` block naming the six gates, and a pointer to the defect register. Moving them out
+  // took the reading to 0.58, and taking the gate file's name out of one sentence took it to 0.53 -- with the help
+  // path at 0.99 and the getting-started scope at 0.88 unchanged.
+  //
+  // So the front page is now held to the thing the measurement was about. A name here is a claim that this text is
+  // for someone working on the project, and the measurement says that is exactly what it reads as.
+  const internals = [
+    /npm run /,                       // a CI command
+    /test\/[A-Za-z0-9_.-]*\.test\.js/, // an internal gate's own file name
+    /docs\/findings\.md/,           // the defect register
+    /coverage floor/i,
+    /the register/,
+  ]
+  const found = internals.filter((re) => re.test(readme))
+  assert.deepEqual(found.map(String), [], 'the front page names internal material: ' + found.map(String).join(', ')
+    + '. It belongs in CONTRIBUTING.md or docs/manual.md, and the measurement of what that costs is in '
+    + 'docs/readme-standards.md.')
 })
 
 test('the manual exists, and the README points a reader at it', () => {
