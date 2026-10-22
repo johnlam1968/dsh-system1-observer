@@ -302,6 +302,26 @@ cells, so the noise is known before any threshold is set on this rubric.
 of lines, so a 62-line state IS a slice, not a whole document — the reviewer reported all three candidates as
 front-page-sized "not a 68-line slice". The distinction matters for exactly the questions that ask about scope.
 
+## The standard, applied to the package's own front page (2026-10-22)
+
+`system1-measure` is the measurement the plugin depends on, and it has a front page of its own. It was measured with
+the same twelve questions, through the same instrument -- the specs read out of THIS file, the model revision named
+above -- two runs per cell:
+
+| question | the package's page, before | after |
+|---|---|---|
+| `internal_plumbing_present` | 0.60 / 0.62 | **0.18** |
+| `help_or_contributing_path` | 0.06 / 0.10 | **0.99** |
+| `getting_started_scope` | 0.45 / 0.67 | **0.90** |
+| `audience_fit` (of 4) | 3.01 / 3.02 | **3.37 / 3.33** |
+| `front_page_quality` (of 4) | 3.08 / 3.09 | **3.63 / 3.65** |
+
+**AND THE PAGE IS HELD TO IT BY A GATE**, with its teeth shown by ablation: `system1-measure/test/readme.test.js` holds
+it to 100 lines, 800 words, absolute links, a linked long-form document that exists, a help path, a short description
+that is the same string as the package description, no internal vocabulary, and **an install line that names the
+release asset of this version** -- because a package that is not on npm yet makes `npm install <name>` a 404, and the
+failure of that line is invisible until a stranger types it.
+
 ## Cross-check: a second reviewer collected the same standards in parallel
 
 A second agent (a different model, the `standard` preset) gathered the standards independently the same day. Both

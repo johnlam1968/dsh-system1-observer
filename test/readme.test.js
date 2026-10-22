@@ -88,6 +88,24 @@ test('the front page names no internal gate, no CI command, and no defect regist
     + 'docs/readme-standards.md.')
 })
 
+test('the package we install tells a reader to install the thing we install', () => {
+    // THE FRONT PAGE OF THE MEASUREMENT is the page a reader of THIS plugin lands on when they want the measurement
+    // itself, and it has to name the same install source this repository depends on. Otherwise the page says
+    // `npm install system1-measure` -- a 404, because the package is not on npm -- while this repository installs the
+    // release tarball. **Two install instructions that disagree is one install instruction too many.**
+    //
+    // The comparison is exact and offline: the installed package's own README, against this repository's own
+    // dependency spec. A version bump moves both, and a bump that moved one of them fails here.
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+    const spec = manifest.dependencies?.['system1-measure']
+    assert.ok(typeof spec === 'string' && spec !== '', 'this repository must depend on the measurement package')
+    const installed = join(ROOT, 'node_modules', 'system1-measure', 'README.md')
+    assert.ok(existsSync(installed), 'the measurement package is not installed, so its front page cannot be read')
+    const page = readFileSync(installed, 'utf8')
+    assert.ok(page.includes(spec), 'the measurement package front page does not name the install source this repository '
+        + 'uses (' + spec + '), so a reader is told to install something else')
+})
+
 test('the manual exists, and the README points a reader at it', () => {
   // The length cap is only honest if what leaves the front page LANDS somewhere a reader can follow.
   assert.ok(existsSync(join(ROOT, 'docs', 'manual.md')), 'docs/manual.md is missing: the cap would have nowhere to put things')
