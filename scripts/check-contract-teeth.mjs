@@ -69,15 +69,24 @@ const MUTATIONS = [
  */
 const verdict = (root) => {
     let out = ''
+    let status = 0
     try {
         execFileSync(process.execPath, ['--test', CONTRACT_TEST], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
     } catch (error) {
+        status = typeof error.status === 'number' ? error.status : 1
         out = `${error.stdout ?? ''}${error.stderr ?? ''}`
     }
-    if (out === '') return 'GREEN'
+    if (status === 0) return 'GREEN'
     if (/ERR_MODULE_NOT_FOUND|Cannot find package|SyntaxError|ERR_UNSUPPORTED_MODULE|ENOENT/.test(out)) return 'BROKEN'
-    const failed = [...out.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1])
-    if (failed.length === 0) return 'GREEN'
+    // THE EXIT CODE DECIDES, AND THE REPORT ONLY NAMES. Node's test reporter changed its LAYOUT between lines --
+    // the TAP `not ok 3 - name` on node 22, the spec reporter's `✖ name (1.2ms)` on node 25 -- and this gate used to
+    // read the LAYOUT to decide. On node 25 it therefore found no failing line, decided the copy was GREEN, and
+    // reported that **all fifteen mutations survived** -- on a contract that catches all fifteen. It was MEASURED, not
+    // guessed: the same tree, the same gate, the reporter changed, and the answer inverted. A gate that reads a
+    // report instead of a verdict is a gate that reports success while measuring nothing, and the exit code is the
+    // verdict. The name below is cosmetics, and it is best-effort on purpose.
+    const failed = [...out.matchAll(/(?:^not ok \d+ - |✖ )(.*)$/gm)].map((m) => m[1])
+    if (failed.length === 0) return `RED (the test run exited ${status})`
     return `RED (${failed.length} failing: ${failed[0].slice(0, 70)})`
 }
 
