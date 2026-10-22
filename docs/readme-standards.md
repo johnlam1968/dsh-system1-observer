@@ -351,3 +351,45 @@ claims, not a defect the measurement found.
 shown that the questions separate a good README from a bad one on labelled cases — the standard this repository holds
 every other question set to (`system1_battery`). The measurement below is therefore a *reading*, not a calibrated
 instrument, and it is reported as such.
+
+## The standard, applied to a SECOND repository: `system1-measure` (2026-10-22)
+
+The measurement above is about **this** repository's README. The measurement was then applied to the package that
+carries the measurement -- `system1-measure` -- because a standard that lives in one repository does not travel to the
+next one on its own, and the package's README had been written without it.
+
+**WHAT WAS MEASURED, AND WHAT WAS NOT.** The twelve questions need a model to answer them, and **this host has no
+model key for the judge** -- so the figures below are the **CHECKABLE** criteria only, measured by reading the page and
+counting, and **the judge's numbers for the package's README are NOT measured**. The checkable criteria are the ones
+this document already treats as load-bearing: the two calibrated ones (`install_present` and `getting_started_scope`)
+both reduce to text a gate can check -- is there a copy-pasteable install command, and does the text stay inside
+getting started -- and the third measurement that decided the observer's landing page (`help_or_contributing_path`) is a
+sentence and a link.
+
+| criterion | the package's README, as written | the standard | after |
+|---|---|---|---|
+| lines | **172** | 100 | **95** |
+| words | **1,297** | 800 | **656** |
+| repository links that are relative | **9** | 0 | **0** |
+| the project's own vocabulary | **45** hits | as few as the reader needs | **14**, every one an API name the reader has to type |
+| a copy-pasteable install command | yes | yes | yes |
+| a usage example with real output | yes | yes | yes |
+| the licence named | yes | yes | yes (near the top, and last) |
+| where to ask for help | yes | yes | yes |
+| a one-line description of at most 120 characters | no | optional | **96 characters, and the same string as the package description** |
+
+**AND IT IS NOW A GATE IN THAT REPOSITORY TOO**, because a standard nothing enforces is a standard that is a habit.
+`system1-measure/test/readme.test.js` holds that README to 100 lines, 800 words, absolute links, a linked long-form
+document that exists, a help path, a short description that is the same string as the package description, and no
+internal vocabulary. **Its teeth are shown by ablation, as this document's own practice requires**: six mutations -- a
+relative link, the help path deleted, internal vocabulary added, 300 words added, a description that no longer matches
+the manifest, a link to a document that does not exist -- and **six caught, with the restored tree green**.
+
+**AND THIS REPOSITORY'S OWN GATE NOW HOLDS THE BIGGEST LEVER.** The help path was the single largest move in the whole
+exercise (0.08 -> 0.11 -> 0.99), and this repository's `test/readme.test.js` did NOT check it -- the page had it, and
+nothing would have said so if it stopped. It is checked now.
+
+**WHAT THIS DOES NOT SHOW.** No judged numbers for the package's README, because there is no key for the judge on this
+host; and the one-line description is a **form** requirement, which this document already records as a CHOICE rather
+than a measured defect -- it is adopted in the package for the reason this document gives (one string, one source of
+truth, for the npm description and the GitHub description), and not because a specification requires the form.

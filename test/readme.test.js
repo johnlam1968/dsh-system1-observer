@@ -51,6 +51,15 @@ test('every repository link in the README is absolute, because npm renders this 
     + ': use the full https://github.com/johnlam1968/dsh-system1-observer/blob/master/<path> URL.')
 })
 
+test('the README says where to ask for help', () => {
+  // MEASURED, and the single largest move in the whole exercise: the help path scored 0.08 on the manual and 0.11 on
+  // the first landing page, and 0.99 once a paragraph and an issues link were there. It is the one line that moved a
+  // question by a large, repeatable margin, and the ablation showed the MARGIN was the paragraph and the link rather
+  // than the heading. So it is a gate and not a hope: the standard's biggest lever, enforced.
+  assert.match(readme, /issues/, 'the README must say where to ask for help: a reader who cannot ask is stuck')
+  assert.match(readme, /contribut/i, 'the README must say how to contribute')
+})
+
 test('the manual exists, and the README points a reader at it', () => {
   // The length cap is only honest if what leaves the front page LANDS somewhere a reader can follow.
   assert.ok(existsSync(join(ROOT, 'docs', 'manual.md')), 'docs/manual.md is missing: the cap would have nowhere to put things')
